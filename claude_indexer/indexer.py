@@ -14,6 +14,8 @@ from .embeddings.base import Embedder
 from .storage.base import VectorStore
 from .logging import get_logger
 
+logger = get_logger()
+
 
 @dataclass
 class IndexingResult:
@@ -85,12 +87,33 @@ class CoreIndexer:
         # Initialize parser registry
         self.parser_registry = ParserRegistry(project_path)
         
-        # State file will be set per collection
-        self._state_file_base = project_path
-        
+    def _get_state_directory(self) -> Path:
+        """Get centralized state directory."""
+        state_dir = Path.home() / '.claude-indexer' / 'state'
+        state_dir.mkdir(parents=True, exist_ok=True)
+        return state_dir
+    
     def _get_state_file(self, collection_name: str) -> Path:
-        """Get collection-specific state file path."""
-        return self._state_file_base / f".indexer_state_{collection_name}.json"
+        """Get collection-specific state file path in centralized directory."""
+        import hashlib
+        
+        # Create unique project identifier using path hash
+        project_hash = hashlib.md5(str(self.project_path).encode()).hexdigest()[:8]
+        filename = f"{project_hash}_{collection_name}.json"
+        
+        # Check for migration from legacy location
+        legacy_state = self.project_path / f".indexer_state_{collection_name}.json"
+        new_state = self._get_state_directory() / filename
+        
+        # Migrate legacy state file if it exists and new one doesn't
+        if legacy_state.exists() and not new_state.exists():
+            try:
+                legacy_state.rename(new_state)
+                logger.info(f"Migrated state file: {legacy_state} -> {new_state}")
+            except Exception as e:
+                logger.warning(f"Failed to migrate state file: {e}")
+        
+        return new_state
     
     @property
     def state_file(self) -> Path:

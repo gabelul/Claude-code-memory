@@ -677,8 +677,8 @@ claude-indexer --project /path/to/project --collection my-project --generate-com
 # Include test files and use incremental updates
 claude-indexer --project /path/to/project --collection my-project --include-tests --incremental
 
-# Force reprocess all files (overrides incremental hash checks)
-claude-indexer --project /path/to/project --collection my-project --incremental --force
+# Full reprocess (default behavior without --incremental)
+claude-indexer --project /path/to/project --collection my-project
 
 # Clear collection and start fresh
 claude-indexer --project /path/to/project --collection my-project --clear
@@ -798,7 +798,6 @@ Options:
   -v, --verbose          Enable verbose output
   --include-tests        Include test files in indexing
   --incremental          Only process changed files
-  --force                Force reprocessing of all files
   --clear                Clear collection before indexing
   --generate-commands    Generate MCP commands instead of auto-loading
   --depth [basic|full]   Analysis depth
@@ -1121,7 +1120,7 @@ def create_correlation_entities(self, correlations: List[Dict[str, Any]]) -> Lis
 **Extend `index_project()` method:**
 ```python
 def index_project(self, include_tests: bool = False, incremental: bool = False, 
-                 force: bool = False, generate_commands: bool = False,
+                 generate_commands: bool = False,
                  enable_multi_modal: bool = False) -> bool:
     """Index the entire project with optional multi-modal correlation"""
     

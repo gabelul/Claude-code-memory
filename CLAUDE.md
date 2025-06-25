@@ -82,8 +82,8 @@ cp settings.template.txt settings.txt
 # 3. Install global wrapper
 ./install.sh
 
-# 4. Index any Python project
-claude-indexer --project /path/to/project --collection project-name
+# 4. Index any Python project (use -p and -c shortcuts for faster typing)
+claude-indexer -p /path/to/project -c project-name
 ```
 
 ## Usage Patterns
@@ -93,22 +93,22 @@ claude-indexer --project /path/to/project --collection project-name
 **Auto-Loading Mode (Default):**
 ```bash
 # Direct Qdrant automation - zero manual steps
-claude-indexer --project /path --collection name
+claude-indexer -p /path -c name
 
 # Incremental updates (15x faster)
-claude-indexer --project /path --collection name --incremental
+claude-indexer -p /path -c name --incremental
 
 # Clear collection (preserves manually added memories)
-claude-indexer --project /path --collection name --clear
+claude-indexer -p /path -c name --clear
 
 # Clear entire collection (deletes all memories including manual)
-claude-indexer --project /path --collection name --clear-all
+claude-indexer -p /path -c name --clear-all
 ```
 
 **Manual Command Mode:**
 ```bash
 # Generate MCP commands without API calls (uses DummyEmbedder)
-claude-indexer --project /path --collection name --generate-commands
+claude-indexer -p /path -c name --generate-commands
 
 # Output: mcp_output/collection-name_mcp_commands.txt
 # Contains ready-to-execute MCP commands for manual copy-paste
@@ -119,7 +119,7 @@ claude-indexer --project /path --collection name --generate-commands
 #### Real-time File Watching
 ```bash
 # Single project file watching with custom debounce
-claude-indexer watch start --project /path --collection name --debounce 3.0
+claude-indexer watch start -p /path -c name --debounce 3.0
 
 # Uses service configuration for patterns and settings
 # Watches *.py, *.md files by default (configurable)
@@ -166,25 +166,25 @@ claude-indexer service status
 #### Git Hooks Integration
 ```bash
 # Install pre-commit automatic indexing
-claude-indexer hooks install --project /path --collection name
+claude-indexer hooks install -p /path -c name
 
 # Check hook status and configuration
-claude-indexer hooks status --project /path --collection name
+claude-indexer hooks status -p /path -c name
 
 # Remove hooks (safe - never blocks commits)
-claude-indexer hooks uninstall --project /path --collection name
+claude-indexer hooks uninstall -p /path -c name
 ```
 
 #### Search and Discovery
 ```bash
 # Semantic search across indexed collections
-claude-indexer search "authentication function" --project /path --collection name
+claude-indexer search "authentication function" -p /path -c name
 
 # Filter by entity type
-claude-indexer search "database connection" --project /path --collection name --type entity
+claude-indexer search "database connection" -p /path -c name --type entity
 
 # Limit results for focused queries
-claude-indexer search "error handling" --project /path --collection name --limit 5
+claude-indexer search "error handling" -p /path -c name --limit 5
 ```
 
 #### Service Configuration Example
@@ -397,7 +397,7 @@ claude-indexer --help  # Test installation
 
 **6. Test with First Project**
 ```bash
-claude-indexer --project /path/to/your/python/project --collection test-setup --verbose
+claude-indexer -p /path/to/your/python/project -c test-setup --verbose
 ```
 
 ## Benefits & Advantages

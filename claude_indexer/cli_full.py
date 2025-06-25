@@ -327,7 +327,8 @@ else:
     @common_options
     @click.option('--debounce', type=float, default=2.0, 
                   help='Debounce delay in seconds (default: 2.0)')
-    def start(project, collection, verbose, quiet, config, debounce):
+    @click.pass_context
+    def start(ctx, project, collection, verbose, quiet, config, debounce):
         """Start file watching for real-time indexing."""
         
         try:
@@ -349,9 +350,14 @@ else:
             service_config = service.load_config()
             service_settings = service_config.get("settings", {})
             
+            # Determine effective debounce using proper configuration hierarchy
+            # CLI override > JSON config > built-in default
+            debounce_explicitly_set = 'debounce' in ctx.params and ctx.get_parameter_source('debounce') != click.core.ParameterSource.DEFAULT
+            effective_debounce = debounce if debounce_explicitly_set else service_settings.get("debounce_seconds", 2.0)
+            
             # Create event handler with service configuration
             settings = {
-                "debounce_seconds": debounce,
+                "debounce_seconds": effective_debounce,
                 "watch_patterns": service_settings.get("watch_patterns", ["*.py", "*.md"]),
                 "ignore_patterns": service_settings.get("ignore_patterns", [
                     "*.pyc", "__pycache__", ".git", ".venv", 
@@ -364,7 +370,7 @@ else:
             event_handler = IndexingEventHandler(
                 project_path=str(project_path),
                 collection_name=collection,
-                debounce_seconds=debounce,
+                debounce_seconds=effective_debounce,
                 settings=settings
             )
             
@@ -376,19 +382,29 @@ else:
             if not quiet:
                 click.echo(f"👁️  Watching: {project_path}")
                 click.echo(f"📦 Collection: {collection}")
-                click.echo(f"⏱️  Debounce: {debounce}s")
+                click.echo(f"⏱️  Debounce: {effective_debounce}s")
                 click.echo("Press Ctrl+C to stop")
+            
+            # Setup signal handling
+            import signal
+            def signal_handler(signum, frame):
+                observer.stop()
+                if not quiet:
+                    click.echo(f"\n🛑 Received signal {signum}, stopping file watcher...")
+                raise KeyboardInterrupt()
+            
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
             
             try:
                 while True:
                     import time
                     time.sleep(1)
             except KeyboardInterrupt:
-                observer.stop()
-                if not quiet:
-                    click.echo("\n🛑 Stopping file watcher...")
-            
-            observer.join()
+                observer.join(timeout=3)  # Add timeout
+                if observer.is_alive():
+                    if not quiet:
+                        click.echo("⚠️ Force stopping watcher")
             
             if not quiet:
                 click.echo("✅ File watcher stopped")

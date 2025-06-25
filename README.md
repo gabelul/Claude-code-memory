@@ -77,7 +77,7 @@ Add to `~/.claude/claude_desktop_config.json`:
 ### Initial Setup Test
 ```bash
 # Test the installation
-claude-indexer --project /path/to/any/python/project --collection test-setup --verbose
+claude-indexer -p /path/to/any/python/project -c test-setup --verbose
 
 # Expected output: successful indexing with entities and relations created
 ```
@@ -126,10 +126,10 @@ Add to `~/.claude/claude_desktop_config.json`:
 ### Step 3: Index Your Project
 ```bash
 # Basic indexing (auto-loads to Qdrant)
-claude-indexer --project /path/to/your/project --collection my-project
+claude-indexer -p /path/to/your/project -c my-project
 
 # With verbose output to see detailed progress
-claude-indexer --project /path/to/your/project --collection my-project --verbose
+claude-indexer -p /path/to/your/project -c my-project --verbose
 ```
 
 ### Step 4: Automatic Knowledge Graph Loading
@@ -147,26 +147,26 @@ mcp__my-project-memory__search_similar("your search query")
 Direct Qdrant integration with zero manual steps:
 ```bash
 # Index new project (auto-loads to Qdrant)
-claude-indexer --project /path/to/project --collection project-name
+claude-indexer -p /path/to/project -c project-name
 
 # Incremental updates (15x faster)
-claude-indexer --project /path/to/project --collection project-name --incremental
+claude-indexer -p /path/to/project -c project-name --incremental
 
-# Force reprocess all files (overrides incremental checks)
-claude-indexer --project /path/to/project --collection project-name --incremental --force
+# Full reprocess (default behavior without --incremental)
+claude-indexer -p /path/to/project -c project-name
 
 # Clear collection (preserves manually added memories)
-claude-indexer --project /path/to/project --collection project-name --clear
+claude-indexer -p /path/to/project -c project-name --clear
 
 # Clear entire collection (deletes all memories including manual)
-claude-indexer --project /path/to/project --collection project-name --clear-all
+claude-indexer -p /path/to/project -c project-name --clear-all
 ```
 
 ### Manual Command Mode
 Generate MCP commands for manual execution:
 ```bash
 # Generate commands without API calls (uses dummy embedder)
-claude-indexer --project /path/to/project --collection project-name --generate-commands
+claude-indexer -p /path/to/project -c project-name --generate-commands
 
 # Commands saved to: mcp_output/project-name_mcp_commands.txt
 # Copy and paste commands into Claude Code for manual execution
@@ -181,7 +181,7 @@ claude-indexer
 ### Advanced Commands
 ```bash
 # File watching - real-time indexing
-claude-indexer watch start --project /path/to/project --collection project-name
+claude-indexer watch start -p /path/to/project -c project-name
 
 # Background service for multiple projects  
 claude-indexer service add-project /path/to project project-name
@@ -189,15 +189,15 @@ claude-indexer service start
 claude-indexer service status
 
 # Git hooks integration
-claude-indexer hooks install --project /path/to/project --collection project-name
-claude-indexer hooks status --project /path/to/project --collection project-name
-claude-indexer hooks uninstall --project /path/to/project --collection project-name
+claude-indexer hooks install -p /path/to/project -c project-name
+claude-indexer hooks status -p /path/to/project -c project-name
+claude-indexer hooks uninstall -p /path/to/project -c project-name
 
 # Search existing collections
-claude-indexer search "function authentication" --project /path --collection project-name
+claude-indexer search "function authentication" -p /path -c project-name
 
 # Index single file
-claude-indexer file /path/to/file.py --project /path/to/project --collection project-name
+claude-indexer file /path/to/file.py -p /path/to/project -c project-name
 
 # Help shows both indexing options AND available commands
 claude-indexer --help
@@ -293,7 +293,7 @@ claude-indexer service status
 
 ## 🎯 When to Use Each Mode
 
-- **Basic Indexing**: New projects, major refactoring, scheduled updates (just `claude-indexer --project X --collection Y`)
+- **Basic Indexing**: New projects, major refactoring, scheduled updates (just `claude-indexer -p X -c Y`)
 - **File Watching**: Active development sessions, real-time feedback (`claude-indexer watch start`)
 - **Background Service**: Multiple projects, continuous development (`claude-indexer service start`)
 - **Git Hooks**: Team workflows, automated CI/CD integration (`claude-indexer hooks install`)
@@ -301,7 +301,8 @@ claude-indexer service status
 ### CLI Interface Improvements
 
 **Simplified Basic Usage:**
-- No need for `index` command - basic usage is `claude-indexer --project X --collection Y`
+- No need for `index` command - basic usage is `claude-indexer -p X -c Y`
+- Use `-p` and `-c` shortcuts instead of `--project` and `--collection` for faster typing
 - Running `claude-indexer` with no arguments shows comprehensive help
 - Help displays both indexing options and available commands in one view
 

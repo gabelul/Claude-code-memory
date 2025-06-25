@@ -1,6 +1,7 @@
 """Qdrant vector store implementation."""
 
 import time
+import warnings
 from typing import List, Dict, Any, Optional, Union
 from .base import VectorStore, StorageResult, VectorPoint, ManagedVectorStore
 
@@ -64,11 +65,14 @@ class QdrantStore(ManagedVectorStore):
         
         # Initialize client
         try:
-            self.client = QdrantClient(
-                url=url,
-                api_key=api_key,
-                timeout=timeout
-            )
+            # Suppress insecure connection warning for development
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="Api key is used with an insecure connection")
+                self.client = QdrantClient(
+                    url=url,
+                    api_key=api_key,
+                    timeout=timeout
+                )
             # Test connection
             self.client.get_collections()
         except Exception as e:

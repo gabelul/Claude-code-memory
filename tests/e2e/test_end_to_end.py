@@ -66,6 +66,10 @@ class TestCLIEndToEnd:
             mock_result.relations_created = 3
             mock_result.warnings = []
             mock_result.errors = []
+            # Add missing cost tracking attributes to prevent Mock comparison errors
+            mock_result.total_tokens = 0
+            mock_result.total_cost_estimate = 0.0
+            mock_result.embedding_requests = 0
             mock_indexer.index_project.return_value = mock_result
             mock_indexer_class.return_value = mock_indexer
             
@@ -392,6 +396,10 @@ class TestCLIIntegrationScenarios:
             mock_result.relations_created = 3
             mock_result.warnings = []
             mock_result.errors = []
+            # Add missing cost tracking attributes to prevent Mock comparison errors
+            mock_result.total_tokens = 0
+            mock_result.total_cost_estimate = 0.0
+            mock_result.embedding_requests = 0
             mock_indexer.index_project.return_value = mock_result
             mock_indexer_class.return_value = mock_indexer
             
@@ -426,6 +434,10 @@ class TestCLIIntegrationScenarios:
             mock_result.relations_created = 3
             mock_result.warnings = []
             mock_result.errors = []
+            # Add missing cost tracking attributes to prevent Mock comparison errors
+            mock_result.total_tokens = 0
+            mock_result.total_cost_estimate = 0.0
+            mock_result.embedding_requests = 0
             mock_indexer.index_project.return_value = mock_result
             mock_indexer_class.return_value = mock_indexer
             
