@@ -43,13 +43,26 @@ docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_storage:/qdrant/storage:z 
 ```
 
 ### Configure Claude Code
+
+**Option 1: Automated Script (Easiest)**
+```bash
+# Quick setup using your settings.txt
+python add_mcp_project.py your-project-name
+```
+
+**Option 2: Command Line**
+```bash
+claude mcp add your-project-memory -e OPENAI_API_KEY="YOUR_OPENAI_KEY" -e QDRANT_API_KEY="YOUR_QDRANT_KEY" -e QDRANT_URL="http://localhost:6333" -e QDRANT_COLLECTION_NAME="your-project-name" -- node "/path/to/memory/mcp-qdrant-memory/dist/index.js"
+```
+
+**Option 3: Manual JSON Configuration**
 Add to `~/.claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
     "general-memory": {
       "command": "node",
-      "args": ["/absolute/path/to/memory/mcp-qdrant-memory/dist/index.js"],
+      "args": ["/path/to/memory/mcp-qdrant-memory/dist/index.js"],
       "env": {
         "OPENAI_API_KEY": "sk-your-key-here",
         "QDRANT_API_KEY": "your-secret-key",
@@ -81,11 +94,24 @@ claude-indexer --version
 ## 📋 Adding New Projects
 
 ### Step 1: Add MCP Collection
+
+**Option 1: Automated Script (Easiest)**
+```bash
+# Quick setup using your settings.txt
+python add_mcp_project.py my-project
+```
+
+**Option 2: Command Line**
+```bash
+claude mcp add my-project-memory -e OPENAI_API_KEY="YOUR_OPENAI_KEY" -e QDRANT_API_KEY="YOUR_QDRANT_KEY" -e QDRANT_URL="http://localhost:6333" -e QDRANT_COLLECTION_NAME="my-project" -- node "/path/to/memory/mcp-qdrant-memory/dist/index.js"
+```
+
+**Option 3: Manual JSON Configuration**
 Add to `~/.claude/claude_desktop_config.json`:
 ```json
 "my-project-memory": {
   "command": "node",
-  "args": ["/absolute/path/to/memory/mcp-qdrant-memory/dist/index.js"],
+  "args": ["/path/to/memory/mcp-qdrant-memory/dist/index.js"],
   "env": {
     "OPENAI_API_KEY": "sk-your-key-here",
     "QDRANT_API_KEY": "your-secret-key", 

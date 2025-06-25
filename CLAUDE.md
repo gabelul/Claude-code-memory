@@ -196,13 +196,31 @@ my-project (Project)
 
 ## Configuration
 
-### MCP Server Setup (`~/.claude/claude_desktop_config.json`)
+### MCP Server Setup
+
+**Option 1: Automated Script (Easiest)**
+```bash
+# Quick setup using your settings.txt - reads API keys automatically
+python add_mcp_project.py project-name
+python add_mcp_project.py general  # for general memory
+```
+
+**Option 2: Command Line**
+```bash
+# Add project-specific memory
+claude mcp add project-memory -e OPENAI_API_KEY="YOUR_OPENAI_KEY" -e QDRANT_API_KEY="YOUR_QDRANT_KEY" -e QDRANT_URL="http://localhost:6333" -e QDRANT_COLLECTION_NAME="project-name" -- node "/path/to/memory/mcp-qdrant-memory/dist/index.js"
+
+# Add general memory
+claude mcp add general-memory -e OPENAI_API_KEY="YOUR_OPENAI_KEY" -e QDRANT_API_KEY="YOUR_QDRANT_KEY" -e QDRANT_URL="http://localhost:6333" -e QDRANT_COLLECTION_NAME="general" -- node "/path/to/memory/mcp-qdrant-memory/dist/index.js"
+```
+
+**Option 3: Manual JSON Configuration (`~/.claude/claude_desktop_config.json`)**
 ```json
 {
   "mcpServers": {
     "project-memory": {
       "command": "node",
-      "args": ["/absolute/path/to/memory/mcp-qdrant-memory/dist/index.js"],
+      "args": ["/path/to/memory/mcp-qdrant-memory/dist/index.js"],
       "env": {
         "OPENAI_API_KEY": "sk-your-openai-key-here",
         "QDRANT_API_KEY": "your-qdrant-api-key",
@@ -212,7 +230,7 @@ my-project (Project)
     },
     "general-memory": {
       "command": "node",
-      "args": ["/absolute/path/to/memory/mcp-qdrant-memory/dist/index.js"],
+      "args": ["/path/to/memory/mcp-qdrant-memory/dist/index.js"],
       "env": {
         "OPENAI_API_KEY": "sk-your-openai-key-here",
         "QDRANT_API_KEY": "your-qdrant-api-key",
