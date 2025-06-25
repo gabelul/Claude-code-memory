@@ -88,8 +88,14 @@ class CoreIndexer:
         self.parser_registry = ParserRegistry(project_path)
         
     def _get_state_directory(self) -> Path:
-        """Get centralized state directory."""
-        state_dir = Path.home() / '.claude-indexer' / 'state'
+        """Get state directory (configurable for test isolation)."""
+        # Use configured state directory if provided (for tests)
+        if self.config.state_directory is not None:
+            state_dir = self.config.state_directory
+        else:
+            # Default to centralized state directory for production
+            state_dir = Path.home() / '.claude-indexer' / 'state'
+        
         state_dir.mkdir(parents=True, exist_ok=True)
         return state_dir
     

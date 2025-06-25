@@ -466,6 +466,18 @@ class TestQdrantStore:
                 mock_count.count = 100  # Initial count
                 mock_client.count.side_effect = [mock_count, MagicMock(count=25)]  # Before and after
                 
+                # Mock scroll to return points with file_path (code-indexed) and without (manual)
+                mock_code_point = MagicMock()
+                mock_code_point.id = "code_point_1"
+                mock_code_point.payload = {"file_path": "/path/to/file.py", "name": "function"}
+                
+                mock_manual_point = MagicMock()
+                mock_manual_point.id = "manual_point_1" 
+                mock_manual_point.payload = {"name": "manual_memory"}  # No file_path
+                
+                # scroll() returns (points, next_page_offset)
+                mock_client.scroll.return_value = ([mock_code_point, mock_manual_point], None)
+                
                 mock_client.delete.return_value = True
                 mock_client_class.return_value = mock_client
                 
@@ -484,6 +496,56 @@ class TestQdrantStore:
                 
                 # Verify selective deletion was called (not full collection deletion)
                 mock_client.delete.assert_called_once()
+                mock_client.delete_collection.assert_not_called()
+                
+                # Verify that only the code-indexed point was deleted
+                call_args = mock_client.delete.call_args
+                assert call_args[1]['collection_name'] == "test_collection"
+                assert call_args[1]['points_selector'] == ["code_point_1"]
+                assert call_args[1]['wait'] is True
+    
+    def test_clear_collection_preserve_manual_no_code_points(self):
+        """Test clearing collection when there are no code-indexed points."""
+        with patch('claude_indexer.storage.qdrant.QDRANT_AVAILABLE', True):
+            with patch('claude_indexer.storage.qdrant.QdrantClient') as mock_client_class:
+                mock_client = MagicMock()
+                mock_client.get_collections.return_value = MagicMock()
+                
+                # Mock count operations - same count before and after (no deletions)
+                mock_count = MagicMock()
+                mock_count.count = 25  # All manual memories
+                mock_client.count.side_effect = [mock_count, MagicMock(count=25)]  # Before and after
+                
+                # Mock scroll to return only manual points (no file_path)
+                mock_manual_point1 = MagicMock()
+                mock_manual_point1.id = "manual_point_1" 
+                mock_manual_point1.payload = {"name": "manual_memory_1"}  # No file_path
+                
+                mock_manual_point2 = MagicMock()
+                mock_manual_point2.id = "manual_point_2" 
+                mock_manual_point2.payload = {"name": "manual_memory_2"}  # No file_path
+                
+                # scroll() returns (points, next_page_offset) 
+                mock_client.scroll.return_value = ([mock_manual_point1, mock_manual_point2], None)
+                
+                mock_client.delete.return_value = True
+                mock_client_class.return_value = mock_client
+                
+                store = QdrantStore()
+                
+                # Mock collection exists
+                store.collection_exists = MagicMock(return_value=True)
+                
+                result = store.clear_collection("test_collection", preserve_manual=True)
+                
+                assert result.success
+                assert result.operation == "clear_collection"
+                assert result.items_processed == 0  # No items deleted
+                assert len(result.warnings) > 0
+                assert "Preserved 25 manual memories" in result.warnings[0]
+                
+                # Verify delete was NOT called since no code-indexed points were found
+                mock_client.delete.assert_not_called()
                 mock_client.delete_collection.assert_not_called()
 
 

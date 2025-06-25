@@ -30,6 +30,9 @@ class IndexerConfig(BaseModel):
     batch_size: int = Field(default=50, ge=1, le=1000)
     max_concurrent_files: int = Field(default=10, ge=1, le=100)
     
+    # State Management
+    state_directory: Optional[Path] = Field(default=None)
+    
     @classmethod
     def from_env(cls) -> 'IndexerConfig':
         """Create config with environment variable overrides."""

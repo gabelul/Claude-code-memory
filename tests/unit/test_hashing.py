@@ -124,18 +124,22 @@ class TestIndexingState:
     def test_state_file_creation(self, tmp_path):
         """Test that state file is created with correct name."""
         from claude_indexer.config import IndexerConfig
+        
+        # Create config with temporary state directory for test isolation
         config = IndexerConfig()
+        config.state_directory = tmp_path
         indexer = CoreIndexer(config, None, None, tmp_path)
         
-        # State file should be in project directory
+        # State file should be in the configured state directory (tmp_path)
         assert indexer.state_file.parent == tmp_path
-        assert indexer.state_file.name.startswith(".indexer_state_")
         assert indexer.state_file.name.endswith(".json")
+        assert "default" in indexer.state_file.name
     
     def test_save_and_load_state(self, tmp_path):
         """Test saving and loading state."""
         from claude_indexer.config import IndexerConfig
         config = IndexerConfig()
+        config.state_directory = tmp_path
         indexer = CoreIndexer(config, None, None, tmp_path)
         
         # Create test files
@@ -168,6 +172,7 @@ class TestIndexingState:
         """Test that state persists correctly across save/load cycles."""
         from claude_indexer.config import IndexerConfig
         config = IndexerConfig()
+        config.state_directory = tmp_path
         indexer = CoreIndexer(config, None, None, tmp_path)
         
         # Create test file
@@ -191,6 +196,7 @@ class TestIndexingState:
         """Test handling of empty state."""
         from claude_indexer.config import IndexerConfig
         config = IndexerConfig()
+        config.state_directory = tmp_path
         indexer = CoreIndexer(config, None, None, tmp_path)
         
         # Load state when no state file exists
@@ -202,6 +208,7 @@ class TestIndexingState:
         """Test handling of corrupted state file."""
         from claude_indexer.config import IndexerConfig
         config = IndexerConfig()
+        config.state_directory = tmp_path
         indexer = CoreIndexer(config, None, None, tmp_path)
         
         # Create corrupted state file
@@ -216,6 +223,7 @@ class TestIndexingState:
         """Test getting current state for files."""
         from claude_indexer.config import IndexerConfig
         config = IndexerConfig()
+        config.state_directory = tmp_path
         indexer = CoreIndexer(config, None, None, tmp_path)
         
         # Create test files with different content
@@ -246,6 +254,7 @@ class TestIndexingState:
         """Test handling of state file permission errors."""
         from claude_indexer.config import IndexerConfig
         config = IndexerConfig()
+        config.state_directory = tmp_path
         indexer = CoreIndexer(config, None, None, tmp_path)
         
         # Mock open to raise permission error
@@ -275,6 +284,7 @@ class TestIncrementalIndexing:
         """Test detection of unchanged files."""
         from claude_indexer.config import IndexerConfig
         config = IndexerConfig()
+        config.state_directory = tmp_path
         indexer = CoreIndexer(config, None, None, tmp_path)
         
         # Create test file
@@ -293,6 +303,7 @@ class TestIncrementalIndexing:
         """Test detection of modified files."""
         from claude_indexer.config import IndexerConfig
         config = IndexerConfig()
+        config.state_directory = tmp_path
         indexer = CoreIndexer(config, None, None, tmp_path)
         
         # Create test file
@@ -317,6 +328,7 @@ class TestIncrementalIndexing:
         """Test detection of new files."""
         from claude_indexer.config import IndexerConfig
         config = IndexerConfig()
+        config.state_directory = tmp_path
         indexer = CoreIndexer(config, None, None, tmp_path)
         
         # Create and save state for first file
@@ -339,6 +351,7 @@ class TestIncrementalIndexing:
         """Test full reprocessing finds all files."""
         from claude_indexer.config import IndexerConfig
         config = IndexerConfig()
+        config.state_directory = tmp_path
         indexer = CoreIndexer(config, None, None, tmp_path)
         
         # Create test files

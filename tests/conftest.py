@@ -285,8 +285,14 @@ qdrant_url=http://localhost:6333
 """
     settings_file.write_text(settings_content.strip())
     
+    # Create temporary state directory for test isolation
+    state_dir = tmp_path / "state"
+    state_dir.mkdir(exist_ok=True)
+    
     from claude_indexer.config import load_config
-    return load_config(settings_file)
+    config = load_config(settings_file)
+    config.state_directory = state_dir  # Override state directory for tests
+    return config
 
 
 # ---------------------------------------------------------------------------
