@@ -8,6 +8,7 @@ from .config import load_config, IndexerConfig
 from .indexer import CoreIndexer
 from .embeddings.registry import create_embedder_from_config
 from .storage.registry import create_store_from_config
+from .logging import setup_logging
 
 # Only import these if they're available
 try:
@@ -60,34 +61,6 @@ else:
         return f
 
 
-    # Check for main help before defining CLI
-    if len(sys.argv) >= 2 and sys.argv[1] in ['--help', '-h']:
-        print("""Usage: python -m claude_indexer [OPTIONS]
-
-  Claude Code Memory Indexer - Universal semantic indexing for codebases.
-
-Options:
-  -c, --collection TEXT  Collection name for vector storage  [required]
-  -p, --project PATH     Project directory path  [required]
-  --config PATH          Configuration file path
-  -q, --quiet            Suppress non-error output
-  -v, --verbose          Enable verbose output
-  --include-tests        Include test files in indexing
-  --incremental          Only process changed files
-  --force                Force reprocessing of all files
-  --clear                Clear collection before indexing
-  --generate-commands    Generate MCP commands instead of auto-loading
-  --depth [basic|full]   Analysis depth
-  --version              Show the version and exit.
-  --help                 Show this message and exit.
-
-Commands:
-  hooks    Git hooks management.
-  search   Search for similar entities and relations.
-  service  Background service commands.
-  watch    File watching commands.
-  file     Index a single file.""")
-        sys.exit(0)
 
     @click.group(invoke_without_command=True)
     @click.version_option(version="1.0.0")
@@ -103,13 +76,14 @@ Commands:
     @click.option('--include-tests', is_flag=True, help='Include test files in indexing')
     @click.option('--incremental', is_flag=True, help='Only process changed files')
     @click.option('--force', is_flag=True, help='Force reprocessing of all files')
-    @click.option('--clear', is_flag=True, help='Clear collection before indexing')
+    @click.option('--clear', is_flag=True, help='Clear code-indexed memories before indexing (preserves manual memories)')
+    @click.option('--clear-all', is_flag=True, help='Clear ALL memories before indexing (including manual ones)')
     @click.option('--depth', type=click.Choice(['basic', 'full']), default='full',
                   help='Analysis depth')
     @click.option('--generate-commands', is_flag=True, 
                   help='Generate MCP commands for manual execution instead of auto-loading')
     def index(project, collection, verbose, quiet, config, include_tests, 
-            incremental, force, clear, depth, generate_commands):
+            incremental, force, clear, clear_all, depth, generate_commands):
         """Index an entire project."""
         
         if quiet and verbose:
@@ -117,6 +91,9 @@ Commands:
             sys.exit(1)
         
         try:
+            # Setup logging
+            logger = setup_logging(quiet=quiet, verbose=verbose)
+            
             # Load configuration
             config_obj = load_config(Path(config) if config else None)
         
@@ -187,15 +164,27 @@ Commands:
             indexer = CoreIndexer(config_obj, embedder, vector_store, project_path)
             
             # Clear collection if requested
-            if clear:
+            if clear or clear_all:
+                if clear and clear_all:
+                    click.echo("Error: --clear and --clear-all are mutually exclusive", err=True)
+                    sys.exit(1)
+                
+                preserve_manual = not clear_all  # clear preserves manual, clear_all doesn't
                 if not quiet:
-                    click.echo(f"🗑️ Clearing collection: {collection}")
-                success = indexer.clear_collection(collection)
+                    if clear_all:
+                        click.echo(f"🗑️ Clearing ALL memories in collection: {collection}")
+                    else:
+                        click.echo(f"🗑️ Clearing code-indexed memories in collection: {collection}")
+                
+                success = indexer.clear_collection(collection, preserve_manual=preserve_manual)
                 if not success:
                     click.echo("❌ Failed to clear collection", err=True)
                     sys.exit(1)
                 elif not quiet:
-                    click.echo("✅ Collection cleared")
+                    if clear_all:
+                        click.echo("✅ All memories cleared")
+                    else:
+                        click.echo("✅ Code-indexed memories cleared (manual memories preserved)")
         
             # Run indexing
             if not quiet:
@@ -221,6 +210,12 @@ Commands:
                     click.echo(f"   Files processed: {result.files_processed}")
                     click.echo(f"   Entities created: {result.entities_created}")
                     click.echo(f"   Relations created: {result.relations_created}")
+                    
+                    # Report MCP command file location if in generate-commands mode
+                    if generate_commands:
+                        commands_file = project_path / 'mcp_output' / f"{collection}_mcp_commands.txt"
+                        if commands_file.exists():
+                            click.echo(f"📋 MCP commands saved to: {commands_file}")
                     
                     if result.warnings and verbose:
                         click.echo("⚠️  Warnings:")

@@ -341,8 +341,13 @@ class QdrantStore(ManagedVectorStore):
         except Exception:
             return []
     
-    def clear_collection(self, collection_name: str) -> StorageResult:
-        """Clear all data from a collection by deleting it."""
+    def clear_collection(self, collection_name: str, preserve_manual: bool = True) -> StorageResult:
+        """Clear collection data. By default, preserves manually-added memories.
+        
+        Args:
+            collection_name: Name of the collection
+            preserve_manual: If True, only delete code-indexed memories (those with file_path)
+        """
         start_time = time.time()
         
         try:
@@ -355,15 +360,50 @@ class QdrantStore(ManagedVectorStore):
                     warnings=[f"Collection {collection_name} doesn't exist - nothing to clear"]
                 )
             
-            # Delete the collection
-            self.client.delete_collection(collection_name=collection_name)
-            
-            return StorageResult(
-                success=True,
-                operation="clear_collection",
-                items_processed=1,
-                processing_time=time.time() - start_time
-            )
+            if preserve_manual:
+                # Delete only points that have file_path (code-indexed memories)
+                from qdrant_client import models
+                
+                # Count points before deletion for reporting
+                count_before = self.client.count(collection_name=collection_name).count
+                
+                # Delete points with file_path field
+                self.client.delete(
+                    collection_name=collection_name,
+                    points_selector=models.FilterSelector(
+                        filter=models.Filter(
+                            must=[
+                                models.FieldCondition(
+                                    key="file_path",
+                                    match=models.MatchExcept(except_values=[None]),
+                                )
+                            ]
+                        )
+                    ),
+                    wait=True
+                )
+                
+                # Count points after deletion
+                count_after = self.client.count(collection_name=collection_name).count
+                deleted_count = count_before - count_after
+                
+                return StorageResult(
+                    success=True,
+                    operation="clear_collection",
+                    items_processed=deleted_count,
+                    processing_time=time.time() - start_time,
+                    metadata={"preserved_manual_memories": count_after}
+                )
+            else:
+                # Delete the entire collection (old behavior)
+                self.client.delete_collection(collection_name=collection_name)
+                
+                return StorageResult(
+                    success=True,
+                    operation="clear_collection",
+                    items_processed=1,
+                    processing_time=time.time() - start_time
+                )
             
         except Exception as e:
             return StorageResult(

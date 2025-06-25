@@ -12,6 +12,7 @@ from .analysis.parser import ParserRegistry, ParserResult
 from .analysis.entities import Entity, Relation
 from .embeddings.base import Embedder
 from .storage.base import VectorStore
+from .logging import get_logger
 
 
 @dataclass
@@ -74,6 +75,7 @@ class CoreIndexer:
         self.embedder = embedder
         self.vector_store = vector_store
         self.project_path = project_path
+        self.logger = get_logger()
         
         # Initialize parser registry
         self.parser_registry = ParserRegistry(project_path)
@@ -109,6 +111,8 @@ class CoreIndexer:
                 result.processing_time = time.time() - start_time
                 return result
             
+            self.logger.info(f"Found {len(files_to_process)} files to process")
+            
             # Process files in batches
             batch_size = self.config.batch_size
             all_entities = []
@@ -116,6 +120,10 @@ class CoreIndexer:
             
             for i in range(0, len(files_to_process), batch_size):
                 batch = files_to_process[i:i + batch_size]
+                batch_num = (i // batch_size) + 1
+                total_batches = (len(files_to_process) + batch_size - 1) // batch_size
+                self.logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} files)")
+                
                 batch_entities, batch_relations, batch_errors = self._process_file_batch(batch)
                 
                 all_entities.extend(batch_entities)
@@ -231,13 +239,18 @@ class CoreIndexer:
             print(f"Search failed: {e}")
             return []
     
-    def clear_collection(self, collection_name: str) -> bool:
-        """Clear all data from collection and state file."""
+    def clear_collection(self, collection_name: str, preserve_manual: bool = True) -> bool:
+        """Clear collection data.
+        
+        Args:
+            collection_name: Name of the collection
+            preserve_manual: If True (default), preserve manually-added memories
+        """
         try:
             # Clear vector store
-            result = self.vector_store.clear_collection(collection_name)
+            result = self.vector_store.clear_collection(collection_name, preserve_manual=preserve_manual)
             
-            # Clear state file
+            # Clear state file (only tracks code-indexed files)
             state_file = self._get_state_file(collection_name)
             if state_file.exists():
                 state_file.unlink()
@@ -368,16 +381,22 @@ class CoreIndexer:
         
         for file_path in files:
             try:
+                relative_path = file_path.relative_to(self.project_path)
+                self.logger.debug(f"Processing file: {relative_path}")
+                
                 result = self.parser_registry.parse_file(file_path)
                 
                 if result.success:
                     all_entities.extend(result.entities)
                     all_relations.extend(result.relations)
+                    self.logger.debug(f"  Found {len(result.entities)} entities, {len(result.relations)} relations")
                 else:
                     errors.append(str(file_path))
+                    self.logger.warning(f"  Failed to parse {relative_path}")
                     
             except Exception as e:
                 errors.append(str(file_path))
+                self.logger.error(f"  Error processing {file_path}: {e}")
         
         return all_entities, all_relations, errors
     

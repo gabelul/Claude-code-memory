@@ -115,11 +115,12 @@ Knowledge graph is automatically loaded into Qdrant - no manual steps required!
 mcp__my-project-memory__search_similar("your search query")
 ```
 
-## 🔄 Improved CLI Interface
+## 🔄 Dual-Mode Operation
 
-### Basic Indexing (Simplified Syntax)
+### Auto-Loading Mode (Default)
+Direct Qdrant integration with zero manual steps:
 ```bash
-# Index new project (auto-loads to Qdrant) - no 'index' command needed!
+# Index new project (auto-loads to Qdrant)
 claude-indexer --project /path/to/project --collection project-name
 
 # Incremental updates (15x faster)
@@ -128,12 +129,25 @@ claude-indexer --project /path/to/project --collection project-name --incrementa
 # Force reprocess all files (overrides incremental checks)
 claude-indexer --project /path/to/project --collection project-name --incremental --force
 
-# Clear collection and start fresh
+# Clear collection (preserves manually added memories)
 claude-indexer --project /path/to/project --collection project-name --clear
 
-# Debug mode (generate commands file)
+# Clear entire collection (deletes all memories including manual)
+claude-indexer --project /path/to/project --collection project-name --clear-all
+```
+
+### Manual Command Mode
+Generate MCP commands for manual execution:
+```bash
+# Generate commands without API calls (uses dummy embedder)
 claude-indexer --project /path/to/project --collection project-name --generate-commands
 
+# Commands saved to: mcp_output/project-name_mcp_commands.txt
+# Copy and paste commands into Claude Code for manual execution
+```
+
+### CLI Help
+```bash
 # Get comprehensive help (shows all options + commands)
 claude-indexer
 ```
@@ -206,6 +220,7 @@ claude-indexer --version
 - **Knowledge graphs**: Understands relationships between code components
 - **Global wrapper**: Use `claude-indexer` from any directory
 - **Zero Manual Steps**: Automatic loading eliminates copy-paste workflows
+- **Smart Memory Clearing**: --clear preserves manual memories, --clear-all removes everything
 
 ## 🧪 Testing
 

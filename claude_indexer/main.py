@@ -8,6 +8,7 @@ from .config import load_config
 from .indexer import CoreIndexer
 from .embeddings.registry import create_embedder_from_config
 from .storage.registry import create_store_from_config
+from .logging import setup_logging
 
 
 def run_indexing(project_path: str, collection_name: str, 
@@ -20,6 +21,9 @@ def run_indexing(project_path: str, collection_name: str,
     """
     
     try:
+        # Setup logging
+        logger = setup_logging(quiet=quiet, verbose=verbose)
+        
         # Load configuration
         config_path = Path(config_file) if config_file else None
         config = load_config(config_path)

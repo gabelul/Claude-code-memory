@@ -49,31 +49,30 @@ class MCPStore(VectorStore):
     def upsert_points(self, collection_name: str, points: List[VectorPoint]) -> StorageResult:
         """Store points for command generation.""" 
         try:
-            # Convert VectorPoints to entities format
-            entities = []
+            # Separate entities and relations
             for point in points:
-                entity = {
-                    "name": point.payload.get("name", f"entity_{point.id}"),
-                    "entityType": point.payload.get("entityType", "unknown"),
-                    "observations": point.payload.get("observations", [])
-                }
-                # Add other payload data as observations
-                for key, value in point.payload.items():
-                    if key not in ["name", "entityType", "observations"] and value:
-                        entity["observations"].append(f"{key}: {value}")
-                entities.append(entity)
+                if point.payload.get("type") == "relation":
+                    # This is a relation
+                    relation = {
+                        "from": point.payload.get("from"),
+                        "to": point.payload.get("to"),
+                        "relationType": point.payload.get("relationType")
+                    }
+                    self.relations.append(relation)
+                else:
+                    # This is an entity
+                    entity = {
+                        "name": point.payload.get("name", f"entity_{point.id}"),
+                        "entityType": point.payload.get("entityType", "unknown"),
+                        "observations": point.payload.get("observations", [])
+                    }
+                    # Add other payload data as observations
+                    for key, value in point.payload.items():
+                        if key not in ["name", "entityType", "observations", "type", "collection"] and value:
+                            entity["observations"].append(f"{key}: {value}")
+                    self.entities.append(entity)
             
-            self.entities.extend(entities)
-            
-            # Generate and save commands if we have output directory
-            if self.output_dir:
-                self._save_commands_to_files()
-            
-            # Print commands if enabled
-            if self.auto_print:
-                commands = self._generate_entity_commands(entities)
-                print("\n# Generated MCP Entity Commands:")
-                print(commands)
+            # Don't save on every upsert, wait for finalize_commands
             
             return StorageResult(success=True, operation="upsert", items_processed=len(points))
             
@@ -177,6 +176,16 @@ class MCPStore(VectorStore):
             
         except Exception as e:
             print(f"❌ Failed to save MCP commands: {e}")
+    
+    def finalize_commands(self, collection_name: str) -> StorageResult:
+        """Finalize command generation and save to files."""
+        try:
+            self.collection_name = collection_name
+            self._save_commands_to_files()
+            return StorageResult(success=True, operation="finalize", items_processed=1)
+        except Exception as e:
+            return StorageResult(success=False, operation="finalize", 
+                               items_failed=1, errors=[str(e)])
 
 
 # Availability check

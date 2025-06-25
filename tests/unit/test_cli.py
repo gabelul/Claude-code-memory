@@ -192,13 +192,23 @@ class TestIndexCommands:
         
         mock_embedder = MagicMock()
         mock_store = MagicMock()
+        # Mock finalize_commands for MCP store
+        mock_store.finalize_commands = MagicMock(return_value=MagicMock(success=True))
         mock_create_embedder.return_value = mock_embedder
         mock_create_store.return_value = mock_store
         
         # Mock indexer and parser
         mock_indexer = MagicMock()
+        # Make sure indexer has vector_store attribute for finalize_commands to be called
+        mock_indexer.vector_store = mock_store
         mock_result = MagicMock()
         mock_result.success = True
+        mock_result.processing_time = 1.2
+        mock_result.files_processed = 1
+        mock_result.entities_created = 10
+        mock_result.relations_created = 5
+        mock_result.warnings = []
+        mock_result.errors = []
         mock_indexer.index_project.return_value = mock_result
         
         # Mock file finding and parsing
@@ -225,8 +235,16 @@ class TestIndexCommands:
             ])
             
             assert result.exit_code == 0
-            assert "Generating MCP commands" in result.output
-            assert "commands.txt" in result.output
+            assert "Using command generation mode (saves to mcp_output/)" in result.output
+            
+            # Verify that the command generation mode was used by checking that:
+            # 1. The dummy embedder was created (not OpenAI)
+            # 2. The MCP store backend was created
+            create_embedder_call = mock_create_embedder.call_args[0][0]
+            assert create_embedder_call["provider"] == "dummy"
+            
+            create_store_call = mock_create_store.call_args[0][0]
+            assert create_store_call["backend"] == "mcp"
     
     def test_index_project_quiet_and_verbose_error(self):
         """Test that quiet and verbose flags are mutually exclusive."""

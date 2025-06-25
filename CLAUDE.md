@@ -8,9 +8,10 @@ Complete memory solution for Claude Code providing context-aware conversations w
 - 🏗️ Modular `claude_indexer` package (refactored from 2000+ LOC monolith)
 - 📊 Knowledge graph with entities & relations via delorenj/mcp-qdrant-memory
 - ⚡ Tree-sitter + Jedi parsing (36x faster, 70% LLM-quality understanding)
-- 🔄 Direct Qdrant automation with zero manual steps
+- 🔄 Dual-mode operation: Direct Qdrant automation OR manual command generation
 - 📁 Project-specific collections for isolation
 - 🎯 Zero code duplication with clean separation of concerns
+- 🛡️ Smart clearing: --clear preserves manual memories, --clear-all removes everything
 
 ## Problem Statement
 
@@ -87,19 +88,30 @@ claude-indexer --project /path/to/project --collection project-name
 
 ## Usage Patterns
 
-### Basic Indexing
+### Dual-Mode Operation
+
+**Auto-Loading Mode (Default):**
 ```bash
-# Auto-loading (default)
+# Direct Qdrant automation - zero manual steps
 claude-indexer --project /path --collection name
 
 # Incremental updates (15x faster)
 claude-indexer --project /path --collection name --incremental
 
-# Manual debugging mode
+# Clear collection (preserves manually added memories)
+claude-indexer --project /path --collection name --clear
+
+# Clear entire collection (deletes all memories including manual)
+claude-indexer --project /path --collection name --clear-all
+```
+
+**Manual Command Mode:**
+```bash
+# Generate MCP commands without API calls (uses DummyEmbedder)
 claude-indexer --project /path --collection name --generate-commands
 
-# Clear collection and start fresh
-claude-indexer --project /path --collection name --clear
+# Output: mcp_output/collection-name_mcp_commands.txt
+# Contains ready-to-execute MCP commands for manual copy-paste
 ```
 
 ### Advanced Automation
