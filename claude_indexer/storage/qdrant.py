@@ -374,18 +374,26 @@ class QdrantStore(ManagedVectorStore):
                 count_before = self.client.count(collection_name=collection_name).count
                 
                 # Delete points with file_path field (code-indexed memories)
-                # Use IsNull with must_not to match points where file_path exists and is not null
-                self.client.delete(
+                # Use scroll to get all points, filter manually, then delete by IDs
+                all_points = self.client.scroll(
                     collection_name=collection_name,
-                    points_selector=models.FilterSelector(
-                        filter=models.Filter(
-                            must_not=[
-                                models.IsNullCondition(is_null=models.PayloadField(key="file_path"))
-                            ]
-                        )
-                    ),
-                    wait=True
-                )
+                    limit=10000,  # Get all points
+                    with_payload=True
+                )[0]
+                
+                # Find points that have file_path (code-indexed)
+                code_point_ids = []
+                for point in all_points:
+                    if 'file_path' in point.payload and point.payload['file_path']:
+                        code_point_ids.append(point.id)
+                
+                # Delete code points by ID if any found
+                if code_point_ids:
+                    self.client.delete(
+                        collection_name=collection_name,
+                        points_selector=code_point_ids,
+                        wait=True
+                    )
                 
                 # Count points after deletion
                 count_after = self.client.count(collection_name=collection_name).count

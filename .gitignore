@@ -25,6 +25,13 @@ settings.txt
 # Temporary files
 *.log
 *.tmp
+.coverage
+*.backup
+
+# Test/debug files
+test_*.py
+debug_*.py
+cleanup_*.py
 
 # Qdrant storage
 qdrant_storage/

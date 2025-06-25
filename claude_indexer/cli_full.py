@@ -75,7 +75,6 @@ else:
     @common_options
     @click.option('--include-tests', is_flag=True, help='Include test files in indexing')
     @click.option('--incremental', is_flag=True, help='Only process changed files')
-    @click.option('--force', is_flag=True, help='Force reprocessing of all files')
     @click.option('--clear', is_flag=True, help='Clear code-indexed memories before indexing (preserves manual memories)')
     @click.option('--clear-all', is_flag=True, help='Clear ALL memories before indexing (including manual ones)')
     @click.option('--depth', type=click.Choice(['basic', 'full']), default='full',
@@ -83,7 +82,7 @@ else:
     @click.option('--generate-commands', is_flag=True, 
                   help='Generate MCP commands for manual execution instead of auto-loading')
     def index(project, collection, verbose, quiet, config, include_tests, 
-            incremental, force, clear, clear_all, depth, generate_commands):
+            incremental, clear, clear_all, depth, generate_commands):
         """Index an entire project."""
         
         if quiet and verbose:
@@ -201,8 +200,7 @@ else:
             result = indexer.index_project(
                 collection_name=collection,
                 include_tests=include_tests,
-                incremental=incremental,
-                force=force
+                incremental=incremental
             )
         
         

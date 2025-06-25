@@ -129,7 +129,7 @@ def qdrant_client() -> Iterator[QdrantClient]:
     try:
         collections = client.get_collections().collections
         if not any(c.name == collection_name for c in collections):
-            client.recreate_collection(
+            client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
             )
@@ -138,8 +138,18 @@ def qdrant_client() -> Iterator[QdrantClient]:
     
     yield client
     
-    # Cleanup: optionally remove test collection
-    # client.delete_collection(collection_name)
+    # Cleanup: Remove all test collections after test session
+    try:
+        collections = client.get_collections().collections
+        test_collections = [c.name for c in collections if 'test' in c.name.lower()]
+        for collection_name in test_collections:
+            try:
+                client.delete_collection(collection_name)
+                print(f"Cleaned up test collection: {collection_name}")
+            except Exception as e:
+                print(f"Warning: Failed to cleanup collection {collection_name}: {e}")
+    except Exception as e:
+        print(f"Warning: Failed to cleanup test collections: {e}")
 
 
 @pytest.fixture()
@@ -390,6 +400,51 @@ def _qdrant_available() -> bool:
         return True
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# Additional cleanup fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True, scope="function")
+def cleanup_test_collections_on_failure():
+    """Cleanup test collections after each test function to prevent accumulation."""
+    yield  # Run the test
+    
+    # Only perform cleanup if Qdrant is available
+    if not _qdrant_available():
+        return
+    
+    # Cleanup any collections created during this test that match test patterns
+    try:
+        from claude_indexer.config import load_config
+        config = load_config()
+        
+        if config.qdrant_api_key and config.qdrant_api_key != "default-key":
+            client = QdrantClient(
+                url=config.qdrant_url,
+                api_key=config.qdrant_api_key
+            )
+        else:
+            client = QdrantClient("localhost", port=6333)
+        
+        collections = client.get_collections().collections
+        # Only cleanup collections that look like temporary test collections (with timestamps or specific patterns)
+        temp_test_collections = [
+            c.name for c in collections 
+            if ('test' in c.name.lower() and 
+                (any(char.isdigit() for char in c.name) or  # has numbers (likely timestamps)
+                 c.name.startswith('test_') and len(c.name) > 20))  # long test names
+        ]
+        
+        for collection_name in temp_test_collections:
+            try:
+                client.delete_collection(collection_name)
+            except Exception:
+                pass  # Ignore individual failures
+                
+    except Exception:
+        pass  # Ignore all cleanup failures to not interfere with test results
 
 
 # ---------------------------------------------------------------------------

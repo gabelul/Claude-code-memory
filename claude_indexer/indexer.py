@@ -98,14 +98,14 @@ class CoreIndexer:
         return self._get_state_file("default")
     
     def index_project(self, collection_name: str, include_tests: bool = False,
-                     incremental: bool = False, force: bool = False) -> IndexingResult:
+                     incremental: bool = False) -> IndexingResult:
         """Index an entire project."""
         start_time = time.time()
         result = IndexingResult(success=True, operation="incremental" if incremental else "full")
         
         try:
             # Find files to process
-            if incremental and not force:
+            if incremental:
                 files_to_process, deleted_files = self._find_changed_files(include_tests, collection_name)
                 
                 # Handle deleted files
@@ -359,10 +359,8 @@ class CoreIndexer:
         
         return filtered_files
     
-    def _get_files_needing_processing(self, include_tests: bool = False, force: bool = False, collection_name: str = None) -> List[Path]:
+    def _get_files_needing_processing(self, include_tests: bool = False, collection_name: str = None) -> List[Path]:
         """Get files that need processing for incremental indexing."""
-        if force:
-            return self._find_all_files(include_tests)
         return self._find_changed_files(include_tests, collection_name)[0]
     
     def _find_changed_files(self, include_tests: bool = False, collection_name: str = None) -> Tuple[List[Path], List[str]]:

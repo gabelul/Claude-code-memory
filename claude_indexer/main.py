@@ -14,7 +14,7 @@ from .logging import setup_logging
 def run_indexing(project_path: str, collection_name: str, 
                 incremental: bool = False, quiet: bool = False, 
                 verbose: bool = False, include_tests: bool = False,
-                force: bool = False, config_file: Optional[str] = None) -> bool:
+                config_file: Optional[str] = None) -> bool:
     """Run indexing with the specified parameters.
     
     This function provides a programmatic interface for other modules.
@@ -84,8 +84,7 @@ def run_indexing(project_path: str, collection_name: str,
         result = indexer.index_project(
             collection_name=collection_name,
             include_tests=include_tests,
-            incremental=incremental,
-            force=force
+            incremental=incremental
         )
         
         # Report results

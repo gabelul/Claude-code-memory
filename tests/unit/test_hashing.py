@@ -335,8 +335,8 @@ class TestIncrementalIndexing:
         assert len(files_to_process) == 1
         assert files_to_process[0] == file2
     
-    def test_force_reprocessing(self, tmp_path):
-        """Test forcing reprocessing of all files."""
+    def test_full_reprocessing(self, tmp_path):
+        """Test full reprocessing finds all files."""
         from claude_indexer.config import IndexerConfig
         config = IndexerConfig()
         indexer = CoreIndexer(config, None, None, tmp_path)
@@ -351,9 +351,9 @@ class TestIncrementalIndexing:
         # Save state
         indexer._save_state(files, "test")
         
-        # Get files needing processing with force=True
-        files_to_process = indexer._get_files_needing_processing(include_tests=False, force=True, collection_name="test")
+        # Get all files (full mode - not incremental)
+        all_files = indexer._find_all_files(include_tests=False)
         
-        # All files should need processing when forced
-        assert len(files_to_process) == 3
-        assert set(files_to_process) == set(files)
+        # All files should be found in full mode
+        assert len(all_files) == 3
+        assert set(all_files) == set(files)
