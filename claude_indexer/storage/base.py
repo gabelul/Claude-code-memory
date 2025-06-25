@@ -275,11 +275,11 @@ class CachingVectorStore(VectorStore):
         else:
             raise AttributeError(f"Backend {type(self.backend)} does not support generate_deterministic_id")
     
-    def clear_collection(self, collection_name: str):
+    def clear_collection(self, collection_name: str, preserve_manual: bool = False):
         """Delegate collection clearing to backend."""
         # Clear cache when collection is cleared
         self._search_cache.clear()
         if hasattr(self.backend, 'clear_collection'):
-            return self.backend.clear_collection(collection_name)
+            return self.backend.clear_collection(collection_name, preserve_manual=preserve_manual)
         else:
             raise AttributeError(f"Backend {type(self.backend)} does not support clear_collection")

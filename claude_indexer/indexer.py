@@ -29,6 +29,11 @@ class IndexingResult:
     relations_created: int = 0
     processing_time: float = 0.0
     
+    # Cost tracking
+    total_tokens: int = 0
+    total_cost_estimate: float = 0.0
+    embedding_requests: int = 0
+    
     # File tracking
     processed_files: List[str] = None
     failed_files: List[str] = None
@@ -172,6 +177,14 @@ class CoreIndexer:
             # Update state file
             if result.success:
                 self._save_state(files_to_process, collection_name)
+            
+            # Transfer cost data to result
+            if hasattr(self, '_session_cost_data'):
+                result.total_tokens = self._session_cost_data.get('tokens', 0)
+                result.total_cost_estimate = self._session_cost_data.get('cost', 0.0)
+                result.embedding_requests = self._session_cost_data.get('requests', 0)
+                # Reset for next operation
+                self._session_cost_data = {'tokens': 0, 'cost': 0.0, 'requests': 0}
             
         except Exception as e:
             result.success = False
@@ -410,11 +423,29 @@ class CoreIndexer:
         """Store entities and relations in vector database using batch processing."""
         try:
             all_points = []
+            total_tokens = 0
+            total_cost = 0.0
+            total_requests = 0
             
             # Batch process entities
             if entities:
                 entity_texts = [self._entity_to_text(entity) for entity in entities]
                 embedding_results = self.embedder.embed_batch(entity_texts)
+                
+                # Collect cost data from embedding results
+                for embedding_result in embedding_results:
+                    if hasattr(embedding_result, 'token_count') and embedding_result.token_count:
+                        total_tokens += embedding_result.token_count
+                    if hasattr(embedding_result, 'cost_estimate') and embedding_result.cost_estimate:
+                        total_cost += embedding_result.cost_estimate
+                
+                # Count successful requests (batch counts as requests based on actual API calls)
+                if hasattr(self.embedder, 'get_usage_stats'):
+                    # Get current stats to track requests made during this operation
+                    stats_before = getattr(self, '_last_usage_stats', {'total_requests': 0})
+                    current_stats = self.embedder.get_usage_stats()
+                    total_requests += max(0, current_stats.get('total_requests', 0) - stats_before.get('total_requests', 0))
+                    self._last_usage_stats = current_stats
                 
                 for entity, embedding_result in zip(entities, embedding_results):
                     if embedding_result.success:
@@ -428,12 +459,34 @@ class CoreIndexer:
                 relation_texts = [self._relation_to_text(relation) for relation in relations]
                 embedding_results = self.embedder.embed_batch(relation_texts)
                 
+                # Collect cost data from embedding results
+                for embedding_result in embedding_results:
+                    if hasattr(embedding_result, 'token_count') and embedding_result.token_count:
+                        total_tokens += embedding_result.token_count
+                    if hasattr(embedding_result, 'cost_estimate') and embedding_result.cost_estimate:
+                        total_cost += embedding_result.cost_estimate
+                
+                # Update request count
+                if hasattr(self.embedder, 'get_usage_stats'):
+                    stats_before = getattr(self, '_last_usage_stats', {'total_requests': 0})
+                    current_stats = self.embedder.get_usage_stats()
+                    total_requests += max(0, current_stats.get('total_requests', 0) - stats_before.get('total_requests', 0))
+                    self._last_usage_stats = current_stats
+                
                 for relation, embedding_result in zip(relations, embedding_results):
                     if embedding_result.success:
                         point = self.vector_store.create_relation_point(
                             relation, embedding_result.embedding, collection_name
                         )
                         all_points.append(point)
+            
+            # Store cost tracking data for result reporting
+            if not hasattr(self, '_session_cost_data'):
+                self._session_cost_data = {'tokens': 0, 'cost': 0.0, 'requests': 0}
+            
+            self._session_cost_data['tokens'] += total_tokens
+            self._session_cost_data['cost'] += total_cost
+            self._session_cost_data['requests'] += total_requests
             
             # Batch store all points
             if all_points:

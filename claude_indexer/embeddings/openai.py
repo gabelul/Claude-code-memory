@@ -14,22 +14,22 @@ except ImportError:
 class OpenAIEmbedder(RetryableEmbedder):
     """OpenAI embeddings with retry logic and rate limiting."""
     
-    # Model configurations
+    # Model configurations with current 2025 pricing
     MODELS = {
         "text-embedding-3-small": {
             "dimensions": 1536,
             "max_tokens": 8191,
-            "cost_per_1k_tokens": 0.00002
+            "cost_per_1k_tokens": 0.00002  # $0.00002/1K tokens (current 2025)
         },
         "text-embedding-3-large": {
             "dimensions": 3072,
             "max_tokens": 8191,
-            "cost_per_1k_tokens": 0.00013
+            "cost_per_1k_tokens": 0.00013   # $0.00013/1K tokens (current 2025)
         },
         "text-embedding-ada-002": {
             "dimensions": 1536,
             "max_tokens": 8191,
-            "cost_per_1k_tokens": 0.0001
+            "cost_per_1k_tokens": 0.0001    # $0.0001/1K tokens (legacy model)
         }
     }
     

@@ -185,8 +185,11 @@ else:
                         click.echo("✅ All memories cleared")
                     else:
                         click.echo("✅ Code-indexed memories cleared (manual memories preserved)")
+                
+                # Exit after clearing - don't auto-index
+                return
         
-            # Run indexing
+            # Run indexing only if not clearing
             if not quiet:
                 click.echo(f"🔄 Indexing project: {project_path}")
                 click.echo(f"📦 Collection: {collection}")
@@ -210,6 +213,26 @@ else:
                     click.echo(f"   Files processed: {result.files_processed}")
                     click.echo(f"   Entities created: {result.entities_created}")
                     click.echo(f"   Relations created: {result.relations_created}")
+                    
+                    # Report cost information if available (only for real OpenAI usage, not dummy mode)
+                    if result.total_tokens > 0 and not generate_commands:
+                        click.echo("💰 OpenAI Usage:")
+                        click.echo(f"   Tokens consumed: {result.total_tokens:,}")
+                        if result.embedding_requests > 0:
+                            click.echo(f"   API requests: {result.embedding_requests}")
+                        if result.total_cost_estimate > 0:
+                            # Format cost nicely based on amount
+                            if result.total_cost_estimate < 0.01:
+                                click.echo(f"   Estimated cost: ${result.total_cost_estimate:.6f}")
+                            else:
+                                click.echo(f"   Estimated cost: ${result.total_cost_estimate:.4f}")
+                        
+                        # Check pricing accuracy and show current model info
+                        if hasattr(embedder, 'get_model_info'):
+                            model_info = embedder.get_model_info()
+                            model_name = model_info.get('model', 'unknown')
+                            cost_per_1k = model_info.get('cost_per_1k_tokens', 0)
+                            click.echo(f"   Model: {model_name} (${cost_per_1k:.5f}/1K tokens)")
                     
                     # Report MCP command file location if in generate-commands mode
                     if generate_commands:
@@ -312,6 +335,7 @@ else:
         try:
             from .watcher.handler import IndexingEventHandler
             from watchdog.observers import Observer
+            from .service import IndexingService
             
             # Validate project path
             project_path = Path(project).resolve()
@@ -322,11 +346,21 @@ else:
             # Load configuration
             config_obj = load_config(Path(config) if config else None)
             
-            # Create event handler
+            # Load service configuration for watch patterns and settings
+            service = IndexingService()
+            service_config = service.load_config()
+            service_settings = service_config.get("settings", {})
+            
+            # Create event handler with service configuration
             settings = {
                 "debounce_seconds": debounce,
-                "watch_patterns": ["*.py", "*.md"],
-                "ignore_patterns": ["*.pyc", "__pycache__", ".git", ".venv"]
+                "watch_patterns": service_settings.get("watch_patterns", ["*.py", "*.md"]),
+                "ignore_patterns": service_settings.get("ignore_patterns", [
+                    "*.pyc", "__pycache__", ".git", ".venv", 
+                    "node_modules", ".env", "*.log"
+                ]),
+                "max_file_size": service_settings.get("max_file_size", 1048576),
+                "enable_logging": service_settings.get("enable_logging", True)
             }
             
             event_handler = IndexingEventHandler(

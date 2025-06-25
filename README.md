@@ -204,6 +204,93 @@ claude-indexer --help
 claude-indexer --version
 ```
 
+## ⚙️ Service Configuration
+
+The background service uses `~/.claude-indexer/config.json` for persistent configuration across multiple projects and file watching behavior.
+
+### Default Configuration
+```json
+{
+  "projects": [
+    {
+      "path": "/Users/username/Python-Projects/memory",
+      "collection": "memory",
+      "watch_enabled": true
+    }
+  ],
+  "settings": {
+    "debounce_seconds": 2.0,
+    "watch_patterns": ["*.py", "*.md"],
+    "ignore_patterns": [
+      "*.pyc", "__pycache__", ".git", ".venv", 
+      "node_modules", ".env", "*.log"
+    ],
+    "max_file_size": 1048576,
+    "enable_logging": true
+  }
+}
+```
+
+### Configuration Options
+
+- **`debounce_seconds`**: Delay before processing file changes (prevents rapid re-indexing during active editing)
+- **`watch_patterns`**: File extensions to monitor for changes (supports glob patterns)
+- **`ignore_patterns`**: Files/directories to skip during watching (performance optimization)
+- **`max_file_size`**: Maximum file size in bytes for processing (default 1MB)
+- **`enable_logging`**: Enable/disable detailed service logging
+
+### Customizing Service Behavior
+
+**Edit Configuration File:**
+```bash
+# Create or edit service configuration
+vi ~/.claude-indexer/config.json
+
+# Or let service create default config on first run
+claude-indexer service start
+```
+
+**Add Projects to Service:**
+```bash
+# Add project to background watching
+claude-indexer service add-project /path/to/project project-collection-name
+
+# Start background service (watches all configured projects)
+claude-indexer service start
+
+# Check service status
+claude-indexer service status
+```
+
+**Performance Tuning:**
+- **Increase `debounce_seconds`** (3.0-5.0) for large projects with frequent changes
+- **Reduce `watch_patterns`** to only essential file types for better performance
+- **Add specific paths** to `ignore_patterns` for directories with many temporary files
+- **Adjust `max_file_size`** based on your largest source files
+
+### Multi-Project Configuration Example
+```json
+{
+  "projects": [
+    {
+      "path": "/home/dev/web-app",
+      "collection": "webapp-memory",
+      "watch_enabled": true
+    },
+    {
+      "path": "/home/dev/api-service", 
+      "collection": "api-memory",
+      "watch_enabled": true
+    }
+  ],
+  "settings": {
+    "debounce_seconds": 3.0,
+    "watch_patterns": ["*.py", "*.js", "*.ts", "*.md"],
+    "ignore_patterns": ["*.pyc", "__pycache__", ".git", ".venv", "node_modules", "dist", "build"]
+  }
+}
+```
+
 ## 🎯 When to Use Each Mode
 
 - **Basic Indexing**: New projects, major refactoring, scheduled updates (just `claude-indexer --project X --collection Y`)

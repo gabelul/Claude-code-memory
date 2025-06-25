@@ -114,20 +114,114 @@ claude-indexer --project /path --collection name --generate-commands
 # Contains ready-to-execute MCP commands for manual copy-paste
 ```
 
-### Advanced Automation
-```bash
-# Real-time file watching
-claude-indexer watch start --project /path --collection name
+### Advanced Automation Features
 
-# Background service for multiple projects
+#### Real-time File Watching
+```bash
+# Single project file watching with custom debounce
+claude-indexer watch start --project /path --collection name --debounce 3.0
+
+# Uses service configuration for patterns and settings
+# Watches *.py, *.md files by default (configurable)
+# Ignores .pyc, __pycache__, .git, .venv automatically
+```
+
+#### Background Service Management
+```bash
+# Start multi-project background service
 claude-indexer service start
 
-# Git hooks integration
+# Add projects to service watch list
+claude-indexer service add-project /path/to/project project-collection-name
+
+# Check service status and active watchers
+claude-indexer service status
+
+# Service automatically loads configuration from ~/.claude-indexer/config.json
+```
+
+#### Service Configuration Management
+- **JSON Configuration**: `~/.claude-indexer/config.json` stores persistent settings
+- **Watch Pattern Customization**: Configure file types with glob patterns (`*.py`, `*.md`, `*.js`, `*.ts`)
+- **Debouncing Control**: Adjust timing (0.1-30.0 seconds) to prevent excessive re-indexing
+- **Resource Limits**: Set file size limits (bytes) and logging preferences
+- **Ignore Pattern Optimization**: Skip directories like `node_modules`, `dist`, `build` for performance
+- **Per-project Settings**: Override global settings for specific project requirements
+
+#### Configuration Hierarchy
+```
+1. Runtime CLI overrides (highest priority)
+2. Service configuration file (~/.claude-indexer/config.json)
+3. Project settings (settings.txt)
+4. Built-in defaults (lowest priority)
+```
+
+#### Performance Tuning Recommendations
+- **Large Projects**: Increase `debounce_seconds` to 3.0-5.0 for frequent changes
+- **Monorepos**: Use specific `watch_patterns` to avoid unnecessary file types
+- **CI/CD Integration**: Disable logging (`"enable_logging": false`) in automated environments
+- **Development Workflows**: Add temporary directories to `ignore_patterns`
+- **File Size Management**: Adjust `max_file_size` based on your largest source files
+
+#### Git Hooks Integration
+```bash
+# Install pre-commit automatic indexing
 claude-indexer hooks install --project /path --collection name
 
-# Search existing collections
-claude-indexer search "authentication function" --project /path --collection name
+# Check hook status and configuration
+claude-indexer hooks status --project /path --collection name
+
+# Remove hooks (safe - never blocks commits)
+claude-indexer hooks uninstall --project /path --collection name
 ```
+
+#### Search and Discovery
+```bash
+# Semantic search across indexed collections
+claude-indexer search "authentication function" --project /path --collection name
+
+# Filter by entity type
+claude-indexer search "database connection" --project /path --collection name --type entity
+
+# Limit results for focused queries
+claude-indexer search "error handling" --project /path --collection name --limit 5
+```
+
+#### Service Configuration Example
+```json
+{
+  "projects": [
+    {
+      "path": "/home/dev/microservice-a",
+      "collection": "microservice-a-memory",
+      "watch_enabled": true
+    },
+    {
+      "path": "/home/dev/shared-library",
+      "collection": "shared-lib-memory", 
+      "watch_enabled": true
+    }
+  ],
+  "settings": {
+    "debounce_seconds": 2.5,
+    "watch_patterns": ["*.py", "*.js", "*.ts", "*.md", "*.yaml"],
+    "ignore_patterns": [
+      "*.pyc", "__pycache__", ".git", ".venv", 
+      "node_modules", "dist", "build", "coverage",
+      "*.log", ".env*", "*.tmp"
+    ],
+    "max_file_size": 2097152,
+    "enable_logging": true
+  }
+}
+```
+
+#### Troubleshooting Service Configuration
+- **Service won't start**: Check JSON syntax in `~/.claude-indexer/config.json`
+- **Files not being watched**: Verify `watch_patterns` include your file extensions
+- **Performance issues**: Add large directories to `ignore_patterns`
+- **Excessive indexing**: Increase `debounce_seconds` for rapid file changes
+- **Permission errors**: Ensure service can read project directories and write to state files
 
 ## Project Structure
 
