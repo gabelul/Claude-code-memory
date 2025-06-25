@@ -5,11 +5,13 @@ Builds knowledge graphs from Python codebases using Tree-sitter + Jedi
 """
 
 import argparse
+import hashlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Any
+from typing import Dict, List, Optional, Set, Any, Tuple
 import traceback
 
 # Import analysis libraries
@@ -42,12 +44,118 @@ class UniversalIndexer:
         self.processed_files = set()
         self.errors = []
         
+        # State file for incremental updates
+        self.state_file = self.project_path / f".indexer_state_{collection_name}.json"
+        self.previous_state = {}
+        
         self.log(f"Initialized indexer for {self.project_path} -> {collection_name}")
 
     def log(self, message: str, level: str = "INFO"):
         """Log messages with optional verbosity"""
         if self.verbose or level == "ERROR":
             print(f"[{level}] {message}")
+
+    def get_file_hash(self, file_path: Path) -> str:
+        """Get SHA256 hash of file contents for change detection"""
+        try:
+            with open(file_path, 'rb') as f:
+                return hashlib.sha256(f.read()).hexdigest()
+        except Exception as e:
+            self.log(f"Failed to hash {file_path}: {e}", "ERROR")
+            return ""
+
+    def load_state_file(self) -> Dict[str, Any]:
+        """Load previous indexing state from disk"""
+        try:
+            if self.state_file.exists():
+                with open(self.state_file, 'r') as f:
+                    state = json.load(f)
+                    self.log(f"Loaded state with {len(state.get('files', {}))} previously indexed files")
+                    return state
+        except Exception as e:
+            self.log(f"Failed to load state file: {e}", "ERROR")
+        
+        return {"files": {}, "entities": {}, "timestamp": time.time()}
+
+    def save_state_file(self, files_state: Dict[str, Dict[str, Any]]) -> bool:
+        """Save current indexing state to disk"""
+        try:
+            state = {
+                "files": files_state,
+                "entities": {},  # Could store entity mappings for cleanup
+                "timestamp": time.time(),
+                "collection": self.collection_name
+            }
+            
+            with open(self.state_file, 'w') as f:
+                json.dump(state, f, indent=2)
+            
+            self.log(f"Saved state with {len(files_state)} files to {self.state_file}")
+            return True
+            
+        except Exception as e:
+            self.log(f"Failed to save state file: {e}", "ERROR")
+            return False
+
+    def get_changed_files(self, current_files: List[Path], incremental: bool = False) -> Tuple[List[Path], List[str]]:
+        """Detect which files have changed since last indexing"""
+        if not incremental:
+            return current_files, []  # Process all files in full mode
+        
+        self.previous_state = self.load_state_file()
+        previous_files = self.previous_state.get("files", {})
+        
+        changed_files = []
+        deleted_files = []
+        
+        # Check for new and modified files
+        for file_path in current_files:
+            relative_path = str(file_path.relative_to(self.project_path))
+            current_hash = self.get_file_hash(file_path)
+            
+            if relative_path not in previous_files:
+                # New file
+                changed_files.append(file_path)
+                self.log(f"New file: {relative_path}")
+            elif previous_files[relative_path].get("hash") != current_hash:
+                # Modified file
+                changed_files.append(file_path)
+                self.log(f"Modified file: {relative_path}")
+        
+        # Check for deleted files
+        current_relative_paths = {str(f.relative_to(self.project_path)) for f in current_files}
+        for prev_file in previous_files:
+            if prev_file not in current_relative_paths:
+                deleted_files.append(prev_file)
+                self.log(f"Deleted file: {prev_file}")
+        
+        self.log(f"Incremental update: {len(changed_files)} changed, {len(deleted_files)} deleted")
+        return changed_files, deleted_files
+
+    def delete_entities_for_files(self, deleted_files: List[str]) -> bool:
+        """Delete entities from MCP memory for removed files"""
+        if not deleted_files:
+            return True
+            
+        try:
+            # For now, we'll just log what would be deleted
+            # In a full implementation, this would call MCP delete operations
+            entities_to_delete = []
+            
+            for file_path in deleted_files:
+                # Add file entity
+                entities_to_delete.append(file_path)
+                
+                # Add entities that were in this file
+                # This would require tracking entity-to-file mappings in state
+                self.log(f"Would delete entities for removed file: {file_path}")
+            
+            self.log(f"Would delete {len(entities_to_delete)} entities for {len(deleted_files)} removed files")
+            return True
+            
+        except Exception as e:
+            self.log(f"Error deleting entities for removed files: {e}", "ERROR")
+            return False
 
     def find_python_files(self, include_tests: bool = False) -> List[Path]:
         """Find all Python files in the project"""
@@ -427,22 +535,57 @@ class UniversalIndexer:
 
     def index_project(self, include_tests: bool = False, incremental: bool = False) -> bool:
         """Index the entire project"""
-        self.log(f"Starting indexing of {self.project_path}")
+        mode = "incremental" if incremental else "full"
+        self.log(f"Starting {mode} indexing of {self.project_path}")
         
         # Find Python files
-        python_files = self.find_python_files(include_tests)
+        all_python_files = self.find_python_files(include_tests)
         
-        if not python_files:
+        if not all_python_files:
             self.log("No Python files found to index", "ERROR")
             return False
         
-        # Process each file
+        # Determine which files to process
+        files_to_process, deleted_files = self.get_changed_files(all_python_files, incremental)
+        
+        if incremental:
+            if not files_to_process and not deleted_files:
+                self.log("No changes detected - all files up to date")
+                return True
+            
+            # Clean up entities for deleted files
+            if deleted_files:
+                self.delete_entities_for_files(deleted_files)
+        
+        # Process files (changed files only in incremental mode)
         successful = 0
-        for file_path in python_files:
+        files_state = {}
+        
+        for file_path in files_to_process:
             if self.process_file(file_path, include_tests):
                 successful += 1
+                
+                # Track file state for next incremental run
+                relative_path = str(file_path.relative_to(self.project_path))
+                files_state[relative_path] = {
+                    "hash": self.get_file_hash(file_path),
+                    "timestamp": time.time(),
+                    "size": file_path.stat().st_size
+                }
         
-        self.log(f"Successfully processed {successful}/{len(python_files)} files")
+        # In incremental mode, also preserve state for unchanged files
+        if incremental and self.previous_state:
+            current_relative_paths = {str(f.relative_to(self.project_path)) for f in all_python_files}
+            for prev_file, prev_state in self.previous_state.get("files", {}).items():
+                if prev_file in current_relative_paths and prev_file not in files_state:
+                    # File unchanged - preserve its state
+                    files_state[prev_file] = prev_state
+        
+        # Save state for next incremental run
+        if files_state:
+            self.save_state_file(files_state)
+        
+        self.log(f"Successfully processed {successful}/{len(files_to_process)} files")
         
         if self.errors:
             self.log(f"Encountered {len(self.errors)} errors:")
@@ -453,7 +596,7 @@ class UniversalIndexer:
         if self.entities or self.relations:
             return self.send_to_mcp(self.entities, self.relations, use_mcp_api=False)
         
-        return successful > 0
+        return successful > 0 or (incremental and not files_to_process)
 
     def create_mcp_commands(self) -> str:
         """Generate MCP commands that can be copy-pasted into Claude Code"""
@@ -487,7 +630,7 @@ def main():
     parser.add_argument("--project", required=True, help="Path to Python project")
     parser.add_argument("--collection", required=True, help="MCP collection name")
     parser.add_argument("--include-tests", action="store_true", help="Include test files")
-    parser.add_argument("--incremental", action="store_true", help="Incremental update (TODO)")
+    parser.add_argument("--incremental", action="store_true", help="Only process changed files since last run")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--depth", choices=["basic", "full"], default="full", help="Analysis depth")
     parser.add_argument("--generate-commands", action="store_true", help="Generate MCP commands for manual execution")
