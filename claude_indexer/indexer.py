@@ -78,8 +78,12 @@ class CoreIndexer:
         # Initialize parser registry
         self.parser_registry = ParserRegistry(project_path)
         
-        # State management - use collection-specific state file for consistency
-        self.state_file = project_path / f".indexer_state_core.json"
+        # State file will be set per collection
+        self._state_file_base = project_path
+        
+    def _get_state_file(self, collection_name: str) -> Path:
+        """Get collection-specific state file path."""
+        return self._state_file_base / f".indexer_state_{collection_name}.json"
     
     def index_project(self, collection_name: str, include_tests: bool = False,
                      incremental: bool = False, force: bool = False) -> IndexingResult:
@@ -90,7 +94,7 @@ class CoreIndexer:
         try:
             # Find files to process
             if incremental and not force:
-                files_to_process, deleted_files = self._find_changed_files(include_tests)
+                files_to_process, deleted_files = self._find_changed_files(include_tests, collection_name)
                 
                 # Handle deleted files
                 if deleted_files:
@@ -154,7 +158,7 @@ class CoreIndexer:
             
             # Update state file
             if result.success:
-                self._save_state(files_to_process)
+                self._save_state(files_to_process, collection_name)
             
         except Exception as e:
             result.success = False
@@ -234,8 +238,9 @@ class CoreIndexer:
             result = self.vector_store.clear_collection(collection_name)
             
             # Clear state file
-            if self.state_file.exists():
-                self.state_file.unlink()
+            state_file = self._get_state_file(collection_name)
+            if state_file.exists():
+                state_file.unlink()
             
             return result.success
             
@@ -323,17 +328,17 @@ class CoreIndexer:
         
         return filtered_files
     
-    def _get_files_needing_processing(self, include_tests: bool = False, force: bool = False) -> List[Path]:
+    def _get_files_needing_processing(self, include_tests: bool = False, force: bool = False, collection_name: str = None) -> List[Path]:
         """Get files that need processing for incremental indexing."""
         if force:
             return self._find_all_files(include_tests)
-        return self._find_changed_files(include_tests)[0]
+        return self._find_changed_files(include_tests, collection_name)[0]
     
-    def _find_changed_files(self, include_tests: bool = False) -> Tuple[List[Path], List[str]]:
+    def _find_changed_files(self, include_tests: bool = False, collection_name: str = None) -> Tuple[List[Path], List[str]]:
         """Find files that have changed since last indexing."""
         current_files = self._find_all_files(include_tests)
         current_state = self._get_current_state(current_files)
-        previous_state = self._load_state()
+        previous_state = self._load_state(collection_name)
         
         changed_files = []
         deleted_files = []
@@ -468,23 +473,25 @@ class CoreIndexer:
         except Exception:
             return ""
     
-    def _load_state(self) -> Dict[str, Dict[str, Any]]:
+    def _load_state(self, collection_name: str) -> Dict[str, Dict[str, Any]]:
         """Load previous indexing state."""
         try:
-            if self.state_file.exists():
+            state_file = self._get_state_file(collection_name)
+            if state_file.exists():
                 import json
-                with open(self.state_file) as f:
+                with open(state_file) as f:
                     return json.load(f)
         except Exception:
             pass
         return {}
     
-    def _save_state(self, files: List[Path]):
+    def _save_state(self, files: List[Path], collection_name: str):
         """Save current indexing state."""
         try:
             state = self._get_current_state(files)
+            state_file = self._get_state_file(collection_name)
             import json
-            with open(self.state_file, 'w') as f:
+            with open(state_file, 'w') as f:
                 json.dump(state, f, indent=2)
         except Exception as e:
             print(f"Failed to save state: {e}")
@@ -501,27 +508,46 @@ class CoreIndexer:
                 # Convert relative path to absolute path for matching
                 if not deleted_file.startswith('/'):
                     # This is a relative path from the state file
-                    full_path = str(self.project_path / deleted_file)
+                    # Use resolve() to handle symlinks (e.g., /var -> /private/var on macOS)
+                    full_path = str((self.project_path / deleted_file).resolve())
                 else:
-                    full_path = deleted_file
+                    # Also resolve absolute paths to handle symlinks
+                    full_path = str(Path(deleted_file).resolve())
                 
                 # Use a proper dummy vector for search
                 dummy_vector = [0.1] * 1536  # Small non-zero values
                 
-                # Search for all vectors from this file using file_path filter
-                
-                filter_conditions = {"file_path": full_path}
+                # First search: Find entities with file_path matching
+                filter_conditions_path = {"file_path": full_path}
                 search_result = self.vector_store.search_similar(
                     collection_name=collection_name,
                     query_vector=dummy_vector,
                     limit=1000,  # Get all matches for this file
                     score_threshold=0.0,  # Include all results
-                    filter_conditions=filter_conditions
+                    filter_conditions=filter_conditions_path
                 )
                 
+                point_ids = []
                 if search_result.success and search_result.results:
-                    # Extract point IDs to delete
-                    point_ids = [result["id"] for result in search_result.results]
+                    point_ids.extend([result["id"] for result in search_result.results])
+                
+                # Second search: Find File entities where name = full_path
+                # This catches File entities that use path as their name
+                filter_conditions_name = {"name": full_path}
+                search_result_name = self.vector_store.search_similar(
+                    collection_name=collection_name,
+                    query_vector=dummy_vector,
+                    limit=1000,
+                    score_threshold=0.0,
+                    filter_conditions=filter_conditions_name
+                )
+                
+                if search_result_name.success and search_result_name.results:
+                    point_ids.extend([result["id"] for result in search_result_name.results])
+                
+                # Remove duplicates and delete all found points
+                point_ids = list(set(point_ids))
+                if point_ids:
                     
                     # Delete the points
                     delete_result = self.vector_store.delete_points(collection_name, point_ids)
@@ -530,6 +556,8 @@ class CoreIndexer:
                         print(f"   Removed {len(point_ids)} entities from {deleted_file}")
                     else:
                         print(f"   Warning: Failed to remove entities from {deleted_file}: {delete_result.errors}")
+                else:
+                    print(f"   No entities found for {deleted_file}")
                         
         except Exception as e:
             print(f"Error handling deleted files: {e}")

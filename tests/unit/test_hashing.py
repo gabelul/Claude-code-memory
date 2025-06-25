@@ -285,7 +285,7 @@ class TestIncrementalIndexing:
         indexer._save_state([test_file])
         
         # Check if file needs processing (should not, as it's unchanged)
-        files_to_process = indexer._get_files_needing_processing(include_tests=False)
+        files_to_process = indexer._get_files_needing_processing(include_tests=False, collection_name="test")
         
         assert len(files_to_process) == 0
     
@@ -308,7 +308,7 @@ class TestIncrementalIndexing:
         test_file.write_text("modified content")
         
         # Check if file needs processing (should need processing)
-        files_to_process = indexer._get_files_needing_processing(include_tests=False)
+        files_to_process = indexer._get_files_needing_processing(include_tests=False, collection_name="test")
         
         assert len(files_to_process) == 1
         assert files_to_process[0] == test_file
@@ -329,7 +329,7 @@ class TestIncrementalIndexing:
         file2.write_text("content 2")
         
         # Check processing needs
-        files_to_process = indexer._get_files_needing_processing(include_tests=False)
+        files_to_process = indexer._get_files_needing_processing(include_tests=False, collection_name="test")
         
         # Only new file should need processing
         assert len(files_to_process) == 1
@@ -352,7 +352,7 @@ class TestIncrementalIndexing:
         indexer._save_state(files)
         
         # Get files needing processing with force=True
-        files_to_process = indexer._get_files_needing_processing(include_tests=False, force=True)
+        files_to_process = indexer._get_files_needing_processing(include_tests=False, force=True, collection_name="test")
         
         # All files should need processing when forced
         assert len(files_to_process) == 3
