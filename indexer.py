@@ -117,7 +117,11 @@ class UniversalIndexer:
 
     def log(self, message: str, level: str = "INFO"):
         """Log messages with optional verbosity"""
-        if self.verbose or level == "ERROR":
+        if self.quiet:
+            # Only show errors in quiet mode
+            if level == "ERROR":
+                print(f"[{level}] {message}")
+        elif self.verbose or level == "ERROR":
             print(f"[{level}] {message}")
 
     def get_file_hash(self, file_path: Path) -> str:
