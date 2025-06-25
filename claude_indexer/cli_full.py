@@ -104,11 +104,12 @@ Commands:
     @click.option('--incremental', is_flag=True, help='Only process changed files')
     @click.option('--force', is_flag=True, help='Force reprocessing of all files')
     @click.option('--clear', is_flag=True, help='Clear collection before indexing')
-    @click.option('--generate-commands', is_flag=True, help='Generate MCP commands instead of auto-loading')
     @click.option('--depth', type=click.Choice(['basic', 'full']), default='full',
                   help='Analysis depth')
+    @click.option('--generate-commands', is_flag=True, 
+                  help='Generate MCP commands for manual execution instead of auto-loading')
     def index(project, collection, verbose, quiet, config, include_tests, 
-            incremental, force, clear, generate_commands, depth):
+            incremental, force, clear, depth, generate_commands):
         """Index an entire project."""
         
         if quiet and verbose:
@@ -125,18 +126,62 @@ Commands:
                 click.echo(f"Error: Project path does not exist: {project_path}", err=True)
                 sys.exit(1)
             
-            # Create components
-            embedder = create_embedder_from_config({
-                "provider": "openai",
-                "api_key": config_obj.openai_api_key,
-                "model": "text-embedding-3-small"
-            })
-            
-            vector_store = create_store_from_config({
-                "backend": "qdrant",
-                "url": config_obj.qdrant_url,
-                "api_key": config_obj.qdrant_api_key
-            })
+            # Create components based on mode
+            if generate_commands:
+                # Use dummy embedder + command generation mode
+                embedder = create_embedder_from_config({
+                    "provider": "dummy",
+                    "dimension": 1536,
+                    "enable_caching": False
+                })
+                
+                # Save commands to mcp_output directory
+                output_dir = project_path / "mcp_output"
+                vector_store = create_store_from_config({
+                    "backend": "mcp",
+                    "output_dir": str(output_dir),
+                    "auto_print": True,
+                    "enable_caching": False
+                })
+                
+                if not quiet:
+                    click.echo("🔧 Using command generation mode (saves to mcp_output/)")
+            else:
+                # Try Qdrant first (automatic like old system), fallback to MCP if unavailable
+                try:
+                    embedder = create_embedder_from_config({
+                        "provider": "openai",
+                        "api_key": config_obj.openai_api_key,
+                        "model": "text-embedding-3-small",
+                        "enable_caching": True
+                    })
+                    
+                    vector_store = create_store_from_config({
+                        "backend": "qdrant",
+                        "url": config_obj.qdrant_url,
+                        "api_key": config_obj.qdrant_api_key,
+                        "enable_caching": True
+                    })
+                    
+                    if not quiet:
+                        click.echo("⚡ Using Qdrant + OpenAI (automatic mode)")
+                        
+                except Exception as e:
+                    # Fallback to MCP if Qdrant unavailable
+                    if not quiet:
+                        click.echo(f"⚠️ Qdrant unavailable ({e}), using MCP fallback")
+                    
+                    embedder = create_embedder_from_config({
+                        "provider": "dummy",
+                        "dimension": 1536,
+                        "enable_caching": False
+                    })
+                    
+                    vector_store = create_store_from_config({
+                        "backend": "mcp",
+                        "auto_print": True,
+                        "enable_caching": False
+                    })
             
             # Create indexer
             indexer = CoreIndexer(config_obj, embedder, vector_store, project_path)
@@ -160,8 +205,6 @@ Commands:
                     click.echo("⚡ Mode: Incremental")
                 else:
                     click.echo("🔄 Mode: Full")
-                if generate_commands:
-                    click.echo("📝 Mode: Generate MCP commands")
             
             result = indexer.index_project(
                 collection_name=collection,
@@ -170,34 +213,6 @@ Commands:
                 force=force
             )
         
-            # Generate commands if requested
-            if generate_commands and result.success:
-                # Get entities and relations from the result
-                # For now, we'll process files again to get the data for command generation
-                if not quiet:
-                    click.echo("📝 Generating MCP commands...")
-                
-                # Process files to get entities/relations for command generation
-                files_to_process = indexer._find_all_files(include_tests)
-                all_entities = []
-                all_relations = []
-                
-                for file_path in files_to_process:
-                    parse_result = indexer.parser_registry.parse_file(file_path)
-                    if parse_result.success:
-                        all_entities.extend(parse_result.entities)
-                        all_relations.extend(parse_result.relations)
-                
-                # Save commands to file
-                commands_file = indexer.save_mcp_commands_to_file(all_entities, all_relations, collection)
-                
-                if not quiet:
-                    click.echo(f"📄 MCP commands saved to: {commands_file}")
-                    click.echo(f"   Copy and paste commands from this file into Claude Code")
-                    click.echo(f"   Total entities: {len(all_entities)}")
-                    click.echo(f"   Total relations: {len(all_relations)}")
-                
-                return  # Don't auto-load when generating commands
         
             # Report results
             if result.success:

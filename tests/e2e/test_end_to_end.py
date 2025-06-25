@@ -43,7 +43,7 @@ class TestCLIEndToEnd:
         # Test index command help
         result = runner.invoke(cli.cli, ['index', '--help'])
         assert result.exit_code == 0
-        assert "Indexing commands" in result.output
+        assert "Index an entire project" in result.output
     
     def test_cli_index_command_with_mocked_components(self, temp_repo):
         """Test CLI index command with mocked dependencies."""
@@ -179,7 +179,7 @@ class TestFullSystemWorkflows:
         
         # Step 2: Search for indexed content
         search_embedding = dummy_embedder.embed_single("add function")
-        hits = qdrant_store.search(search_embedding, top_k=5)
+        hits = qdrant_store.search("test_e2e_workflow", search_embedding, top_k=5)
         
         assert len(hits) > 0
         
@@ -204,7 +204,7 @@ def search_test_function():
         
         # Step 4: Search for new content
         search_embedding = dummy_embedder.embed_single("search_test_function")
-        hits = qdrant_store.search(search_embedding, top_k=5)
+        hits = qdrant_store.search("test_e2e_workflow", search_embedding, top_k=5)
         
         new_function_found = any(
             "search_test_function" in hit.payload.get("name", "")
@@ -226,12 +226,12 @@ def search_test_function():
         
         # Initial index
         result1 = indexer.index_project("test_incremental_e2e")
-        initial_count = qdrant_store.count()
+        initial_count = qdrant_store.count("test_incremental_e2e")
         
         # First incremental run (no changes)
         result2 = indexer.index_project("test_incremental_e2e", incremental=True)
         assert result2.success
-        assert qdrant_store.count() == initial_count  # Should be same
+        assert qdrant_store.count("test_incremental_e2e") == initial_count  # Should be same
         
         # Add a file
         new_file = temp_repo / "incremental_test.py"
@@ -240,11 +240,11 @@ def search_test_function():
         # Second incremental run (with changes)
         result3 = indexer.index_project("test_incremental_e2e", incremental=True)
         assert result3.success
-        assert qdrant_store.count() > initial_count  # Should increase
+        assert qdrant_store.count("test_incremental_e2e") > initial_count  # Should increase
         
         # Verify new content is searchable
         search_embedding = dummy_embedder.embed_single("incremental_func")
-        hits = qdrant_store.search(search_embedding, top_k=5)
+        hits = qdrant_store.search("test_incremental_e2e", search_embedding, top_k=5)
         
         incremental_found = any(
             "incremental_func" in hit.payload.get("name", "")
@@ -269,7 +269,7 @@ def search_test_function():
             import numpy as np
             return np.random.rand(1536).astype(np.float32)
         
-        failing_embedder.embed_single.side_effect = sometimes_failing_embed
+        failing_embedder.embed_text.side_effect = sometimes_failing_embed
         
         from claude_indexer.indexer import CoreIndexer
         indexer = CoreIndexer(
@@ -348,7 +348,7 @@ def module_{module_i}_function_{func_i}():
         
         # Should be searchable
         search_embedding = dummy_embedder.embed_single("Module0Class0")
-        hits = qdrant_store.search(search_embedding, top_k=10)
+        hits = qdrant_store.search("test_large_project", search_embedding, top_k=10)
         
         assert len(hits) > 0
         class_found = any(

@@ -125,7 +125,8 @@ class OpenAIEmbedder(RetryableEmbedder):
             )
         
         try:
-            return self._embed_with_retry(_embed)
+            result = self._embed_with_retry(_embed)
+            return result
         except Exception as e:
             return EmbeddingResult(
                 text=text,
@@ -141,7 +142,7 @@ class OpenAIEmbedder(RetryableEmbedder):
             return []
         
         # For batch requests, we can send up to 2048 texts at once
-        batch_size = min(100, len(texts))  # Conservative batch size
+        batch_size = min(500, len(texts))  # Increased batch size for better performance
         results = []
         
         for i in range(0, len(texts), batch_size):

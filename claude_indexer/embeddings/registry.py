@@ -1,8 +1,9 @@
 """Registry for managing embedder instances and configurations."""
 
 from typing import Dict, Any, Optional, Type
-from .base import Embedder, CachingEmbedder
+from .base import Embedder, CachingEmbedder, RetryableEmbedder
 from .openai import OpenAIEmbedder, OPENAI_AVAILABLE
+from .dummy import DummyEmbedder
 
 
 class EmbedderRegistry:
@@ -16,6 +17,9 @@ class EmbedderRegistry:
         """Register default embedder implementations."""
         if OPENAI_AVAILABLE:
             self.register("openai", OpenAIEmbedder)
+        
+        # Always register dummy embedder (no dependencies)
+        self.register("dummy", DummyEmbedder)
     
     def register(self, name: str, embedder_class: Type[Embedder]):
         """Register an embedder class."""

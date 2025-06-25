@@ -19,8 +19,11 @@ class TestDeleteEventHandling:
     
     def test_simple_file_deletion_cleanup(self, temp_repo, dummy_embedder, qdrant_store):
         """Test cleanup when a single file is deleted."""
+        import time
+        collection_name = f"test_delete_simple_{int(time.time() * 1000)}"
+        
         config = IndexerConfig(
-            collection_name="test_delete_simple",
+            collection_name=collection_name,
             embedder_type="dummy",
             storage_type="qdrant"
         )
@@ -28,19 +31,20 @@ class TestDeleteEventHandling:
         indexer = CoreIndexer(
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            vector_store=qdrant_store,
+            project_path=temp_repo
         )
         
         # Initial indexing
-        result1 = indexer.index_project(temp_repo)
+        result1 = indexer.index_project(collection_name)
         assert result1.success
         
-        initial_count = qdrant_store.count()
+        initial_count = qdrant_store.count(collection_name)
         assert initial_count >= 3  # foo.py, bar.py, helpers.py
         
         # Verify we can find content from foo.py
         search_embedding = dummy_embedder.embed_single("add function")
-        hits = qdrant_store.search(search_embedding, top_k=10)
+        hits = qdrant_store.search(collection_name, search_embedding, top_k=10)
         
         foo_entities_before = [
             hit for hit in hits 
@@ -52,16 +56,16 @@ class TestDeleteEventHandling:
         (temp_repo / "foo.py").unlink()
         
         # Re-index incrementally (should detect deletion)
-        result2 = indexer.index_project(temp_repo, incremental=True)
+        result2 = indexer.index_project(collection_name, incremental=True)
         assert result2.success
         
         # Verify cleanup occurred
-        final_count = qdrant_store.count()
+        final_count = qdrant_store.count(collection_name)
         assert final_count < initial_count, "Vector count should decrease after file deletion"
         
         # Verify entities from deleted file are gone
         search_embedding = dummy_embedder.embed_single("add function")
-        hits = qdrant_store.search(search_embedding, top_k=10)
+        hits = qdrant_store.search(collection_name, search_embedding, top_k=10)
         
         foo_entities_after = [
             hit for hit in hits 
@@ -71,8 +75,11 @@ class TestDeleteEventHandling:
     
     def test_multiple_file_deletion(self, temp_repo, dummy_embedder, qdrant_store):
         """Test cleanup when multiple files are deleted."""
+        import time
+        collection_name = f"test_delete_multi_{int(time.time() * 1000)}"
+        
         config = IndexerConfig(
-            collection_name="test_delete_multi",
+            collection_name=collection_name,
             embedder_type="dummy",
             storage_type="qdrant"
         )
@@ -80,7 +87,8 @@ class TestDeleteEventHandling:
         indexer = CoreIndexer(
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            vector_store=qdrant_store,
+            project_path=temp_repo
         )
         
         # Add extra files to delete
@@ -96,15 +104,15 @@ def extra_function_{i}():
             extra_files.append(extra_file)
         
         # Initial indexing
-        result1 = indexer.index_project(temp_repo)
+        result1 = indexer.index_project(collection_name)
         assert result1.success
         
-        initial_count = qdrant_store.count()
+        initial_count = qdrant_store.count(collection_name)
         
         # Verify extra files are indexed
         for i in range(3):
             search_embedding = dummy_embedder.embed_single(f"extra_function_{i}")
-            hits = qdrant_store.search(search_embedding, top_k=5)
+            hits = qdrant_store.search(collection_name, search_embedding, top_k=5)
             
             extra_found = any(
                 f"extra_function_{i}" in hit.payload.get("name", "")
@@ -117,16 +125,16 @@ def extra_function_{i}():
             extra_file.unlink()
         
         # Re-index with cleanup
-        result2 = indexer.index_project(temp_repo, incremental=True)
+        result2 = indexer.index_project(collection_name, incremental=True)
         assert result2.success
         
-        final_count = qdrant_store.count()
+        final_count = qdrant_store.count(collection_name)
         assert final_count < initial_count, "Count should decrease after multiple deletions"
         
         # Verify all extra functions are gone
         for i in range(3):
             search_embedding = dummy_embedder.embed_single(f"extra_function_{i}")
-            hits = qdrant_store.search(search_embedding, top_k=5)
+            hits = qdrant_store.search(collection_name, search_embedding, top_k=5)
             
             extra_found = any(
                 f"extra_function_{i}" in hit.payload.get("name", "")
@@ -145,7 +153,8 @@ def extra_function_{i}():
         indexer = CoreIndexer(
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            vector_store=qdrant_store,
+            project_path=temp_repo
         )
         
         # Create a subdirectory with files
@@ -165,14 +174,14 @@ class SubClass_{i}:
 ''')
         
         # Initial indexing
-        result1 = indexer.index_project(temp_repo)
+        result1 = indexer.index_project("test_delete_dir")
         assert result1.success
         
-        initial_count = qdrant_store.count()
+        initial_count = qdrant_store.count("test_delete_dir")
         
         # Verify subdirectory content is indexed
         search_embedding = dummy_embedder.embed_single("SubClass_0")
-        hits = qdrant_store.search(search_embedding, top_k=10)
+        hits = qdrant_store.search("test_delete_dir", search_embedding, top_k=10)
         
         subdir_entities_before = [
             hit for hit in hits 
@@ -185,15 +194,15 @@ class SubClass_{i}:
         shutil.rmtree(subdir)
         
         # Re-index with cleanup
-        result2 = indexer.index_project(temp_repo, incremental=True)
+        result2 = indexer.index_project("test_delete_dir", incremental=True)
         assert result2.success
         
-        final_count = qdrant_store.count()
+        final_count = qdrant_store.count("test_delete_dir")
         assert final_count < initial_count, "Count should decrease after directory deletion"
         
         # Verify subdirectory entities are gone
         search_embedding = dummy_embedder.embed_single("SubClass_0")
-        hits = qdrant_store.search(search_embedding, top_k=10)
+        hits = qdrant_store.search("test_delete_dir", search_embedding, top_k=10)
         
         subdir_entities_after = [
             hit for hit in hits 
@@ -212,16 +221,17 @@ class SubClass_{i}:
         indexer = CoreIndexer(
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            vector_store=qdrant_store,
+            project_path=temp_repo
         )
         
         # Initial indexing
-        result1 = indexer.index_project(temp_repo)
+        result1 = indexer.index_project("test_delete_partial")
         assert result1.success
         
         # Verify existing files are indexed
         search_embedding = dummy_embedder.embed_single("Calculator")
-        hits = qdrant_store.search(search_embedding, top_k=5)
+        hits = qdrant_store.search("test_delete_partial", search_embedding, top_k=5)
         
         calc_found_before = any(
             "Calculator" in hit.payload.get("name", "")
@@ -233,12 +243,12 @@ class SubClass_{i}:
         (temp_repo / "bar.py").unlink()
         
         # Re-index with cleanup
-        result2 = indexer.index_project(temp_repo, incremental=True)
+        result2 = indexer.index_project("test_delete_partial", incremental=True)
         assert result2.success
         
         # Verify that foo.py entities are still present
         search_embedding = dummy_embedder.embed_single("Calculator")
-        hits = qdrant_store.search(search_embedding, top_k=5)
+        hits = qdrant_store.search("test_delete_partial", search_embedding, top_k=5)
         
         calc_found_after = any(
             "Calculator" in hit.payload.get("name", "")
@@ -248,7 +258,7 @@ class SubClass_{i}:
         
         # Verify bar.py entities are gone
         search_embedding = dummy_embedder.embed_single("main")
-        hits = qdrant_store.search(search_embedding, top_k=10)
+        hits = qdrant_store.search("test_delete_partial", search_embedding, top_k=10)
         
         bar_entities = [
             hit for hit in hits 
@@ -267,7 +277,8 @@ class SubClass_{i}:
         indexer = CoreIndexer(
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            vector_store=qdrant_store,
+            project_path=temp_repo
         )
         
         # Create a temporary file
@@ -280,12 +291,12 @@ def temp_func():
 ''')
         
         # Initial indexing
-        result1 = indexer.index_project(temp_repo)
+        result1 = indexer.index_project("test_delete_persistence")
         assert result1.success
         
         # Verify temp file is indexed
         search_embedding = dummy_embedder.embed_single("temp_func")
-        hits = qdrant_store.search(search_embedding, top_k=5)
+        hits = qdrant_store.search("test_delete_persistence", search_embedding, top_k=5)
         
         temp_found_before = any(
             "temp_func" in hit.payload.get("name", "")
@@ -297,16 +308,16 @@ def temp_func():
         temp_file.unlink()
         
         # First incremental index (should clean up)
-        result2 = indexer.index_project(temp_repo, incremental=True)
+        result2 = indexer.index_project("test_delete_persistence", incremental=True)
         assert result2.success
         
         # Second incremental index (should remember deletion)
-        result3 = indexer.index_project(temp_repo, incremental=True)
+        result3 = indexer.index_project("test_delete_persistence", incremental=True)
         assert result3.success
         
         # Verify temp function is still gone after multiple runs
         search_embedding = dummy_embedder.embed_single("temp_func")
-        hits = qdrant_store.search(search_embedding, top_k=5)
+        hits = qdrant_store.search("test_delete_persistence", search_embedding, top_k=5)
         
         temp_found_after = any(
             "temp_func" in hit.payload.get("name", "")
@@ -335,7 +346,8 @@ def temp_func():
         indexer = CoreIndexer(
             config=config,
             embedder=failing_embedder,
-            store=qdrant_store
+            vector_store=qdrant_store,
+            project_path=temp_repo
         )
         
         # Create a file that will cause embedding errors
@@ -348,19 +360,19 @@ def error_trigger_function():
 ''')
         
         # Initial indexing (will have errors but should succeed partially)
-        result1 = indexer.index_project(temp_repo)
+        result1 = indexer.index_project("test_delete_errors")
         # May succeed or fail depending on error handling, but should not crash
         
-        initial_count = qdrant_store.count()
+        initial_count = qdrant_store.count("test_delete_errors")
         
         # Delete the error file
         error_file.unlink()
         
         # Re-index (cleanup should work despite previous errors)
-        result2 = indexer.index_project(temp_repo, incremental=True)
+        result2 = indexer.index_project("test_delete_errors", incremental=True)
         # Should succeed since error file is gone
         
-        final_count = qdrant_store.count()
+        final_count = qdrant_store.count("test_delete_errors")
         
         # Should not crash and should handle cleanup properly
         assert final_count >= 0, "Should handle cleanup even with previous indexing errors"
@@ -381,11 +393,12 @@ class TestDeleteEventEdgeCases:
         indexer = CoreIndexer(
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            vector_store=qdrant_store,
+            project_path=temp_repo
         )
         
         # Initial indexing
-        result1 = indexer.index_project(temp_repo)
+        result1 = indexer.index_project("test_delete_nonexistent")
         assert result1.success
         
         # Create and immediately delete a file without indexing
@@ -394,7 +407,7 @@ class TestDeleteEventEdgeCases:
         temp_file.unlink()
         
         # Incremental indexing should handle missing file gracefully
-        result2 = indexer.index_project(temp_repo, incremental=True)
+        result2 = indexer.index_project("test_delete_nonexistent", incremental=True)
         assert result2.success
     
     def test_delete_during_indexing_race_condition(self, temp_repo, dummy_embedder, qdrant_store):
@@ -410,7 +423,8 @@ class TestDeleteEventEdgeCases:
         indexer = CoreIndexer(
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            vector_store=qdrant_store,
+            project_path=temp_repo
         )
         
         # Create a file
@@ -418,12 +432,12 @@ class TestDeleteEventEdgeCases:
         race_file.write_text("def race_func(): pass")
         
         # Index normally first
-        result1 = indexer.index_project(temp_repo)
+        result1 = indexer.index_project("test_delete_race")
         assert result1.success
         
         # Delete the file
         race_file.unlink()
         
         # Try to index again - should handle gracefully
-        result2 = indexer.index_project(temp_repo, incremental=True)
+        result2 = indexer.index_project("test_delete_race", incremental=True)
         assert result2.success  # Should not crash

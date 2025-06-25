@@ -110,8 +110,19 @@ def empty_repo(tmp_path_factory) -> Path:
 @pytest.fixture(scope="session")
 def qdrant_client() -> Iterator[QdrantClient]:
     """Create a Qdrant client for testing with session scope."""
-    # Use localhost Qdrant instance (assumes it's running)
-    client = QdrantClient("localhost", port=6333)
+    # Load config to get API key from settings.txt
+    from claude_indexer.config import load_config
+    config = load_config()
+    
+    # Use authentication if available
+    if config.qdrant_api_key and config.qdrant_api_key != "default-key":
+        client = QdrantClient(
+            url=config.qdrant_url,
+            api_key=config.qdrant_api_key
+        )
+    else:
+        # Fall back to unauthenticated for local testing
+        client = QdrantClient("localhost", port=6333)
     
     # Create test collection if it doesn't exist
     collection_name = "test_collection"
@@ -137,13 +148,28 @@ def qdrant_store(qdrant_client) -> "QdrantStore":
     if QdrantStore is None:
         pytest.skip("QdrantStore not available")
     
-    store = QdrantStore(client=qdrant_client, collection="test_collection")
+    # Load config to get API credentials 
+    from claude_indexer.config import load_config
+    config = load_config()
+    
+    store = QdrantStore(
+        url=config.qdrant_url,
+        api_key=config.qdrant_api_key if config.qdrant_api_key != "default-key" else None
+    )
     
     # Clean up any existing test data
-    store.client.delete(
-        collection_name="test_collection",
-        points_selector={"filter": {"must": [{"key": "test", "match": {"value": True}}]}}
-    )
+    try:
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        filter_obj = Filter(
+            must=[FieldCondition(key="test", match=MatchValue(value=True))]
+        )
+        store.client.delete(
+            collection_name="test_collection",
+            points_selector=filter_obj
+        )
+    except Exception:
+        # Skip cleanup if it fails
+        pass
     
     return store
 
@@ -157,6 +183,44 @@ class DummyEmbedder:
     
     def __init__(self, dimension: int = 1536):
         self.dimension = dimension
+    
+    def embed_text(self, text: str):
+        """Generate embedding for single text - interface compatibility."""
+        from claude_indexer.embeddings.base import EmbeddingResult
+        
+        # Create deterministic but unique embedding
+        seed = hash(text) % 10000
+        np.random.seed(seed)
+        embedding = np.random.rand(self.dimension).astype(np.float32).tolist()
+        
+        return EmbeddingResult(
+            text=text,
+            embedding=embedding,
+            model="dummy",
+            token_count=len(text.split()),
+            processing_time=0.001
+        )
+    
+    def embed_batch(self, texts: list[str]):
+        """Generate embeddings for multiple texts."""
+        return [self.embed_text(text) for text in texts]
+    
+    def get_model_info(self):
+        """Get model information."""
+        return {
+            "model": "dummy",
+            "dimension": self.dimension,
+            "max_tokens": 8192
+        }
+    
+    def get_max_tokens(self):
+        """Get maximum token limit."""
+        return 8192
+    
+    def embed_single(self, text: str) -> np.ndarray:
+        """Legacy method for backward compatibility."""
+        result = self.embed_text(text)
+        return np.array(result.embedding, dtype=np.float32)
     
     def embed(self, texts: list[str]) -> list[np.ndarray]:
         """Generate deterministic embeddings based on text hash."""
@@ -308,7 +372,20 @@ def requires_openai(func):
 def _qdrant_available() -> bool:
     """Check if Qdrant is available."""
     try:
-        client = QdrantClient("localhost", port=6333)
+        # Load config to get API key from settings.txt
+        from claude_indexer.config import load_config
+        config = load_config()
+        
+        # Use authentication if available
+        if config.qdrant_api_key and config.qdrant_api_key != "default-key":
+            client = QdrantClient(
+                url=config.qdrant_url,
+                api_key=config.qdrant_api_key
+            )
+        else:
+            # Fall back to unauthenticated for local testing
+            client = QdrantClient("localhost", port=6333)
+            
         client.get_collections()
         return True
     except Exception:

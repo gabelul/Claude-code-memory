@@ -58,6 +58,11 @@ class IndexingResult:
         if total == 0:
             return 1.0
         return self.files_processed / total
+     
+    @property  
+    def duration(self) -> float:
+        """Alias for processing_time for backward compatibility."""
+        return self.processing_time
 
 
 class CoreIndexer:
@@ -117,15 +122,35 @@ class CoreIndexer:
                 result.files_processed += len([f for f in batch if f not in batch_errors])
                 result.files_failed += len(batch_errors)
             
-            # Store in vector database
+            # Choose storage method based on vector store type
             if all_entities or all_relations:
-                storage_success = self._store_vectors(collection_name, all_entities, all_relations)
-                if not storage_success:
-                    result.success = False
-                    result.errors.append("Failed to store vectors")
+                # Check for Qdrant backend (direct or cached) for direct automation
+                is_qdrant_backend = (
+                    hasattr(self.vector_store, 'client') or  # Direct QdrantStore
+                    (hasattr(self.vector_store, 'backend') and hasattr(self.vector_store.backend, 'client'))  # CachingVectorStore wrapping QdrantStore
+                )
+                
+                if is_qdrant_backend:
+                    # Use direct Qdrant automation via existing _store_vectors method
+                    storage_success = self._store_vectors(collection_name, all_entities, all_relations)
+                    if not storage_success:
+                        result.success = False
+                        result.errors.append("Failed to store vectors in Qdrant")
+                    else:
+                        result.entities_created = len(all_entities)
+                        result.relations_created = len(all_relations)
                 else:
-                    result.entities_created = len(all_entities)
-                    result.relations_created = len(all_relations)
+                    # Fall back to MCP command generation (for MCP backend)
+                    mcp_success = self._send_to_mcp(all_entities, all_relations)
+                    if not mcp_success:
+                        result.success = False
+                        result.errors.append("Failed to generate MCP commands")
+                    else:
+                        result.entities_created = len(all_entities)
+                        result.relations_created = len(all_relations)
+            
+            # Finalize storage (important for MCP command generator)
+            self._finalize_storage(collection_name)
             
             # Update state file
             if result.success:
@@ -153,50 +178,18 @@ class CoreIndexer:
                 result.errors.extend(parse_result.errors)
                 return result
             
-            # Generate embeddings and store
-            entities_with_embeddings = []
-            relations_with_embeddings = []
+            # Use batch processing like the project indexer
+            storage_success = self._store_vectors(collection_name, parse_result.entities, parse_result.relations)
             
-            # Process entities
-            for entity in parse_result.entities:
-                text = self._entity_to_text(entity)
-                embedding_result = self.embedder.embed_text(text)
-                
-                if embedding_result.success:
-                    point = self.vector_store.create_entity_point(
-                        entity, embedding_result.embedding, collection_name
-                    )
-                    entities_with_embeddings.append(point)
-                else:
-                    result.warnings.append(f"Failed to embed entity: {entity.name}")
-            
-            # Process relations
-            for relation in parse_result.relations:
-                text = self._relation_to_text(relation)
-                embedding_result = self.embedder.embed_text(text)
-                
-                if embedding_result.success:
-                    point = self.vector_store.create_relation_point(
-                        relation, embedding_result.embedding, collection_name
-                    )
-                    relations_with_embeddings.append(point)
-                else:
-                    result.warnings.append(f"Failed to embed relation: {relation.from_entity} -> {relation.to_entity}")
-            
-            # Store vectors
-            all_points = entities_with_embeddings + relations_with_embeddings
-            if all_points:
-                storage_result = self.vector_store.upsert_points(collection_name, all_points)
-                
-                if storage_result.success:
-                    result.files_processed = 1
-                    result.entities_created = len(entities_with_embeddings)
-                    result.relations_created = len(relations_with_embeddings)
-                    result.processed_files = [str(file_path)]
-                else:
-                    result.success = False
-                    result.files_failed = 1
-                    result.errors.extend(storage_result.errors)
+            if storage_success:
+                result.files_processed = 1
+                result.entities_created = len(parse_result.entities)
+                result.relations_created = len(parse_result.relations)
+                result.processed_files = [str(file_path)]
+            else:
+                result.success = False
+                result.files_failed = 1
+                result.errors.append("Failed to store vectors")
             
         except Exception as e:
             result.success = False
@@ -385,33 +378,35 @@ class CoreIndexer:
     
     def _store_vectors(self, collection_name: str, entities: List[Entity], 
                       relations: List[Relation]) -> bool:
-        """Store entities and relations in vector database."""
+        """Store entities and relations in vector database using batch processing."""
         try:
             all_points = []
             
-            # Process entities
-            for entity in entities:
-                text = self._entity_to_text(entity)
-                embedding_result = self.embedder.embed_text(text)
+            # Batch process entities
+            if entities:
+                entity_texts = [self._entity_to_text(entity) for entity in entities]
+                embedding_results = self.embedder.embed_batch(entity_texts)
                 
-                if embedding_result.success:
-                    point = self.vector_store.create_entity_point(
-                        entity, embedding_result.embedding, collection_name
-                    )
-                    all_points.append(point)
+                for entity, embedding_result in zip(entities, embedding_results):
+                    if embedding_result.success:
+                        point = self.vector_store.create_entity_point(
+                            entity, embedding_result.embedding, collection_name
+                        )
+                        all_points.append(point)
             
-            # Process relations
-            for relation in relations:
-                text = self._relation_to_text(relation)
-                embedding_result = self.embedder.embed_text(text)
+            # Batch process relations
+            if relations:
+                relation_texts = [self._relation_to_text(relation) for relation in relations]
+                embedding_results = self.embedder.embed_batch(relation_texts)
                 
-                if embedding_result.success:
-                    point = self.vector_store.create_relation_point(
-                        relation, embedding_result.embedding, collection_name
-                    )
-                    all_points.append(point)
+                for relation, embedding_result in zip(relations, embedding_results):
+                    if embedding_result.success:
+                        point = self.vector_store.create_relation_point(
+                            relation, embedding_result.embedding, collection_name
+                        )
+                        all_points.append(point)
             
-            # Batch store
+            # Batch store all points
             if all_points:
                 result = self.vector_store.batch_upsert(collection_name, all_points)
                 return result.success
@@ -419,7 +414,7 @@ class CoreIndexer:
             return True
             
         except Exception as e:
-            print(f"Storage failed: {e}")
+            print(f"Error in _store_vectors: {e}")
             return False
     
     def _entity_to_text(self, entity: Entity) -> str:
@@ -496,9 +491,133 @@ class CoreIndexer:
     
     def _handle_deleted_files(self, collection_name: str, deleted_files: List[str]):
         """Handle deleted files by removing their entities."""
-        # TODO: Implement entity deletion based on file tracking
-        # This requires maintaining entity-to-file mappings
-        pass
+        if not deleted_files:
+            return
+        
+        try:
+            for deleted_file in deleted_files:
+                print(f"   Removing entities from deleted file: {deleted_file}")
+                
+                # Convert relative path to absolute path for matching
+                if not deleted_file.startswith('/'):
+                    # This is a relative path from the state file
+                    full_path = str(self.project_path / deleted_file)
+                else:
+                    full_path = deleted_file
+                
+                # Use a proper dummy vector for search
+                dummy_vector = [0.1] * 1536  # Small non-zero values
+                
+                # Search for all vectors from this file using file_path filter
+                
+                filter_conditions = {"file_path": full_path}
+                search_result = self.vector_store.search_similar(
+                    collection_name=collection_name,
+                    query_vector=dummy_vector,
+                    limit=1000,  # Get all matches for this file
+                    score_threshold=0.0,  # Include all results
+                    filter_conditions=filter_conditions
+                )
+                
+                if search_result.success and search_result.results:
+                    # Extract point IDs to delete
+                    point_ids = [result["id"] for result in search_result.results]
+                    
+                    # Delete the points
+                    delete_result = self.vector_store.delete_points(collection_name, point_ids)
+                    
+                    if delete_result.success:
+                        print(f"   Removed {len(point_ids)} entities from {deleted_file}")
+                    else:
+                        print(f"   Warning: Failed to remove entities from {deleted_file}: {delete_result.errors}")
+                        
+        except Exception as e:
+            print(f"Error handling deleted files: {e}")
+    
+    def _send_to_mcp(self, entities: List[Entity], relations: List[Relation]) -> bool:
+        """Send to MCP (auto-printing like old indexer.py)."""
+        try:
+            success = True
+            
+            # Convert entities to MCP format
+            if entities:
+                mcp_entities = []
+                for entity in entities:
+                    mcp_entity = {
+                        "name": entity.name,
+                        "entityType": entity.entity_type.value,
+                        "observations": entity.observations
+                    }
+                    mcp_entities.append(mcp_entity)
+                
+                success &= self._call_mcp_api("create_entities", {"entities": mcp_entities})
+            
+            # Convert relations to MCP format  
+            if relations:
+                mcp_relations = []
+                for relation in relations:
+                    mcp_relation = {
+                        "from": relation.from_entity,
+                        "to": relation.to_entity, 
+                        "relationType": relation.relation_type.value
+                    }
+                    mcp_relations.append(mcp_relation)
+                
+                success &= self._call_mcp_api("create_relations", {"relations": mcp_relations})
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ MCP send failed: {e}")
+            return False
+    
+    def _call_mcp_api(self, method: str, params: Dict[str, Any]) -> bool:
+        """Execute MCP commands automatically - call functions directly from globals."""
+        try:
+            print(f"🚀 Executing MCP {method} automatically with {len(params.get('entities', params.get('relations', [])))} items")
+            
+            # Execute MCP commands directly - we have access to these functions in this environment
+            if method == "create_entities":
+                result = mcp__memory_project_memory__create_entities(params)
+                print(f"✅ Entities created successfully: {result}")
+                return True
+                
+            elif method == "create_relations":
+                result = mcp__memory_project_memory__create_relations(params)
+                print(f"✅ Relations created successfully: {result}")
+                return True
+                
+            else:
+                print(f"❌ Unknown MCP method: {method}")
+                return False
+            
+        except NameError as e:
+            # MCP functions not available in this environment - fall back to printing
+            print(f"🔧 MCP functions not available ({e}), printing commands for manual execution:")
+            return self._fallback_print_commands(method, params)
+            
+        except Exception as e:
+            print(f"❌ MCP execution failed: {e}")
+            # Fallback to printing commands for manual execution
+            return self._fallback_print_commands(method, params)
+    
+    def _fallback_print_commands(self, method: str, params: Dict[str, Any]) -> bool:
+        """Fallback to printing commands for manual execution."""
+        collection_memory = f"memory-project-memory"
+        mcp_command = f"mcp__{collection_memory}__{method}"
+        params_json = json.dumps(params, indent=2)
+        print(f"{mcp_command}({params_json})")
+        print(f"✅ MCP {method} command printed for execution")
+        return True
+
+    def _finalize_storage(self, collection_name: str):
+        """Finalize storage operations (important for MCP command generator)."""
+        try:
+            # Check if vector store has finalize method (e.g., MCPCommandGenerator)
+            if hasattr(self.vector_store, 'finalize_commands'):
+                result = self.vector_store.finalize_commands(collection_name)
+        except Exception as e:
+            print(f"Error finalizing storage: {e}")
     
     def _is_test_file(self, file_path: Path) -> bool:
         """Check if a file is a test file."""

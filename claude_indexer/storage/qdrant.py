@@ -296,6 +296,43 @@ class QdrantStore(ManagedVectorStore):
                 "error": str(e)
             }
     
+    def count(self, collection_name: str) -> int:
+        """Count total points in collection - test compatibility method."""
+        try:
+            collection_info = self.client.get_collection(collection_name)
+            return collection_info.points_count
+        except Exception:
+            return 0
+    
+    def search(self, collection_name: str, query_vector, top_k: int = 10):
+        """Legacy search interface for test compatibility."""
+        try:
+            if hasattr(query_vector, 'tolist'):
+                query_vector = query_vector.tolist()
+            elif isinstance(query_vector, list):
+                pass
+            else:
+                query_vector = list(query_vector)
+                
+            search_results = self.client.search(
+                collection_name=collection_name,
+                query_vector=query_vector,
+                limit=top_k
+            )
+            
+            # Return results in expected format for tests
+            class SearchHit:
+                def __init__(self, id, score, payload):
+                    self.id = id
+                    self.score = score
+                    self.payload = payload
+            
+            return [SearchHit(result.id, result.score, result.payload) for result in search_results]
+            
+        except Exception as e:
+            print(f"Search failed: {e}")
+            return []
+    
     def list_collections(self) -> List[str]:
         """List all collections."""
         try:
@@ -361,8 +398,9 @@ class QdrantStore(ManagedVectorStore):
         """Create a vector point from an entity."""
         from ..analysis.entities import Entity
         
-        # Generate deterministic ID
-        point_id = self.generate_deterministic_id(entity.name)
+        # Generate deterministic ID using file path + entity name to prevent collisions
+        entity_key = f"{entity.file_path}::{entity.name}" if entity.file_path else entity.name
+        point_id = self.generate_deterministic_id(entity_key)
         
         # Create payload
         payload = {
