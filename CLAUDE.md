@@ -725,3 +725,246 @@ The combination of delorenj/mcp-qdrant-memory + Tree-sitter + Jedi + advanced au
 - **Git Hooks**: Seamless integration with version control workflows
 
 This comprehensive approach ensures that teams can choose the automation level that best fits their development workflow while maintaining the same high-quality semantic search and knowledge graph capabilities.
+
+## Future Enhancement: Multi-Modal Learning
+
+### Concept
+Extend the current indexing system to correlate code with documentation, comments, and project architecture decisions, creating cross-referenced understanding between different information sources.
+
+### Current State vs Enhancement
+
+**What we have now:**
+- Separate indexing of Python code (functions, classes, imports)
+- Independent markdown processing (headers, links, code blocks)
+- File-level documentation extraction (docstrings)
+- Isolated entity creation without cross-document correlation
+
+**Multi-Modal Learning enhancement:**
+- **Cross-document correlation**: Link README sections to relevant code files
+- **Topic mapping**: Connect documentation topics (Installation, Usage, Configuration) to implementation files
+- **Intent bridging**: Map project goals from documentation to actual code patterns
+- **Architecture correlation**: Link CLAUDE.md decisions to code implementation patterns
+
+### Implementation Strategy
+
+**Phase 1: Topic Extraction Enhancement**
+```python
+def extract_documentation_topics(self, content: str, file_path: Path) -> Dict[str, Any]:
+    """Extract semantic topics from documentation"""
+    topics = {
+        'installation': self.find_installation_patterns(content),
+        'configuration': self.find_config_patterns(content),
+        'usage': self.find_usage_patterns(content),
+        'architecture': self.find_architecture_patterns(content)
+    }
+    return topics
+
+def find_installation_patterns(self, content: str) -> List[str]:
+    """Identify installation-related content"""
+    patterns = [
+        r'pip install',
+        r'requirements\.txt',
+        r'setup\.py',
+        r'npm install',
+        r'yarn install'
+    ]
+    # Return matched patterns with context
+```
+
+**Phase 2: Code-Documentation Correlation**
+```python
+def correlate_docs_to_code(self) -> List[Dict[str, Any]]:
+    """Create correlations between documentation and code"""
+    correlations = []
+    
+    # Map README sections to code files
+    readme_topics = self.get_indexed_markdown_topics('README.md')
+    
+    for topic in readme_topics:
+        if topic['name'].lower() in ['installation', 'setup']:
+            # Link to setup.py, requirements.txt, install.sh
+            correlations.extend(self.create_setup_correlations(topic))
+        elif topic['name'].lower() in ['configuration', 'config']:
+            # Link to config files, settings modules
+            correlations.extend(self.create_config_correlations(topic))
+        elif topic['name'].lower() in ['usage', 'api', 'examples']:
+            # Link to main modules, example files
+            correlations.extend(self.create_usage_correlations(topic))
+    
+    return correlations
+
+def create_setup_correlations(self, topic: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Create correlations for setup/installation content"""
+    correlations = []
+    setup_files = ['setup.py', 'requirements.txt', 'install.sh', 'pyproject.toml']
+    
+    for setup_file in setup_files:
+        if self.file_exists_in_project(setup_file):
+            correlations.append({
+                'from': f"README.md:{topic['name']}",
+                'to': setup_file,
+                'relationType': 'documents',
+                'correlation_type': 'installation'
+            })
+    
+    return correlations
+```
+
+**Phase 3: Architecture Decision Mapping**
+```python
+def map_architecture_decisions(self) -> List[Dict[str, Any]]:
+    """Map CLAUDE.md architecture decisions to code implementations"""
+    correlations = []
+    
+    # Extract architecture decisions from CLAUDE.md
+    claude_content = self.get_file_content('CLAUDE.md')
+    if claude_content:
+        decisions = self.extract_architecture_decisions(claude_content)
+        
+        for decision in decisions:
+            # Find implementing code patterns
+            implementing_files = self.find_implementing_code(decision)
+            
+            for impl_file in implementing_files:
+                correlations.append({
+                    'from': f"CLAUDE.md:{decision['section']}",
+                    'to': impl_file,
+                    'relationType': 'implements',
+                    'correlation_type': 'architecture'
+                })
+    
+    return correlations
+
+def extract_architecture_decisions(self, content: str) -> List[Dict[str, Any]]:
+    """Extract architecture decisions from CLAUDE.md"""
+    decisions = []
+    
+    # Look for technology choices
+    if 'Tree-sitter' in content:
+        decisions.append({
+            'section': 'Code Analysis Technology',
+            'decision': 'Tree-sitter + Jedi',
+            'implementation_patterns': ['tree_sitter', 'jedi', 'parse_with_tree_sitter']
+        })
+    
+    if 'Qdrant' in content:
+        decisions.append({
+            'section': 'Vector Database',
+            'decision': 'Qdrant with OpenAI embeddings',
+            'implementation_patterns': ['QdrantClient', 'openai', 'create_entities_direct']
+        })
+    
+    return decisions
+```
+
+**Phase 4: Enhanced Entity Creation**
+```python
+def create_correlation_entities(self, correlations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Create MCP entities for document-code correlations"""
+    entities = []
+    
+    for correlation in correlations:
+        entity = {
+            'name': f"correlation_{correlation['from']}_{correlation['to']}",
+            'entityType': 'documentation_correlation',
+            'observations': [
+                f"Links {correlation['from']} to {correlation['to']}",
+                f"Correlation type: {correlation.get('correlation_type', 'general')}",
+                f"Relationship: {correlation['relationType']}",
+                f"Part of {self.collection_name} project"
+            ]
+        }
+        entities.append(entity)
+    
+    return entities
+```
+
+### Integration with Current System
+
+**Extend `index_project()` method:**
+```python
+def index_project(self, include_tests: bool = False, incremental: bool = False, 
+                 force: bool = False, generate_commands: bool = False,
+                 enable_multi_modal: bool = False) -> bool:
+    """Index the entire project with optional multi-modal correlation"""
+    
+    # ... existing indexing logic ...
+    
+    # Add multi-modal correlation step
+    if enable_multi_modal:
+        self.log("Starting multi-modal correlation analysis...")
+        
+        # Extract documentation topics
+        doc_topics = self.extract_all_documentation_topics()
+        
+        # Create code-documentation correlations
+        correlations = self.correlate_docs_to_code()
+        
+        # Map architecture decisions
+        arch_correlations = self.map_architecture_decisions()
+        correlations.extend(arch_correlations)
+        
+        # Create correlation entities
+        correlation_entities = self.create_correlation_entities(correlations)
+        self.entities.extend(correlation_entities)
+        
+        # Create correlation relations
+        for correlation in correlations:
+            self.relations.append(correlation)
+        
+        self.log(f"Created {len(correlations)} multi-modal correlations")
+    
+    # ... rest of existing logic ...
+```
+
+### Expected Benefits
+
+**Enhanced Claude Understanding:**
+- **Contextual Code Comprehension**: Claude understands not just what code does, but why it exists based on documentation
+- **Architectural Awareness**: Links project decisions in CLAUDE.md to actual implementation patterns
+- **Intent-Implementation Mapping**: Connects user requirements (README) to code solutions
+- **Cross-Reference Navigation**: Can explain how documentation relates to specific code sections
+
+**Practical Examples:**
+```
+Query: "How does the git hooks feature work?"
+Enhanced Response: "The git hooks feature documented in README.md:131-140 is implemented by the GitHooksManager class in indexer.py:1251-1361, which handles pre-commit hook installation as described in CLAUDE.md Phase 8."
+
+Query: "What files implement the installation process?"
+Enhanced Response: "The installation process described in README.md:13-35 is implemented through requirements.txt (dependencies), install.sh (global wrapper), and CLAUDE.md setup instructions."
+```
+
+### Command Line Integration
+
+```bash
+# Enable multi-modal correlation during indexing
+claude-indexer --project /path/to/project --collection project-name --multi-modal
+
+# Incremental updates with correlation analysis
+claude-indexer --project /path/to/project --collection project-name --incremental --multi-modal
+
+# Generate correlation report
+claude-indexer --project /path/to/project --collection project-name --correlation-report
+```
+
+### Performance Considerations
+
+**Minimal Performance Impact:**
+- Correlation analysis runs after main indexing (no slowdown to core functionality)
+- Correlations are lightweight entities (small memory footprint)
+- Optional feature (disabled by default)
+- Incremental correlation updates (only process changed documentation)
+
+**Scalability:**
+- Linear scaling with documentation size
+- Cached topic extraction for unchanged files
+- Batched correlation entity creation
+
+### Implementation Timeline
+
+**Phase 1** (Week 1): Basic topic extraction from README and CLAUDE.md
+**Phase 2** (Week 2): Code-documentation correlation logic
+**Phase 3** (Week 3): Architecture decision mapping
+**Phase 4** (Week 4): Integration testing and optimization
+
+This enhancement builds naturally on our existing indexing infrastructure while providing significantly improved contextual understanding for Claude Code interactions.
