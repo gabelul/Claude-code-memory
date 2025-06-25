@@ -166,7 +166,7 @@ class TestIndexCommands:
             ])
             
             assert result.exit_code == 0
-            assert "Collection cleared" in result.output
+            assert "Code-indexed memories cleared" in result.output
             assert "Indexing completed" in result.output
             assert "Warnings:" in result.output
             

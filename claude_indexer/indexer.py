@@ -87,6 +87,11 @@ class CoreIndexer:
         """Get collection-specific state file path."""
         return self._state_file_base / f".indexer_state_{collection_name}.json"
     
+    @property
+    def state_file(self) -> Path:
+        """Default state file for backward compatibility with tests."""
+        return self._get_state_file("default")
+    
     def index_project(self, collection_name: str, include_tests: bool = False,
                      incremental: bool = False, force: bool = False) -> IndexingResult:
         """Index an entire project."""

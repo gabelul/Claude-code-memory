@@ -431,7 +431,7 @@ class TestQdrantStore:
                 # Mock collection exists
                 store.collection_exists = MagicMock(return_value=True)
                 
-                result = store.clear_collection("test_collection")
+                result = store.clear_collection("test_collection", preserve_manual=False)
                 
                 assert result.success
                 assert result.operation == "clear_collection"
@@ -453,6 +453,38 @@ class TestQdrantStore:
                 assert result.success
                 assert len(result.warnings) > 0
                 assert "doesn't exist" in result.warnings[0]
+    
+    def test_clear_collection_preserve_manual(self):
+        """Test clearing collection while preserving manual memories."""
+        with patch('claude_indexer.storage.qdrant.QDRANT_AVAILABLE', True):
+            with patch('claude_indexer.storage.qdrant.QdrantClient') as mock_client_class:
+                mock_client = MagicMock()
+                mock_client.get_collections.return_value = MagicMock()
+                
+                # Mock count operations - before: 100, after: 25 (preserved manual memories)
+                mock_count = MagicMock()
+                mock_count.count = 100  # Initial count
+                mock_client.count.side_effect = [mock_count, MagicMock(count=25)]  # Before and after
+                
+                mock_client.delete.return_value = True
+                mock_client_class.return_value = mock_client
+                
+                store = QdrantStore()
+                
+                # Mock collection exists
+                store.collection_exists = MagicMock(return_value=True)
+                
+                result = store.clear_collection("test_collection", preserve_manual=True)
+                
+                assert result.success
+                assert result.operation == "clear_collection"
+                assert result.items_processed == 75  # 100 - 25 = 75 deleted
+                assert len(result.warnings) > 0
+                assert "Preserved 25 manual memories" in result.warnings[0]
+                
+                # Verify selective deletion was called (not full collection deletion)
+                mock_client.delete.assert_called_once()
+                mock_client.delete_collection.assert_not_called()
 
 
 class TestVectorPoint:

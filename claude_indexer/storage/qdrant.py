@@ -6,7 +6,7 @@ from .base import VectorStore, StorageResult, VectorPoint, ManagedVectorStore
 
 try:
     from qdrant_client import QdrantClient
-    from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+    from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue, IsNullCondition, PayloadField
     QDRANT_AVAILABLE = True
 except ImportError:
     QDRANT_AVAILABLE = False
@@ -32,6 +32,12 @@ except ImportError:
         pass
     
     class MatchValue:
+        pass
+    
+    class IsNullCondition:
+        pass
+    
+    class PayloadField:
         pass
 
 
@@ -367,16 +373,14 @@ class QdrantStore(ManagedVectorStore):
                 # Count points before deletion for reporting
                 count_before = self.client.count(collection_name=collection_name).count
                 
-                # Delete points with file_path field
+                # Delete points with file_path field (code-indexed memories)
+                # Use IsNull with must_not to match points where file_path exists and is not null
                 self.client.delete(
                     collection_name=collection_name,
                     points_selector=models.FilterSelector(
                         filter=models.Filter(
-                            must=[
-                                models.FieldCondition(
-                                    key="file_path",
-                                    match=models.MatchExcept(except_values=[None]),
-                                )
+                            must_not=[
+                                models.IsNullCondition(is_null=models.PayloadField(key="file_path"))
                             ]
                         )
                     ),
@@ -392,7 +396,7 @@ class QdrantStore(ManagedVectorStore):
                     operation="clear_collection",
                     items_processed=deleted_count,
                     processing_time=time.time() - start_time,
-                    metadata={"preserved_manual_memories": count_after}
+                    warnings=[f"Preserved {count_after} manual memories"]
                 )
             else:
                 # Delete the entire collection (old behavior)

@@ -146,13 +146,13 @@ class TestIndexingState:
             test_files.append(file_path)
         
         # Save state
-        indexer._save_state(test_files)
+        indexer._save_state(test_files, "default")
         
         # Verify state file exists
         assert indexer.state_file.exists()
         
         # Load state
-        loaded_state = indexer._load_state()
+        loaded_state = indexer._load_state("default")
         
         # Verify state content
         assert isinstance(loaded_state, dict)
@@ -178,10 +178,10 @@ class TestIndexingState:
         current_state = indexer._get_current_state([test_file])
         
         # Save state
-        indexer._save_state([test_file])
+        indexer._save_state([test_file], "default")
         
         # Load state
-        loaded_state = indexer._load_state()
+        loaded_state = indexer._load_state("default")
         
         # Compare states
         file_key = str(test_file.relative_to(tmp_path))
@@ -194,7 +194,7 @@ class TestIndexingState:
         indexer = CoreIndexer(config, None, None, tmp_path)
         
         # Load state when no state file exists
-        loaded_state = indexer._load_state()
+        loaded_state = indexer._load_state("default")
         
         assert loaded_state == {}
     
@@ -208,7 +208,7 @@ class TestIndexingState:
         indexer.state_file.write_text("invalid json content")
         
         # Load state should return empty dict
-        loaded_state = indexer._load_state()
+        loaded_state = indexer._load_state("default")
         
         assert loaded_state == {}
     
@@ -261,10 +261,10 @@ class TestIndexingState:
         test_file.write_text("test")
         
         # Should not raise exception
-        indexer._save_state([test_file])
+        indexer._save_state([test_file], "default")
         
         # Should return empty state
-        loaded_state = indexer._load_state()
+        loaded_state = indexer._load_state("default")
         assert loaded_state == {}
 
 
@@ -282,7 +282,7 @@ class TestIncrementalIndexing:
         test_file.write_text("original content")
         
         # Save initial state
-        indexer._save_state([test_file])
+        indexer._save_state([test_file], "test")
         
         # Check if file needs processing (should not, as it's unchanged)
         files_to_process = indexer._get_files_needing_processing(include_tests=False, collection_name="test")
@@ -300,7 +300,7 @@ class TestIncrementalIndexing:
         test_file.write_text("original content")
         
         # Save initial state
-        indexer._save_state([test_file])
+        indexer._save_state([test_file], "test")
         
         # Modify file
         import time
@@ -322,7 +322,7 @@ class TestIncrementalIndexing:
         # Create and save state for first file
         file1 = tmp_path / "file1.py"
         file1.write_text("content 1")
-        indexer._save_state([file1])
+        indexer._save_state([file1], "test")
         
         # Create new file
         file2 = tmp_path / "file2.py"
@@ -349,7 +349,7 @@ class TestIncrementalIndexing:
             files.append(file_path)
         
         # Save state
-        indexer._save_state(files)
+        indexer._save_state(files, "test")
         
         # Get files needing processing with force=True
         files_to_process = indexer._get_files_needing_processing(include_tests=False, force=True, collection_name="test")
