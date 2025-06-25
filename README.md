@@ -19,14 +19,18 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Install MCP memory server
+# 2. Configure settings (copy template and add your API keys)
+cp settings.template.txt settings.txt
+# Edit settings.txt with your OpenAI API key and Qdrant settings
+
+# 3. Install MCP memory server
 git clone https://github.com/delorenj/mcp-qdrant-memory.git
 cd mcp-qdrant-memory && npm install && npm run build && cd ..
 
-# 3. Install global wrapper
+# 4. Install global wrapper
 ./install.sh
 
-# 4. Start Qdrant
+# 5. Start Qdrant
 docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_storage:/qdrant/storage:z qdrant/qdrant
 ```
 
@@ -100,6 +104,12 @@ claude-indexer --project /path/to/project --collection project-name
 # Incremental updates (15x faster)
 claude-indexer --project /path/to/project --collection project-name --incremental
 
+# Force reprocess all files (overrides incremental checks)
+claude-indexer --project /path/to/project --collection project-name --incremental --force
+
+# Clear collection and start fresh
+claude-indexer --project /path/to/project --collection project-name --clear
+
 # Debug mode (generate commands file)
 claude-indexer --project /path/to/project --collection project-name --generate-commands
 ```
@@ -135,6 +145,16 @@ claude-indexer --uninstall-hooks --project /path/to/project --collection project
 - **File Watching**: Active development sessions, real-time feedback
 - **Background Service**: Multiple projects, continuous development
 - **Git Hooks**: Team workflows, automated CI/CD integration
+
+## 🛠️ Technology Stack
+
+- **Vector Database**: Qdrant for high-performance semantic search
+- **Knowledge Graph**: delorenj/mcp-qdrant-memory for entities & relations
+- **Code Analysis**: Tree-sitter (36x faster parsing) + Jedi (semantic analysis)
+- **Embeddings**: OpenAI text-embedding-3-small for semantic similarity
+- **File Processing**: Python + Markdown with node_modules filtering
+- **Automation**: Python watchdog, git hooks, background services
+- **Integration**: MCP (Model Context Protocol) for Claude Code
 
 ## ✨ Features
 

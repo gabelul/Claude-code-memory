@@ -1,0 +1,23 @@
+# Claude Code Memory Solution - Configuration Settings Template
+# Copy this file to settings.txt and fill in your actual values
+
+# OpenAI API Key for embeddings generation
+openai_api_key=your_openai_api_key_here
+
+# Qdrant Vector Database Configuration
+qdrant_url=http://localhost:6333
+qdrant_api_key=your_qdrant_api_key_here
+
+# Indexer Settings
+indexer_debug=false
+indexer_verbose=true
+debounce_seconds=2.0
+
+# File Processing Settings
+include_markdown=true
+include_tests=false
+max_file_size=1048576
+
+# Service Configuration
+service_config_path=~/.claude-indexer/config.json
+auto_start_service=false

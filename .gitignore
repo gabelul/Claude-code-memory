@@ -19,6 +19,9 @@ mcp_output/
 mcp-qdrant-memory/
 mcp-qdrant-memory/*
 
+# Configuration files with secrets
+settings.txt
+
 # Temporary files
 *.log
 *.tmp

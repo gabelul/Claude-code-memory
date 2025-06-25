@@ -33,6 +33,52 @@ import signal
 import threading
 from threading import Timer
 
+def load_settings() -> Dict[str, Any]:
+    """Load configuration from settings.txt file"""
+    settings = {}
+    settings_file = Path(__file__).parent / "settings.txt"
+    
+    if settings_file.exists():
+        try:
+            with open(settings_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        if '=' in line:
+                            key, value = line.split('=', 1)
+                            key = key.strip()
+                            value = value.strip()
+                            
+                            # Convert boolean values
+                            if value.lower() in ('true', 'false'):
+                                value = value.lower() == 'true'
+                            # Convert numeric values
+                            elif value.replace('.', '').isdigit():
+                                value = float(value) if '.' in value else int(value)
+                            
+                            settings[key] = value
+        except Exception as e:
+            print(f"Warning: Failed to load settings.txt: {e}")
+    
+    # Set defaults for missing values
+    defaults = {
+        'openai_api_key': os.environ.get('OPENAI_API_KEY', ''),
+        'qdrant_url': os.environ.get('QDRANT_URL', 'http://localhost:6333'),
+        'qdrant_api_key': os.environ.get('QDRANT_API_KEY', 'default-key'),
+        'indexer_debug': False,
+        'indexer_verbose': True,
+        'debounce_seconds': 2.0,
+        'include_markdown': True,
+        'include_tests': False,
+        'max_file_size': 1048576,
+    }
+    
+    for key, default_value in defaults.items():
+        if key not in settings:
+            settings[key] = default_value
+    
+    return settings
+
 class UniversalIndexer:
     """Universal semantic indexer for Python codebases"""
     
@@ -40,6 +86,11 @@ class UniversalIndexer:
         self.project_path = Path(project_path).resolve()
         self.collection_name = collection_name
         self.verbose = verbose
+        
+        # Load settings
+        self.settings = load_settings()
+        if self.settings.get('indexer_verbose', True):
+            self.verbose = True
         
         # Initialize Tree-sitter
         self.language = Language(tree_sitter_python.language())
@@ -61,6 +112,7 @@ class UniversalIndexer:
         self.previous_state = {}
         
         self.log(f"Initialized indexer for {self.project_path} -> {collection_name}")
+        self.log(f"Settings loaded: {len(self.settings)} configuration values")
 
     def log(self, message: str, level: str = "INFO"):
         """Log messages with optional verbosity"""
@@ -109,10 +161,10 @@ class UniversalIndexer:
             self.log(f"Failed to save state file: {e}", "ERROR")
             return False
 
-    def get_changed_files(self, current_files: List[Path], incremental: bool = False) -> Tuple[List[Path], List[str]]:
+    def get_changed_files(self, current_files: List[Path], incremental: bool = False, force: bool = False) -> Tuple[List[Path], List[str]]:
         """Detect which files have changed since last indexing"""
-        if not incremental:
-            return current_files, []  # Process all files in full mode
+        if not incremental or force:
+            return current_files, []  # Process all files in full mode or when forced
         
         self.previous_state = self.load_state_file()
         previous_files = self.previous_state.get("files", {})
@@ -169,10 +221,11 @@ class UniversalIndexer:
             self.log(f"Error deleting entities for removed files: {e}", "ERROR")
             return False
 
-    def find_python_files(self, include_tests: bool = False) -> List[Path]:
-        """Find all Python files in the project"""
-        python_files = []
+    def find_source_files(self, include_tests: bool = False) -> List[Path]:
+        """Find all source files in the project (Python and optionally Markdown)"""
+        source_files = []
         
+        # Find Python files
         for file_path in self.project_path.rglob("*.py"):
             # Skip virtual environments and hidden directories
             if any(part.startswith('.') for part in file_path.parts):
@@ -184,10 +237,30 @@ class UniversalIndexer:
             if not include_tests and ('test_' in file_path.name or '/tests/' in str(file_path)):
                 continue
                 
-            python_files.append(file_path)
+            source_files.append(file_path)
         
-        self.log(f"Found {len(python_files)} Python files")
-        return python_files
+        # Find Markdown files if enabled
+        if self.settings.get('include_markdown', True):
+            for file_path in self.project_path.rglob("*.md"):
+                # Skip hidden directories
+                if any(part.startswith('.') for part in file_path.parts):
+                    continue
+                if 'venv' in str(file_path) or '__pycache__' in str(file_path):
+                    continue
+                # Skip node_modules
+                if 'node_modules' in str(file_path):
+                    continue
+                    
+                source_files.append(file_path)
+        
+        python_count = len([f for f in source_files if f.suffix == '.py'])
+        markdown_count = len([f for f in source_files if f.suffix == '.md'])
+        self.log(f"Found {python_count} Python files and {markdown_count} Markdown files")
+        return source_files
+
+    def find_python_files(self, include_tests: bool = False) -> List[Path]:
+        """Legacy method - use find_source_files instead"""
+        return [f for f in self.find_source_files(include_tests) if f.suffix == '.py']
 
     def parse_with_tree_sitter(self, file_path: Path) -> Optional[tree_sitter.Tree]:
         """Parse file with Tree-sitter"""
@@ -487,14 +560,20 @@ class UniversalIndexer:
         try:
             self.log(f"Direct Qdrant call: {method} with {len(params.get('entities', params.get('relations', [])))} items")
             
-            # Initialize Qdrant client
-            qdrant_url = os.environ.get("QDRANT_URL", "http://localhost:6333")
-            qdrant_api_key = os.environ.get("QDRANT_API_KEY", "your-secret-key")
+            # Use settings for configuration
+            qdrant_url = self.settings.get('qdrant_url', 'http://localhost:6333')
+            qdrant_api_key = self.settings.get('qdrant_api_key', 'default-key')
+            openai_api_key = self.settings.get('openai_api_key', '')
             
+            if not openai_api_key:
+                self.log("OpenAI API key not configured in settings.txt", "ERROR")
+                return False
+            
+            # Initialize Qdrant client
             client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
             
             # Initialize OpenAI client for embeddings
-            openai_client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+            openai_client = openai.OpenAI(api_key=openai_api_key)
             
             # Ensure collection exists
             collection_name = self.collection_name
@@ -537,9 +616,11 @@ class UniversalIndexer:
                 )
                 embedding = response.data[0].embedding
                 
-                # Create point for Qdrant
+                # Create point for Qdrant  
+                # Use deterministic hash for stable IDs across runs
+                entity_id = int(hashlib.sha256(entity['name'].encode()).hexdigest()[:8], 16)
                 point = PointStruct(
-                    id=hash(entity['name']) % (2**31),  # Stable ID based on entity name
+                    id=entity_id,  # Deterministic ID based on entity name
                     vector=embedding,
                     payload={
                         "name": entity['name'],
@@ -559,6 +640,44 @@ class UniversalIndexer:
             self.log(f"Failed to create entities: {e}", "ERROR")
             return False
 
+    def clear_collection(self) -> bool:
+        """Clear all data from the collection"""
+        try:
+            qdrant_url = self.settings.get('qdrant_url', 'http://localhost:6333')
+            qdrant_api_key = self.settings.get('qdrant_api_key', 'default-key')
+            
+            # Initialize Qdrant client
+            client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
+            
+            # Check if collection exists
+            try:
+                client.get_collection(self.collection_name)
+                # Delete the collection
+                client.delete_collection(self.collection_name)
+                self.log(f"✅ Deleted collection: {self.collection_name}")
+                
+                # Also clear the state file
+                if self.state_file.exists():
+                    self.state_file.unlink()
+                    self.log(f"✅ Cleared state file: {self.state_file}")
+                
+                return True
+                
+            except Exception as e:
+                if "doesn't exist" in str(e).lower():
+                    self.log(f"ℹ️  Collection '{self.collection_name}' doesn't exist - nothing to clear")
+                    # Still clear state file if it exists
+                    if self.state_file.exists():
+                        self.state_file.unlink()
+                        self.log(f"✅ Cleared state file: {self.state_file}")
+                    return True
+                else:
+                    raise e
+                    
+        except Exception as e:
+            self.log(f"❌ Failed to clear collection: {e}", "ERROR")
+            return False
+
     def _create_relations_direct(self, client: QdrantClient, openai_client, collection_name: str, relations: List[Dict[str, Any]]) -> bool:
         """Create relations directly in Qdrant as separate points"""
         try:
@@ -576,8 +695,11 @@ class UniversalIndexer:
                 embedding = response.data[0].embedding
                 
                 # Create point for Qdrant
+                # Use deterministic hash for stable IDs across runs
+                relation_key = f"{relation['from']}-{relation['relationType']}-{relation['to']}"
+                relation_id = int(hashlib.sha256(relation_key.encode()).hexdigest()[:8], 16)
                 point = PointStruct(
-                    id=hash(f"{relation['from']}-{relation['relationType']}-{relation['to']}") % (2**31),
+                    id=relation_id,
                     vector=embedding,
                     payload={
                         "from": relation['from'],
@@ -599,10 +721,27 @@ class UniversalIndexer:
             return False
 
     def process_file(self, file_path: Path, include_tests: bool = False) -> bool:
-        """Process a single Python file"""
+        """Process a single source file (Python or Markdown)"""
         try:
             self.log(f"Processing {file_path.relative_to(self.project_path)}")
             
+            if file_path.suffix == '.py':
+                return self.process_python_file(file_path, include_tests)
+            elif file_path.suffix == '.md':
+                return self.process_markdown_file(file_path)
+            else:
+                self.log(f"Unsupported file type: {file_path.suffix}", "ERROR")
+                return False
+            
+        except Exception as e:
+            self.log(f"Error processing {file_path}: {e}", "ERROR")
+            self.errors.append(f"Processing error in {file_path}: {e}")
+            traceback.print_exc()
+            return False
+
+    def process_python_file(self, file_path: Path, include_tests: bool = False) -> bool:
+        """Process a single Python file"""
+        try:
             # Parse with Tree-sitter
             tree = self.parse_with_tree_sitter(file_path)
             if not tree:
@@ -626,25 +765,175 @@ class UniversalIndexer:
             return True
             
         except Exception as e:
-            self.log(f"Error processing {file_path}: {e}", "ERROR")
-            self.errors.append(f"Processing error in {file_path}: {e}")
-            traceback.print_exc()
+            self.log(f"Error processing Python file {file_path}: {e}", "ERROR")
+            self.errors.append(f"Python processing error in {file_path}: {e}")
             return False
 
-    def index_project(self, include_tests: bool = False, incremental: bool = False, generate_commands: bool = False) -> bool:
+    def process_markdown_file(self, file_path: Path) -> bool:
+        """Process a single Markdown file"""
+        try:
+            # Read markdown content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Extract markdown entities
+            md_entities = self.extract_markdown_entities(content, file_path)
+            
+            # Create MCP entities for markdown
+            mcp_entities = self.create_markdown_mcp_entities(md_entities, file_path)
+            self.entities.extend(mcp_entities)
+            
+            # Create MCP relations for markdown
+            mcp_relations = self.create_markdown_mcp_relations(file_path, md_entities)
+            self.relations.extend(mcp_relations)
+            
+            self.processed_files.add(str(file_path))
+            return True
+            
+        except Exception as e:
+            self.log(f"Error processing Markdown file {file_path}: {e}", "ERROR")
+            self.errors.append(f"Markdown processing error in {file_path}: {e}")
+            return False
+
+    def extract_markdown_entities(self, content: str, file_path: Path) -> List[Dict[str, Any]]:
+        """Extract entities from Markdown content"""
+        entities = []
+        lines = content.split('\n')
+        
+        for line_num, line in enumerate(lines, 1):
+            line = line.strip()
+            
+            # Extract headers
+            if line.startswith('#'):
+                header_level = len(line) - len(line.lstrip('#'))
+                header_text = line.lstrip('#').strip()
+                if header_text:
+                    entities.append({
+                        'name': header_text,
+                        'type': 'header',
+                        'level': header_level,
+                        'file': str(file_path.relative_to(self.project_path)),
+                        'line': line_num,
+                        'source': 'markdown'
+                    })
+            
+            # Extract links [text](url)
+            import re
+            link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+            for match in re.finditer(link_pattern, line):
+                link_text, link_url = match.groups()
+                entities.append({
+                    'name': f"Link: {link_text}",
+                    'type': 'link',
+                    'url': link_url,
+                    'text': link_text,
+                    'file': str(file_path.relative_to(self.project_path)),
+                    'line': line_num,
+                    'source': 'markdown'
+                })
+            
+            # Extract code blocks
+            if line.startswith('```'):
+                language = line[3:].strip() if len(line) > 3 else 'unknown'
+                entities.append({
+                    'name': f"Code block ({language})",
+                    'type': 'code_block',
+                    'language': language,
+                    'file': str(file_path.relative_to(self.project_path)),
+                    'line': line_num,
+                    'source': 'markdown'
+                })
+        
+        return entities
+
+    def create_markdown_mcp_entities(self, md_entities: List[Dict[str, Any]], file_path: Path) -> List[Dict[str, Any]]:
+        """Create MCP entities from markdown content"""
+        mcp_entities = []
+        
+        # Create file entity
+        relative_path = str(file_path.relative_to(self.project_path))
+        
+        # Count entity types
+        headers = [e for e in md_entities if e['type'] == 'header']
+        links = [e for e in md_entities if e['type'] == 'link']
+        code_blocks = [e for e in md_entities if e['type'] == 'code_block']
+        
+        file_entity = {
+            'name': relative_path,
+            'entityType': 'file',
+            'observations': [
+                f"Markdown documentation file in {self.collection_name} project",
+                f"Located at {relative_path}",
+                f"Contains {len(headers)} headers",
+                f"Contains {len(links)} links",
+                f"Contains {len(code_blocks)} code blocks"
+            ]
+        }
+        mcp_entities.append(file_entity)
+        
+        # Create entities for headers
+        for header in headers:
+            observations = [
+                f"Level {header['level']} header in {relative_path} at line {header['line']}",
+                f"Part of {self.collection_name} project documentation"
+            ]
+            
+            mcp_entities.append({
+                'name': f"{relative_path}:{header['name']}",
+                'entityType': 'section',
+                'observations': observations
+            })
+        
+        # Create entities for significant links (not too many to avoid noise)
+        for link in links[:5]:  # Limit to first 5 links per file
+            observations = [
+                f"Link in {relative_path} at line {link['line']}",
+                f"Links to: {link['url']}",
+                f"Link text: {link['text']}"
+            ]
+            
+            mcp_entities.append({
+                'name': f"{relative_path}:Link:{link['text'][:50]}",
+                'entityType': 'reference',
+                'observations': observations
+            })
+        
+        return mcp_entities
+
+    def create_markdown_mcp_relations(self, file_path: Path, md_entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Create MCP relations for markdown content"""
+        relations = []
+        relative_path = str(file_path.relative_to(self.project_path))
+        
+        # File contains headers and links
+        for entity in md_entities:
+            if entity['type'] in ['header', 'link']:
+                entity_name = entity['name']
+                if entity['type'] == 'link':
+                    entity_name = f"Link:{entity['text'][:50]}"
+                
+                relations.append({
+                    'from': relative_path,
+                    'to': f"{relative_path}:{entity_name}",
+                    'relationType': 'contains'
+                })
+        
+        return relations
+
+    def index_project(self, include_tests: bool = False, incremental: bool = False, force: bool = False, generate_commands: bool = False) -> bool:
         """Index the entire project"""
         mode = "incremental" if incremental else "full"
         self.log(f"Starting {mode} indexing of {self.project_path}")
         
-        # Find Python files
-        all_python_files = self.find_python_files(include_tests)
+        # Find source files (Python + Markdown)
+        all_source_files = self.find_source_files(include_tests)
         
-        if not all_python_files:
-            self.log("No Python files found to index", "ERROR")
+        if not all_source_files:
+            self.log("No source files found to index", "ERROR")
             return False
         
         # Determine which files to process
-        files_to_process, deleted_files = self.get_changed_files(all_python_files, incremental)
+        files_to_process, deleted_files = self.get_changed_files(all_source_files, incremental, force)
         
         if incremental:
             if not files_to_process and not deleted_files:
@@ -673,7 +962,7 @@ class UniversalIndexer:
         
         # In incremental mode, also preserve state for unchanged files
         if incremental and self.previous_state:
-            current_relative_paths = {str(f.relative_to(self.project_path)) for f in all_python_files}
+            current_relative_paths = {str(f.relative_to(self.project_path)) for f in all_source_files}
             for prev_file, prev_state in self.previous_state.get("files", {}).items():
                 if prev_file in current_relative_paths and prev_file not in files_state:
                     # File unchanged - preserve its state
@@ -750,15 +1039,15 @@ class IndexingEventHandler(FileSystemEventHandler):
         self.timers = {}
         
     def on_modified(self, event):
-        if not event.is_directory and event.src_path.endswith('.py'):
+        if not event.is_directory and (event.src_path.endswith('.py') or event.src_path.endswith('.md')):
             self._debounced_index(event.src_path)
     
     def on_created(self, event):
-        if not event.is_directory and event.src_path.endswith('.py'):
+        if not event.is_directory and (event.src_path.endswith('.py') or event.src_path.endswith('.md')):
             self._debounced_index(event.src_path)
     
     def on_deleted(self, event):
-        if not event.is_directory and event.src_path.endswith('.py'):
+        if not event.is_directory and (event.src_path.endswith('.py') or event.src_path.endswith('.md')):
             self._handle_file_deletion(event.src_path)
     
     def _debounced_index(self, file_path):
@@ -1100,6 +1389,8 @@ def main():
     parser.add_argument("--collection", help="MCP collection name")
     parser.add_argument("--include-tests", action="store_true", help="Include test files")
     parser.add_argument("--incremental", action="store_true", help="Only process changed files since last run")
+    parser.add_argument("--force", action="store_true", help="Force reprocessing all files (overrides incremental hash checks)")
+    parser.add_argument("--clear", action="store_true", help="Clear all data from the collection before indexing")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--depth", choices=["basic", "full"], default="full", help="Analysis depth")
     parser.add_argument("--generate-commands", action="store_true", help="Generate MCP commands for manual execution instead of auto-loading")
@@ -1237,9 +1528,21 @@ def main():
         verbose=args.verbose
     )
     
+    # Handle clear collection command
+    if args.clear:
+        print(f"🗑️  Clearing collection '{args.collection}'...")
+        clear_success = indexer.clear_collection()
+        if clear_success:
+            print(f"✅ Successfully cleared collection '{args.collection}'")
+        else:
+            print(f"❌ Failed to clear collection '{args.collection}'")
+            sys.exit(1)
+        return
+    
     success = indexer.index_project(
         include_tests=args.include_tests,
         incremental=args.incremental,
+        force=args.force,
         generate_commands=args.generate_commands
     )
     

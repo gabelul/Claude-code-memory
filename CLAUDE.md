@@ -345,12 +345,17 @@ npm run build
 cd ..
 ```
 
-### Step 4: Configure Environment Variables
+### Step 4: Configure Settings
 ```bash
-# Set up your API keys (replace with your actual keys)
-export OPENAI_API_KEY="sk-your-openai-key-here"
-export QDRANT_API_KEY="your-qdrant-api-key"  # Can be any secret key
-export QDRANT_URL="http://localhost:6333"
+# Copy settings template and configure your keys
+cp settings.template.txt settings.txt
+
+# Edit settings.txt with your actual API keys:
+# openai_api_key=sk-your-openai-key-here
+# qdrant_api_key=your-qdrant-api-key  # Can be any secret key
+# qdrant_url=http://localhost:6333
+
+# The indexer will automatically load these settings
 ```
 
 ### Step 5: Configure Claude Code MCP
@@ -604,6 +609,9 @@ collections:
 
 # Incremental updates (only process changed files - 15x faster)
 ./indexer.py --project /path/to/project --collection my-project --incremental
+
+# Force reprocess all files (overrides incremental hash checks)
+./indexer.py --project /path/to/project --collection my-project --incremental --force
 ```
 
 #### Real-time File Watching
