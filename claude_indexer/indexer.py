@@ -100,7 +100,7 @@ class CoreIndexer:
         return state_dir
     
     def _get_state_file(self, collection_name: str) -> Path:
-        """Get collection-specific state file path in centralized directory."""
+        """Get collection-specific state file with atomic migration."""
         import hashlib
         
         # Create unique project identifier using path hash
@@ -111,13 +111,32 @@ class CoreIndexer:
         legacy_state = self.project_path / f".indexer_state_{collection_name}.json"
         new_state = self._get_state_directory() / filename
         
-        # Migrate legacy state file if it exists and new one doesn't
+        # Atomic migration with race condition protection
         if legacy_state.exists() and not new_state.exists():
+            temp_file = None
             try:
-                legacy_state.rename(new_state)
+                # Use atomic two-step rename to prevent race conditions
+                temp_file = new_state.with_suffix('.tmp')
+                legacy_state.rename(temp_file)  # Atomic move from legacy
+                temp_file.rename(new_state)     # Atomic move to final location
                 logger.info(f"Migrated state file: {legacy_state} -> {new_state}")
+            except FileNotFoundError:
+                # Another process already migrated it - this is expected
+                # Clean up temp file if it exists (edge case handling)
+                if temp_file and temp_file.exists():
+                    try:
+                        temp_file.unlink()
+                    except Exception:
+                        pass  # Ignore cleanup errors
             except Exception as e:
-                logger.warning(f"Failed to migrate state file: {e}")
+                # Clean up temp file if it exists
+                if temp_file and temp_file.exists():
+                    try:
+                        temp_file.unlink()
+                    except Exception:
+                        pass  # Ignore cleanup errors
+                logger.warning(f"Migration failed, using legacy location: {e}")
+                return legacy_state  # Graceful fallback to legacy location
         
         return new_state
     

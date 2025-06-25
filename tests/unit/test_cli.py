@@ -419,7 +419,7 @@ class TestWatchCommands:
             
             assert result.exit_code == 0
             assert "Watching:" in result.output
-            assert "Stopping file watcher" in result.output
+            assert "File watcher stopped" in result.output
             mock_observer.start.assert_called_once()
             mock_observer.stop.assert_called_once()
     
