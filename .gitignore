@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+.indexer_state_*.json
+mcp_output/
+mcp-qdrant-memory/
+mcp-qdrant-memory/*
+
+# Temporary files
+*.log
+*.tmp
+
+# Qdrant storage
+qdrant_storage/

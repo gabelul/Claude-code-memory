@@ -21,6 +21,11 @@ import tree_sitter_python
 import jedi
 import requests
 
+# Import Qdrant and OpenAI for direct automation
+from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance, PointStruct
+import openai
+
 class UniversalIndexer:
     """Universal semantic indexer for Python codebases"""
     
@@ -471,26 +476,119 @@ class UniversalIndexer:
             return False
 
     def _call_mcp_api(self, method: str, params: Dict[str, Any]) -> bool:
-        """Print MCP commands for Claude Code execution"""
+        """Execute direct Qdrant operations for true automation"""
         try:
-            self.log(f"MCP API call: {method} with {len(params.get('entities', params.get('relations', [])))} items")
+            self.log(f"Direct Qdrant call: {method} with {len(params.get('entities', params.get('relations', [])))} items")
             
-            # Format the MCP command for Claude Code
-            collection_memory = f"{self.collection_name}-memory"
-            mcp_command = f"mcp__{collection_memory}__{method}"
+            # Initialize Qdrant client
+            qdrant_url = os.environ.get("QDRANT_URL", "http://localhost:6333")
+            qdrant_api_key = os.environ.get("QDRANT_API_KEY", "your-secret-key")
             
-            # Print the command that should be executed in Claude Code
-            params_json = json.dumps(params, indent=2)
-            print(f"\n🔧 Execute this MCP command in Claude Code:")
-            print(f"{mcp_command}({params_json})")
-            print()
+            client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
             
-            # For auto-loading mode, we'll assume success and let Claude Code handle it
-            self.log(f"✅ MCP {method} command printed for execution")
+            # Initialize OpenAI client for embeddings
+            openai_client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+            
+            # Ensure collection exists
+            collection_name = self.collection_name
+            try:
+                client.get_collection(collection_name)
+                self.log(f"Using existing collection: {collection_name}")
+            except Exception:
+                # Create collection if it doesn't exist
+                client.create_collection(
+                    collection_name=collection_name,
+                    vectors_config=VectorParams(size=1536, distance=Distance.COSINE)
+                )
+                self.log(f"Created new collection: {collection_name}")
+            
+            if method == "create_entities":
+                return self._create_entities_direct(client, openai_client, collection_name, params["entities"])
+            elif method == "create_relations":
+                return self._create_relations_direct(client, openai_client, collection_name, params["relations"])
+            else:
+                self.log(f"Unknown method: {method}", "ERROR")
+                return False
+                
+        except Exception as e:
+            self.log(f"Direct Qdrant call failed: {e}", "ERROR")
+            return False
+
+    def _create_entities_direct(self, client: QdrantClient, openai_client, collection_name: str, entities: List[Dict[str, Any]]) -> bool:
+        """Create entities directly in Qdrant with embeddings"""
+        try:
+            points = []
+            
+            for i, entity in enumerate(entities):
+                # Create text for embedding from entity data
+                entity_text = f"{entity['name']} ({entity['entityType']}): {' '.join(entity['observations'])}"
+                
+                # Generate embedding
+                response = openai_client.embeddings.create(
+                    model="text-embedding-ada-002",
+                    input=entity_text
+                )
+                embedding = response.data[0].embedding
+                
+                # Create point for Qdrant
+                point = PointStruct(
+                    id=hash(entity['name']) % (2**31),  # Stable ID based on entity name
+                    vector=embedding,
+                    payload={
+                        "name": entity['name'],
+                        "entityType": entity['entityType'],
+                        "observations": entity['observations'],
+                        "collection": collection_name
+                    }
+                )
+                points.append(point)
+            
+            # Batch upsert to Qdrant
+            client.upsert(collection_name=collection_name, points=points)
+            self.log(f"✅ Created {len(entities)} entities in Qdrant")
             return True
             
         except Exception as e:
-            self.log(f"MCP API call failed: {e}", "ERROR")
+            self.log(f"Failed to create entities: {e}", "ERROR")
+            return False
+
+    def _create_relations_direct(self, client: QdrantClient, openai_client, collection_name: str, relations: List[Dict[str, Any]]) -> bool:
+        """Create relations directly in Qdrant as separate points"""
+        try:
+            points = []
+            
+            for i, relation in enumerate(relations):
+                # Create text for embedding from relation data
+                relation_text = f"Relation: {relation['from']} {relation['relationType']} {relation['to']}"
+                
+                # Generate embedding
+                response = openai_client.embeddings.create(
+                    model="text-embedding-ada-002",
+                    input=relation_text
+                )
+                embedding = response.data[0].embedding
+                
+                # Create point for Qdrant
+                point = PointStruct(
+                    id=hash(f"{relation['from']}-{relation['relationType']}-{relation['to']}") % (2**31),
+                    vector=embedding,
+                    payload={
+                        "from": relation['from'],
+                        "to": relation['to'],
+                        "relationType": relation['relationType'],
+                        "collection": collection_name,
+                        "type": "relation"  # Mark as relation for filtering
+                    }
+                )
+                points.append(point)
+            
+            # Batch upsert to Qdrant
+            client.upsert(collection_name=collection_name, points=points)
+            self.log(f"✅ Created {len(relations)} relations in Qdrant")
+            return True
+            
+        except Exception as e:
+            self.log(f"Failed to create relations: {e}", "ERROR")
             return False
 
     def process_file(self, file_path: Path, include_tests: bool = False) -> bool:
@@ -675,8 +773,9 @@ def main():
             print(f"📋 Generated MCP commands in {commands_file}")
             print(f"💡 Copy and paste the commands from this file into Claude Code to load the knowledge graph")
         else:
-            print(f"🚀 Auto-loaded entities and relations into MCP memory server")
-            print(f"💡 Use mcp__{args.collection}-memory__search_similar(\"query\") to search the knowledge graph")
+            print(f"🚀 Directly loaded entities and relations into Qdrant vector database")
+            print(f"💡 Knowledge graph stored in collection '{args.collection}' with semantic search enabled")
+            print(f"🔍 Use Qdrant API or Claude Code MCP tools to search the knowledge graph")
             
     else:
         print(f"❌ Failed to index {args.project}")

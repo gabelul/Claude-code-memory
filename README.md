@@ -1,6 +1,6 @@
 # Claude Code Memory Solution
 
-Enterprise-grade memory system for Claude Code that provides persistent, semantic understanding of your Python codebases through knowledge graphs and vector search.
+🧠 Universal semantic indexer with **True Automation** - providing persistent memory for Claude Code through direct Qdrant integration, knowledge graphs, and Tree-sitter parsing - Zero manual intervention required
 
 ## 🚀 Quick Start
 
@@ -13,7 +13,7 @@ Enterprise-grade memory system for Claude Code that provides persistent, semanti
 ### Installation
 ```bash
 # 1. Clone and setup
-git clone <repository-url> memory
+git clone https://github.com/Durafen/Claude-code-memory.git memory
 cd memory
 python3.12 -m venv .venv
 source .venv/bin/activate
@@ -81,8 +81,8 @@ Add to `~/.claude/claude_desktop_config.json`:
 claude-indexer --project /path/to/your/project --collection my-project
 ```
 
-### Step 4: Load Knowledge Graph
-Copy/paste the printed MCP commands into Claude Code to load the knowledge graph.
+### Step 4: Automatic Knowledge Graph Loading
+Knowledge graph is automatically loaded into Qdrant - no manual steps required!
 
 ### Step 5: Test Semantic Search
 ```bash
@@ -115,12 +115,13 @@ claude-indexer --project /path/to/project --collection project-name --generate-c
 
 ## ✨ Features
 
-- **Auto-loading**: MCP commands printed for easy execution
+- **True Automation**: Direct Qdrant integration with zero manual intervention
 - **Incremental updates**: 15x faster processing of changed files only
 - **Project isolation**: Separate memory collections per project
 - **Semantic search**: Find code by intent, not just keywords
 - **Knowledge graphs**: Understands relationships between code components
 - **Global wrapper**: Use `claude-indexer` from any directory
+- **Zero Manual Steps**: Automatic loading eliminates copy-paste workflows
 
 ## 📚 Full Documentation
 
@@ -133,12 +134,12 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive architecture, setup instructions, a
 │   Claude Code   │◄──►│  MCP Server      │◄──►│   Qdrant DB     │
 │                 │    │  (delorenj)      │    │   (Vectors)     │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │
-                       ┌────────▼────────┐
-                       │   Knowledge     │
-                       │     Graph       │
-                       │   (JSON+Vectors)│
-                       └─────────────────┘
+                                                        ▲
+                       ┌────────────────┐               │
+                       │ Universal      │               │ Direct
+                       │ Indexer        │───────────────┘ Automation
+                       │ (indexer.py)   │
+                       └────────────────┘
                                 │
                        ┌────────▼────────┐
                        │  Tree-sitter +  │
@@ -153,4 +154,6 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive architecture, setup instructions, a
 ✅ **100% success rate** on file processing  
 ✅ **Sub-second semantic search** across indexed codebases  
 ✅ **15x performance improvement** with incremental updates  
-✅ **Enterprise-grade accuracy** with Tree-sitter + Jedi analysis
+✅ **Enterprise-grade accuracy** with Tree-sitter + Jedi analysis  
+✅ **True Automation** - Zero manual copy-paste steps eliminated  
+✅ **Direct Qdrant Integration** - Instant knowledge graph loading
