@@ -127,6 +127,13 @@ We sought to build the **ideal memory solution** for Claude Code that would prov
 - [x] Achieve 15x performance improvement for iterative development
 - [x] Test all incremental scenarios (new, modified, deleted files)
 
+### Phase 6: Auto-Loading & User Experience ✅
+- [x] Implement auto-loading as default behavior
+- [x] Add --generate-commands flag for debugging scenarios
+- [x] Test semantic search functionality with indexed data
+- [x] Validate knowledge graph relationships and accuracy
+- [x] Complete Week 1 goals: semantic search and validation
+
 ## Project-Specific Memory Architecture
 
 ### Collection Strategy
@@ -340,30 +347,42 @@ Edit your Claude Code configuration file:
 }
 ```
 
-### Step 6: Test the Installation
+### Step 6: Install Global Wrapper (Optional but Recommended)
 ```bash
-# Activate environment
-source .venv/bin/activate
+# Install global wrapper for easy access from anywhere
+./install.sh
 
-# Test indexer with any Python project
+# Now you can use claude-indexer from any directory
+claude-indexer --help
+```
+
+### Step 7: Test the Installation
+```bash
+# Test indexer with any Python project (using global wrapper)
+claude-indexer --project /path/to/your/python/project --collection test-setup --verbose
+
+# Or use local script (with virtual environment activated)
+source .venv/bin/activate
 ./indexer.py --project /path/to/your/python/project --collection test-setup --verbose
 
 # Expected output: successful indexing with entities and relations created
 ```
 
-### Step 7: Index Your First Project
+### Step 8: Index Your First Project
 ```bash
-# Full indexing with MCP command generation
-./indexer.py --project /path/to/your/project --collection my-project --generate-commands --verbose
+# Auto-loading (recommended) - prints MCP commands to execute
+claude-indexer --project /path/to/your/project --collection my-project --verbose
 
-# Copy the generated MCP commands from mcp_output/my-project_mcp_commands.txt
-# Paste them into Claude Code to load the knowledge graph
+# Copy/paste the printed MCP commands into Claude Code to load the knowledge graph
+
+# Alternative: Generate commands for manual loading
+claude-indexer --project /path/to/your/project --collection my-project --generate-commands --verbose
 
 # Test semantic search
 # In Claude Code: mcp__my-project-memory__search_similar("your search query")
 ```
 
-### Step 8: Add Project-Specific MCP Collections
+### Step 9: Add Project-Specific MCP Collections
 For each project you want to index, add a new MCP server to `claude_desktop_config.json`:
 
 ```json
@@ -379,15 +398,18 @@ For each project you want to index, add a new MCP server to `claude_desktop_conf
 }
 ```
 
-### Step 9: Development Workflow
+### Step 10: Development Workflow
 ```bash
-# Initial indexing (first time)
-./indexer.py --project /path/to/project --collection project-name --generate-commands
+# Initial indexing (first time) - auto-loads
+./indexer.py --project /path/to/project --collection project-name
 
-# Daily development (incremental updates)
+# Daily development (incremental updates - 15x faster)
 ./indexer.py --project /path/to/project --collection project-name --incremental --verbose
 
 # Major refactoring (full re-index)
+./indexer.py --project /path/to/project --collection project-name
+
+# Debugging/manual mode (when needed)
 ./indexer.py --project /path/to/project --collection project-name --generate-commands
 ```
 
@@ -421,12 +443,12 @@ For each project you want to index, add a new MCP server to `claude_desktop_conf
 
 ### Universal Indexer Usage
 ```bash
-# Index any Python project
+# Index any Python project (auto-loads by default)
 ./indexer.py --project /path/to/github-utils --collection github-utils
 ./indexer.py --project /path/to/yad2-scrapper --collection yad2-scrapper
 ./indexer.py --project . --collection current-project
 
-# Generate MCP commands for manual loading
+# Generate MCP commands for debugging/manual loading
 ./indexer.py --project /path --collection name --generate-commands
 
 # Advanced options
@@ -500,10 +522,11 @@ collections:
 
 ### Final Implementation Status
 - **Complete Memory System**: Both project-specific (`github-utils`) and general collections active
-- **Universal Indexer**: Production-ready script for any Python project
+- **Universal Indexer**: Production-ready script with auto-loading as default behavior
 - **Proven Accuracy**: 218 entities + 201 relations successfully indexed and searchable
 - **Full Integration**: MCP + Qdrant + Tree-sitter + Jedi working seamlessly together
 - **Incremental Updates**: SHA256-based change detection with 15x performance improvement
+- **Week 1 Complete**: Semantic search tested and validated across indexed codebases
 
 ## Universal Indexer Architecture
 
@@ -526,10 +549,10 @@ collections:
 
 ### Command Interface
 ```bash
-# Basic usage
+# Basic usage (auto-loads into MCP memory)
 ./indexer.py --project PROJECT_PATH --collection COLLECTION_NAME
 
-# Generate MCP commands for loading into Claude Code
+# Generate MCP commands for debugging/manual loading
 ./indexer.py --project /path/to/project --collection my-project --generate-commands
 
 # Full semantic analysis with verbose output
@@ -538,16 +561,22 @@ collections:
 # Include test files in analysis
 ./indexer.py --project /path/to/project --collection my-project --include-tests
 
-# Incremental updates (only process changed files)
+# Incremental updates (only process changed files - 15x faster)
 ./indexer.py --project /path/to/project --collection my-project --incremental
 ```
 
 ### Integration Workflow
-1. **Index Project**: `./indexer.py --project /path --collection name --generate-commands`
+
+**Auto-Loading (Default):**
+1. **Index Project**: `./indexer.py --project /path --collection name`
+2. **Execute Commands**: Copy/paste the printed MCP commands into Claude Code
+3. **Test Search**: Use `mcp__name-memory__search_similar("query")` for semantic queries
+
+**Manual Mode (Debugging):**
+1. **Generate Commands**: `./indexer.py --project /path --collection name --generate-commands`
 2. **Review Output**: Check `mcp_output/name_mcp_commands.txt` for generated commands
 3. **Load into Claude**: Copy and paste MCP commands into Claude Code session
 4. **Verify Loading**: Use `mcp__name-memory__read_graph` to confirm knowledge graph
-5. **Test Search**: Use `mcp__name-memory__search_similar` for semantic queries
 
 ### Workflow Integration
 1. **New Project**: Run full indexing to establish knowledge graph

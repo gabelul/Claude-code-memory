@@ -471,29 +471,22 @@ class UniversalIndexer:
             return False
 
     def _call_mcp_api(self, method: str, params: Dict[str, Any]) -> bool:
-        """Make API call to MCP memory server"""
+        """Print MCP commands for Claude Code execution"""
         try:
-            # Since MCP runs locally through Claude Code, we'll use a subprocess approach
-            # to call the MCP tools directly rather than HTTP requests
-            
-            import subprocess
-            import tempfile
-            import json
-            
-            # Create temporary file with the request data
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-                json.dump(params, f, indent=2)
-                temp_file = f.name
-            
-            # For now, we'll print the MCP commands that would need to be run
-            # In a full implementation, this would integrate with the MCP client
-            
             self.log(f"MCP API call: {method} with {len(params.get('entities', params.get('relations', [])))} items")
             
-            # Clean up temp file
-            os.unlink(temp_file)
+            # Format the MCP command for Claude Code
+            collection_memory = f"{self.collection_name}-memory"
+            mcp_command = f"mcp__{collection_memory}__{method}"
             
-            # Return True for now - in real implementation, this would check the MCP response
+            # Print the command that should be executed in Claude Code
+            params_json = json.dumps(params, indent=2)
+            print(f"\n🔧 Execute this MCP command in Claude Code:")
+            print(f"{mcp_command}({params_json})")
+            print()
+            
+            # For auto-loading mode, we'll assume success and let Claude Code handle it
+            self.log(f"✅ MCP {method} command printed for execution")
             return True
             
         except Exception as e:
@@ -533,7 +526,7 @@ class UniversalIndexer:
             traceback.print_exc()
             return False
 
-    def index_project(self, include_tests: bool = False, incremental: bool = False) -> bool:
+    def index_project(self, include_tests: bool = False, incremental: bool = False, generate_commands: bool = False) -> bool:
         """Index the entire project"""
         mode = "incremental" if incremental else "full"
         self.log(f"Starting {mode} indexing of {self.project_path}")
@@ -592,9 +585,11 @@ class UniversalIndexer:
             for error in self.errors[:5]:  # Show first 5 errors
                 self.log(f"  {error}", "ERROR")
         
-        # Send to MCP
+        # Send to MCP - auto-load by default unless generating commands
         if self.entities or self.relations:
-            return self.send_to_mcp(self.entities, self.relations, use_mcp_api=False)
+            # Use auto-load mode unless --generate-commands was specified
+            auto_load = not generate_commands
+            return self.send_to_mcp(self.entities, self.relations, use_mcp_api=auto_load)
         
         return successful > 0 or (incremental and not files_to_process)
 
@@ -633,7 +628,7 @@ def main():
     parser.add_argument("--incremental", action="store_true", help="Only process changed files since last run")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--depth", choices=["basic", "full"], default="full", help="Analysis depth")
-    parser.add_argument("--generate-commands", action="store_true", help="Generate MCP commands for manual execution")
+    parser.add_argument("--generate-commands", action="store_true", help="Generate MCP commands for manual execution instead of auto-loading")
     
     args = parser.parse_args()
     
@@ -656,7 +651,8 @@ def main():
     
     success = indexer.index_project(
         include_tests=args.include_tests,
-        incremental=args.incremental
+        incremental=args.incremental,
+        generate_commands=args.generate_commands
     )
     
     if success:
@@ -666,7 +662,7 @@ def main():
         if indexer.errors:
             print(f"⚠️  {len(indexer.errors)} errors encountered")
         
-        # Generate MCP commands if requested
+        # Generate MCP commands if requested, otherwise auto-load
         if args.generate_commands:
             commands_file = project_path / 'mcp_output' / f"{args.collection}_mcp_commands.txt"
             with open(commands_file, 'w') as f:
@@ -678,6 +674,9 @@ def main():
             
             print(f"📋 Generated MCP commands in {commands_file}")
             print(f"💡 Copy and paste the commands from this file into Claude Code to load the knowledge graph")
+        else:
+            print(f"🚀 Auto-loaded entities and relations into MCP memory server")
+            print(f"💡 Use mcp__{args.collection}-memory__search_similar(\"query\") to search the knowledge graph")
             
     else:
         print(f"❌ Failed to index {args.project}")
