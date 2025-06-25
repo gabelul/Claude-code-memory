@@ -58,8 +58,13 @@ class VectorPoint:
     payload: Dict[str, Any]
     
     def __post_init__(self):
-        if not self.vector:
-            raise ValueError("Vector cannot be empty")
+        # Handle both lists and numpy arrays
+        if hasattr(self.vector, '__len__'):
+            if len(self.vector) == 0:
+                raise ValueError("Vector cannot be empty")
+        else:
+            if not self.vector:
+                raise ValueError("Vector cannot be empty")
         if not isinstance(self.payload, dict):
             raise ValueError("Payload must be a dictionary")
 
@@ -247,3 +252,34 @@ class CachingVectorStore(VectorStore):
     
     def list_collections(self) -> List[str]:
         return self.backend.list_collections()
+    
+    # Delegate custom Qdrant methods
+    def create_entity_point(self, entity, embedding: List[float], collection_name: str):
+        """Delegate entity point creation to backend."""
+        if hasattr(self.backend, 'create_entity_point'):
+            return self.backend.create_entity_point(entity, embedding, collection_name)
+        else:
+            raise AttributeError(f"Backend {type(self.backend)} does not support create_entity_point")
+    
+    def create_relation_point(self, relation, embedding: List[float], collection_name: str):
+        """Delegate relation point creation to backend."""  
+        if hasattr(self.backend, 'create_relation_point'):
+            return self.backend.create_relation_point(relation, embedding, collection_name)
+        else:
+            raise AttributeError(f"Backend {type(self.backend)} does not support create_relation_point")
+    
+    def generate_deterministic_id(self, content: str) -> str:
+        """Delegate deterministic ID generation to backend."""
+        if hasattr(self.backend, 'generate_deterministic_id'):
+            return self.backend.generate_deterministic_id(content)
+        else:
+            raise AttributeError(f"Backend {type(self.backend)} does not support generate_deterministic_id")
+    
+    def clear_collection(self, collection_name: str):
+        """Delegate collection clearing to backend."""
+        # Clear cache when collection is cleared
+        self._search_cache.clear()
+        if hasattr(self.backend, 'clear_collection'):
+            return self.backend.clear_collection(collection_name)
+        else:
+            raise AttributeError(f"Backend {type(self.backend)} does not support clear_collection")

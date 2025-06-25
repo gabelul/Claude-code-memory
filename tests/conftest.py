@@ -1,0 +1,333 @@
+"""
+Shared fixtures for Claude Indexer test suite.
+
+Provides test fixtures for:
+- Temporary repository creation
+- Qdrant client/store setup
+- Mock embedder for fast testing
+- Configuration management
+"""
+
+import os
+import shutil
+import tempfile
+from pathlib import Path
+from contextlib import contextmanager
+from typing import Iterator
+
+import pytest
+import numpy as np
+from qdrant_client import QdrantClient
+from qdrant_client.http.models import Distance, VectorParams, CollectionInfo
+
+# Import project components
+try:
+    from claude_indexer.config import IndexerConfig
+    from claude_indexer.embeddings.openai import OpenAIEmbedder
+    from claude_indexer.storage.qdrant import QdrantStore
+except ImportError:
+    # Graceful fallback for missing imports during test discovery
+    IndexerConfig = None
+    OpenAIEmbedder = None
+    QdrantStore = None
+
+
+# ---------------------------------------------------------------------------
+# Temporary repository fixture
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def temp_repo(tmp_path_factory) -> Path:
+    """Create a temporary repository with sample Python files for testing."""
+    repo_path = tmp_path_factory.mktemp("sample_repo")
+    
+    # Create sample Python files
+    (repo_path / "foo.py").write_text('''"""Sample module with functions."""
+
+def add(x, y):
+    """Return sum of two numbers."""
+    return x + y
+
+class Calculator:
+    """Simple calculator class."""
+    
+    def multiply(self, a, b):
+        """Multiply two numbers."""
+        return a * b
+''')
+    
+    (repo_path / "bar.py").write_text('''"""Module that imports and uses foo."""
+from foo import add, Calculator
+
+def main():
+    """Main function that uses imported components."""
+    result = add(1, 2)
+    calc = Calculator()
+    product = calc.multiply(3, 4)
+    print(f"Results: {result}, {product}")
+
+if __name__ == "__main__":
+    main()
+''')
+    
+    # Create a subdirectory with more code
+    subdir = repo_path / "utils"
+    subdir.mkdir()
+    (subdir / "__init__.py").write_text("")
+    (subdir / "helpers.py").write_text('''"""Helper utilities."""
+
+def format_output(value):
+    """Format value for display."""
+    return f"Value: {value}"
+
+LOG_LEVEL = "INFO"
+''')
+    
+    # Create a test file (will be excluded by default)
+    test_dir = repo_path / "tests"
+    test_dir.mkdir()
+    (test_dir / "test_foo.py").write_text('''"""Tests for foo module."""
+import pytest
+from foo import add
+
+def test_add():
+    assert add(2, 3) == 5
+''')
+    
+    return repo_path
+
+
+@pytest.fixture()
+def empty_repo(tmp_path_factory) -> Path:
+    """Create an empty temporary repository."""
+    return tmp_path_factory.mktemp("empty_repo")
+
+
+# ---------------------------------------------------------------------------
+# Qdrant test fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session")
+def qdrant_client() -> Iterator[QdrantClient]:
+    """Create a Qdrant client for testing with session scope."""
+    # Use localhost Qdrant instance (assumes it's running)
+    client = QdrantClient("localhost", port=6333)
+    
+    # Create test collection if it doesn't exist
+    collection_name = "test_collection"
+    try:
+        collections = client.get_collections().collections
+        if not any(c.name == collection_name for c in collections):
+            client.recreate_collection(
+                collection_name=collection_name,
+                vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+            )
+    except Exception as e:
+        pytest.skip(f"Qdrant not available: {e}")
+    
+    yield client
+    
+    # Cleanup: optionally remove test collection
+    # client.delete_collection(collection_name)
+
+
+@pytest.fixture()
+def qdrant_store(qdrant_client) -> "QdrantStore":
+    """Create a QdrantStore instance for testing."""
+    if QdrantStore is None:
+        pytest.skip("QdrantStore not available")
+    
+    store = QdrantStore(client=qdrant_client, collection="test_collection")
+    
+    # Clean up any existing test data
+    store.client.delete(
+        collection_name="test_collection",
+        points_selector={"filter": {"must": [{"key": "test", "match": {"value": True}}]}}
+    )
+    
+    return store
+
+
+# ---------------------------------------------------------------------------
+# Mock embedder fixtures
+# ---------------------------------------------------------------------------
+
+class DummyEmbedder:
+    """Fast, deterministic embedder for testing."""
+    
+    def __init__(self, dimension: int = 1536):
+        self.dimension = dimension
+    
+    def embed(self, texts: list[str]) -> list[np.ndarray]:
+        """Generate deterministic embeddings based on text hash."""
+        embeddings = []
+        for i, text in enumerate(texts):
+            # Create deterministic but unique embeddings
+            seed = hash(text) % 10000
+            np.random.seed(seed)
+            embedding = np.random.rand(self.dimension).astype(np.float32)
+            embeddings.append(embedding)
+        return embeddings
+    
+    def embed_single(self, text: str) -> np.ndarray:
+        """Embed a single text."""
+        return self.embed([text])[0]
+
+
+@pytest.fixture()
+def dummy_embedder() -> DummyEmbedder:
+    """Provide a fast, deterministic embedder for tests."""
+    return DummyEmbedder()
+
+
+@pytest.fixture()
+def mock_openai_embedder(monkeypatch) -> DummyEmbedder:
+    """Mock OpenAI embedder with dummy implementation."""
+    dummy = DummyEmbedder()
+    
+    if OpenAIEmbedder is not None:
+        monkeypatch.setattr(OpenAIEmbedder, "embed", dummy.embed)
+        monkeypatch.setattr(OpenAIEmbedder, "embed_single", dummy.embed_single)
+    
+    return dummy
+
+
+# ---------------------------------------------------------------------------
+# Configuration fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def test_config(tmp_path) -> "IndexerConfig":
+    """Create test configuration with temporary paths."""
+    if IndexerConfig is None:
+        pytest.skip("IndexerConfig class not available")
+    
+    # Create temporary settings file
+    settings_file = tmp_path / "test_settings.txt"
+    settings_content = f"""
+openai_api_key=test-key-12345
+qdrant_api_key=test-qdrant-key
+qdrant_url=http://localhost:6333
+"""
+    settings_file.write_text(settings_content.strip())
+    
+    from claude_indexer.config import load_config
+    return load_config(settings_file)
+
+
+# ---------------------------------------------------------------------------
+# File system fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def sample_python_file(tmp_path) -> Path:
+    """Create a single sample Python file for testing."""
+    py_file = tmp_path / "sample.py"
+    py_file.write_text('''"""Sample Python file for testing."""
+
+class SampleClass:
+    """A sample class."""
+    
+    def __init__(self, name: str):
+        self.name = name
+    
+    def greet(self) -> str:
+        """Return a greeting."""
+        return f"Hello, {self.name}!"
+
+def utility_function(data: list) -> int:
+    """Process data and return count."""
+    return len([x for x in data if x])
+
+# Module-level variable
+DEFAULT_NAME = "World"
+''')
+    return py_file
+
+
+@pytest.fixture()
+def sample_files_with_changes(tmp_path) -> tuple[Path, dict]:
+    """Create sample files and return info about planned changes."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    
+    # Original file
+    original = repo / "original.py"
+    original.write_text('def old_func(): return "old"')
+    
+    # File to be modified
+    modified = repo / "modified.py"
+    modified.write_text('def func(): return 1')
+    
+    # File to be deleted
+    deleted = repo / "deleted.py"
+    deleted.write_text('def func(): return "delete me"')
+    
+    changes = {
+        "modify": (modified, 'def func(): return 2'),  # Changed return value
+        "delete": deleted,
+        "add": (repo / "new.py", 'def new_func(): return "new"')
+    }
+    
+    return repo, changes
+
+
+# ---------------------------------------------------------------------------
+# Async fixtures for file watching tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def event_loop():
+    """Create an event loop for async tests."""
+    import asyncio
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
+# ---------------------------------------------------------------------------
+# Marker decorators
+# ---------------------------------------------------------------------------
+
+def requires_qdrant(func):
+    """Decorator to skip tests if Qdrant is not available."""
+    return pytest.mark.skipif(
+        not _qdrant_available(),
+        reason="Qdrant not available"
+    )(func)
+
+
+def requires_openai(func):
+    """Decorator to skip tests if OpenAI API key is not available."""
+    return pytest.mark.skipif(
+        not os.getenv("OPENAI_API_KEY"),
+        reason="OpenAI API key not available"
+    )(func)
+
+
+def _qdrant_available() -> bool:
+    """Check if Qdrant is available."""
+    try:
+        client = QdrantClient("localhost", port=6333)
+        client.get_collections()
+        return True
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Utility functions for tests
+# ---------------------------------------------------------------------------
+
+def assert_valid_embedding(embedding: np.ndarray, expected_dim: int = 1536):
+    """Assert that an embedding has the correct shape and type."""
+    assert isinstance(embedding, np.ndarray)
+    assert embedding.shape == (expected_dim,)
+    assert embedding.dtype == np.float32
+    assert not np.isnan(embedding).any()
+    assert not np.isinf(embedding).any()
+
+
+def count_python_files(path: Path) -> int:
+    """Count Python files in a directory recursively."""
+    return len(list(path.rglob("*.py")))

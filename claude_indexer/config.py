@@ -3,18 +3,18 @@
 import os
 from pathlib import Path
 from typing import Dict, Any, Optional
-from pydantic import BaseSettings, Field, validator
+from pydantic import BaseModel, Field
 
 
-class IndexerConfig(BaseSettings):
-    """Configuration model with validation and environment variable support."""
+class IndexerConfig(BaseModel):
+    """Configuration model with validation."""
     
     # API Keys
-    openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
-    qdrant_api_key: str = Field(default="default-key", env="QDRANT_API_KEY")
+    openai_api_key: str = Field(default="")
+    qdrant_api_key: str = Field(default="default-key")
     
     # URLs and Endpoints
-    qdrant_url: str = Field(default="http://localhost:6333", env="QDRANT_URL")
+    qdrant_url: str = Field(default="http://localhost:6333")
     
     # Indexing Behavior
     indexer_debug: bool = Field(default=False)
@@ -30,22 +30,14 @@ class IndexerConfig(BaseSettings):
     batch_size: int = Field(default=50, ge=1, le=1000)
     max_concurrent_files: int = Field(default=10, ge=1, le=100)
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        
-    @validator("openai_api_key")
-    def validate_openai_key(cls, v):
-        if v and not v.startswith("sk-"):
-            raise ValueError("OpenAI API key must start with 'sk-'")
-        return v
-        
-    @validator("qdrant_url")
-    def validate_qdrant_url(cls, v):
-        if not v.startswith(("http://", "https://")):
-            raise ValueError("Qdrant URL must start with http:// or https://")
-        return v
+    @classmethod
+    def from_env(cls) -> 'IndexerConfig':
+        """Create config with environment variable overrides."""
+        return cls(
+            openai_api_key=os.environ.get('OPENAI_API_KEY', ''),
+            qdrant_api_key=os.environ.get('QDRANT_API_KEY', 'default-key'),
+            qdrant_url=os.environ.get('QDRANT_URL', 'http://localhost:6333'),
+        )
 
 
 def load_legacy_settings(settings_file: Path) -> Dict[str, Any]:
@@ -64,12 +56,20 @@ def load_legacy_settings(settings_file: Path) -> Dict[str, Any]:
                     key = key.strip()
                     value = value.strip()
                     
+                    # Skip empty keys
+                    if not key:
+                        continue
+                    
                     # Convert boolean values
                     if value.lower() in ('true', 'false'):
                         value = value.lower() == 'true'
-                    # Convert numeric values
-                    elif value.replace('.', '').replace('-', '').isdigit():
-                        value = float(value) if '.' in value else int(value)
+                    # Convert numeric values (more robust check)
+                    elif value.replace('.', '', 1).replace('-', '', 1).isdigit():
+                        try:
+                            value = float(value) if '.' in value else int(value)
+                        except ValueError:
+                            # Keep as string if conversion fails
+                            pass
                     
                     settings[key] = value
     except Exception as e:
@@ -92,16 +92,41 @@ def load_config(settings_file: Optional[Path] = None, **overrides) -> IndexerCon
     # Load legacy settings if available
     legacy_settings = load_legacy_settings(settings_file)
     
-    # Merge with overrides (overrides take precedence)
-    merged_settings = {**legacy_settings, **overrides}
+    # Start with legacy file settings
+    config_dict = legacy_settings.copy()
     
-    # Create config with merged settings
+    # Override with environment variables (higher priority than file)
+    env_settings = {
+        'openai_api_key': os.environ.get('OPENAI_API_KEY'),
+        'qdrant_api_key': os.environ.get('QDRANT_API_KEY'),
+        'qdrant_url': os.environ.get('QDRANT_URL'),
+    }
+    
+    # Only override with env vars that are actually set
+    for key, value in env_settings.items():
+        if value is not None:
+            config_dict[key] = value
+    
+    # Apply explicit overrides (highest priority)
+    config_dict.update(overrides)
+    
+    # Create config with merged settings, filtering out invalid values
     try:
-        config = IndexerConfig(**merged_settings)
+        config = IndexerConfig(**config_dict)
     except Exception as e:
         print(f"Warning: Configuration validation failed: {e}")
-        # Fall back to defaults if validation fails
-        config = IndexerConfig(**overrides)
+        # Fall back to defaults, then apply valid overrides
+        config = IndexerConfig()
+        
+        # Apply valid overrides one by one
+        for key, value in overrides.items():
+            if hasattr(config, key):
+                try:
+                    # Test if this override would be valid
+                    test_config = IndexerConfig(**{key: value})
+                    setattr(config, key, value)
+                except:
+                    print(f"Warning: Ignoring invalid override {key}={value}")
     
     return config
 

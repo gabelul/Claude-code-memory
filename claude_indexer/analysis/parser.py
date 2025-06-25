@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 import hashlib
+import re
 
 try:
     import tree_sitter
@@ -13,6 +14,13 @@ try:
     TREE_SITTER_AVAILABLE = True
 except ImportError:
     TREE_SITTER_AVAILABLE = False
+
+# Import entities at module level to avoid scope issues
+try:
+    from .entities import Entity, Relation, EntityFactory, RelationFactory, EntityType, RelationType
+    ENTITIES_AVAILABLE = True
+except ImportError:
+    ENTITIES_AVAILABLE = False
 
 
 @dataclass
@@ -105,7 +113,6 @@ class PythonParser(CodeParser):
     def parse(self, file_path: Path) -> ParserResult:
         """Parse Python file using Tree-sitter and Jedi."""
         import time
-        from .entities import Entity, Relation, EntityFactory, RelationFactory, EntityType, RelationType
         
         start_time = time.time()
         result = ParserResult(file_path=file_path, entities=[], relations=[])
@@ -154,7 +161,7 @@ class PythonParser(CodeParser):
         except Exception:
             return ""
     
-    def _parse_with_tree_sitter(self, file_path: Path) -> Optional[tree_sitter.Tree]:
+    def _parse_with_tree_sitter(self, file_path: Path) -> Optional['tree_sitter.Tree']:
         """Parse file with Tree-sitter."""
         try:
             with open(file_path, 'rb') as f:
@@ -163,9 +170,8 @@ class PythonParser(CodeParser):
         except Exception as e:
             return None
     
-    def _extract_tree_sitter_entities(self, tree: tree_sitter.Tree, file_path: Path) -> List['Entity']:
+    def _extract_tree_sitter_entities(self, tree: 'tree_sitter.Tree', file_path: Path) -> List['Entity']:
         """Extract entities from Tree-sitter AST."""
-        from .entities import Entity, EntityFactory, EntityType
         
         entities = []
         
@@ -187,10 +193,9 @@ class PythonParser(CodeParser):
         traverse_node(tree.root_node)
         return entities
     
-    def _extract_named_entity(self, node: tree_sitter.Node, entity_type: EntityType, 
+    def _extract_named_entity(self, node: 'tree_sitter.Node', entity_type: 'EntityType', 
                              file_path: Path) -> Optional['Entity']:
         """Extract named entity from Tree-sitter node."""
-        from .entities import Entity, EntityFactory
         
         # Find identifier child
         entity_name = None
@@ -263,7 +268,6 @@ class PythonParser(CodeParser):
     def _process_jedi_analysis(self, analysis: Dict[str, Any], 
                               file_path: Path) -> tuple[List['Entity'], List['Relation']]:
         """Process Jedi analysis results into entities and relations."""
-        from .entities import Entity, Relation, EntityFactory, RelationFactory, EntityType
         
         entities = []
         relations = []
@@ -319,7 +323,6 @@ class MarkdownParser(CodeParser):
     def parse(self, file_path: Path) -> ParserResult:
         """Parse Markdown file to extract documentation entities."""
         import time
-        from .entities import Entity, Relation, EntityFactory, EntityType
         
         start_time = time.time()
         result = ParserResult(file_path=file_path, entities=[], relations=[])
@@ -342,7 +345,6 @@ class MarkdownParser(CodeParser):
             # Create containment relations
             file_name = str(file_path)
             for header in headers:
-                from .entities import RelationFactory
                 relation = RelationFactory.create_contains_relation(file_name, header.name)
                 result.relations.append(relation)
         
@@ -361,15 +363,16 @@ class MarkdownParser(CodeParser):
             return ""
     
     def _extract_headers(self, file_path: Path) -> List['Entity']:
-        """Extract headers from Markdown file."""
-        from .entities import Entity, EntityType
+        """Extract headers, links, and code blocks from Markdown file."""
         
         entities = []
         
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
+                content = f.read()
+                lines = content.split('\n')
             
+            # Extract headers
             for line_num, line in enumerate(lines, 1):
                 line = line.strip()
                 if line.startswith('#'):
@@ -387,9 +390,59 @@ class MarkdownParser(CodeParser):
                             ],
                             file_path=file_path,
                             line_number=line_num,
-                            metadata={"header_level": level}
+                            metadata={"header_level": level, "type": "header"}
                         )
                         entities.append(entity)
+            
+            # Extract links with regex pattern [text](url)
+            link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+            for match in re.finditer(link_pattern, content):
+                text = match.group(1)
+                url = match.group(2)
+                
+                # Find line number
+                line_num = content[:match.start()].count('\n') + 1
+                
+                entity = Entity(
+                    name=f"Link: {text}",
+                    entity_type=EntityType.DOCUMENTATION,
+                    observations=[
+                        f"Link text: {text}",
+                        f"URL: {url}",
+                        f"Line {line_num} in {file_path.name}"
+                    ],
+                    file_path=file_path,
+                    line_number=line_num,
+                    metadata={"type": "link", "url": url, "text": text}
+                )
+                entities.append(entity)
+            
+            # Extract code blocks with language detection
+            code_block_pattern = r'```(\w+)?\n(.*?)\n```'
+            for match in re.finditer(code_block_pattern, content, re.DOTALL):
+                language = match.group(1) or "unknown"
+                code = match.group(2)
+                
+                # Find line number
+                line_num = content[:match.start()].count('\n') + 1
+                
+                # Truncate long code blocks
+                display_code = code[:100] + "..." if len(code) > 100 else code
+                
+                entity = Entity(
+                    name=f"Code Block ({language})",
+                    entity_type=EntityType.DOCUMENTATION,
+                    observations=[
+                        f"Language: {language}",
+                        f"Code: {display_code}",
+                        f"Line {line_num} in {file_path.name}",
+                        f"Full code length: {len(code)} characters"
+                    ],
+                    file_path=file_path,
+                    line_number=line_num,
+                    metadata={"type": "code_block", "language": language, "code": code}
+                )
+                entities.append(entity)
         
         except Exception:
             pass  # Ignore errors, return what we could extract

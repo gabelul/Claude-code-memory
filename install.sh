@@ -1,4 +1,4 @@
-d#!/bin/bash
+#!/bin/bash
 # Claude Code Memory Solution - Global Installer
 # Creates a global wrapper script for the indexer
 
@@ -13,16 +13,16 @@ NC='\033[0m' # No Color
 
 # Get the absolute path to the memory project directory
 MEMORY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INDEXER_PATH="$MEMORY_DIR/indexer.py"
+PACKAGE_PATH="$MEMORY_DIR/claude_indexer"
 VENV_PATH="$MEMORY_DIR/.venv"
 WRAPPER_PATH="/usr/local/bin/claude-indexer"
 
 echo -e "${BLUE}Claude Code Memory Solution - Global Installer${NC}"
 echo "========================================"
 
-# Check if indexer.py exists
-if [[ ! -f "$INDEXER_PATH" ]]; then
-    echo -e "${RED}Error: indexer.py not found at $INDEXER_PATH${NC}"
+# Check if claude_indexer package exists
+if [[ ! -d "$PACKAGE_PATH" ]]; then
+    echo -e "${RED}Error: claude_indexer package not found at $PACKAGE_PATH${NC}"
     exit 1
 fi
 
@@ -56,19 +56,19 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-MEMORY_DIR=\"$MEMORY_DIR\"
-INDEXER_PATH=\"$INDEXER_PATH\"
-VENV_PATH=\"$VENV_PATH\"
+MEMORY_DIR="$MEMORY_DIR"
+PACKAGE_PATH="$PACKAGE_PATH"
+VENV_PATH="$VENV_PATH"
 
 # Check if files still exist
-if [[ ! -f "\$INDEXER_PATH" ]]; then
-    echo -e "\${RED}Error: indexer.py not found at \$INDEXER_PATH${NC}"
-    echo -e "\${YELLOW}The memory project may have been moved or deleted.${NC}"
+if [[ ! -d "\$PACKAGE_PATH" ]]; then
+    echo -e "\${RED}Error: claude_indexer package not found at \$PACKAGE_PATH\${NC}"
+    echo -e "\${YELLOW}The memory project may have been moved or deleted.\${NC}"
     exit 1
 fi
 
 if [[ ! -d "\$VENV_PATH" ]]; then
-    echo -e "\${RED}Error: Virtual environment not found at \$VENV_PATH${NC}"
+    echo -e "\${RED}Error: Virtual environment not found at \$VENV_PATH\${NC}"
     exit 1
 fi
 
@@ -84,7 +84,26 @@ if [[ "\$1" == "--project" && "\$2" == "." ]]; then
 fi
 
 # Run the indexer with all passed arguments
-exec python "\$INDEXER_PATH" "\$@"
+# Smart command detection and routing
+if [[ "\$1" =~ ^(hooks|watch|service|search|file)$ ]]; then
+    # Advanced commands - pass through directly
+    exec python -m claude_indexer "\$@"
+elif [[ "\$1" == "index" ]]; then
+    # Explicit index command - pass through
+    exec python -m claude_indexer "\$@"
+elif [[ "\$1" =~ ^--(help|version)$ ]]; then
+    # Help and version commands
+    exec python -m claude_indexer "\$@"
+elif [[ "\$1" == "--help" || "\$1" == "-h" || "\$1" == "help" ]]; then
+    # Help command variations
+    exec python -m claude_indexer --help
+elif [[ \$# -eq 0 ]]; then
+    # No arguments - show help
+    exec python -m claude_indexer --help
+else
+    # Basic indexing - use default index command for backward compatibility
+    exec python -m claude_indexer index "\$@"
+fi
 EOF
 
 # Make the wrapper executable
@@ -99,15 +118,25 @@ if [[ -x "$WRAPPER_PATH" ]]; then
     echo "  claude-indexer --project . --collection current-project"
     echo "  claude-indexer --help"
     echo ""
-    echo -e "${BLUE}Examples:${NC}"
+    echo -e "${BLUE}Basic Examples:${NC}"
     echo "  # Index current directory"
     echo "  claude-indexer --project . --collection my-project"
     echo ""
-    echo "  # Index specific project with incremental updates"
+    echo "  # Index with incremental updates"
     echo "  claude-indexer --project /path/to/project --collection name --incremental"
     echo ""
     echo "  # Generate commands for debugging"
     echo "  claude-indexer --project . --collection test --generate-commands"
+    echo ""
+    echo -e "${BLUE}Advanced Commands:${NC}"
+    echo "  # File watching"
+    echo "  claude-indexer watch start --project . --collection my-project"
+    echo ""
+    echo "  # Git hooks"
+    echo "  claude-indexer hooks install --project . --collection my-project"
+    echo ""
+    echo "  # Search collections"
+    echo "  claude-indexer search \"query\" --project . --collection my-project"
     echo ""
     echo -e "${GREEN}You can now use 'claude-indexer' from any directory!${NC}"
 else
