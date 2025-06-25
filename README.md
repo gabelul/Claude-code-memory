@@ -205,4 +205,4 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive architecture, setup instructions, a
 ✅ **Direct Qdrant Integration** - Instant knowledge graph loading  
 ✅ **Real-time file watching** - 2-second debounced indexing  
 ✅ **Multi-project service** - Background automation for teams  
-✅ **Git hooks integration** - Pre-commit automatic updates
+✅ **Git hooks integration** - Pre-commit automatic updatestest change

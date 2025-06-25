@@ -82,14 +82,15 @@ def load_settings() -> Dict[str, Any]:
 class UniversalIndexer:
     """Universal semantic indexer for Python codebases"""
     
-    def __init__(self, project_path: str, collection_name: str, verbose: bool = False):
+    def __init__(self, project_path: str, collection_name: str, verbose: bool = False, quiet: bool = False):
         self.project_path = Path(project_path).resolve()
         self.collection_name = collection_name
         self.verbose = verbose
+        self.quiet = quiet
         
         # Load settings
         self.settings = load_settings()
-        if self.settings.get('indexer_verbose', True):
+        if self.settings.get('indexer_verbose', True) and not quiet:
             self.verbose = True
         
         # Initialize Tree-sitter
@@ -1392,6 +1393,7 @@ def main():
     parser.add_argument("--force", action="store_true", help="Force reprocessing all files (overrides incremental hash checks)")
     parser.add_argument("--clear", action="store_true", help="Clear all data from the collection before indexing")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument("--quiet", "-q", action="store_true", help="Suppress all output except errors")
     parser.add_argument("--depth", choices=["basic", "full"], default="full", help="Analysis depth")
     parser.add_argument("--generate-commands", action="store_true", help="Generate MCP commands for manual execution instead of auto-loading")
     
@@ -1525,7 +1527,8 @@ def main():
     indexer = UniversalIndexer(
         project_path=str(project_path),
         collection_name=args.collection,
-        verbose=args.verbose
+        verbose=args.verbose,
+        quiet=args.quiet
     )
     
     # Handle clear collection command
