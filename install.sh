@@ -36,7 +36,10 @@ fi
 # Check if /usr/local/bin exists
 if [[ ! -d "/usr/local/bin" ]]; then
     echo -e "${YELLOW}Creating /usr/local/bin directory...${NC}"
-    sudo mkdir -p /usr/local/bin
+    if ! mkdir -p /usr/local/bin 2>/dev/null; then
+        echo -e "${YELLOW}Need sudo permissions to create /usr/local/bin${NC}"
+        sudo mkdir -p /usr/local/bin
+    fi
 fi
 
 # Create the wrapper script
@@ -53,9 +56,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-MEMORY_DIR="$MEMORY_DIR"
-INDEXER_PATH="$INDEXER_PATH"
-VENV_PATH="$VENV_PATH"
+MEMORY_DIR=\"$MEMORY_DIR\"
+INDEXER_PATH=\"$INDEXER_PATH\"
+VENV_PATH=\"$VENV_PATH\"
 
 # Check if files still exist
 if [[ ! -f "\$INDEXER_PATH" ]]; then
@@ -74,7 +77,7 @@ source "\$VENV_PATH/bin/activate"
 
 # Check if we're in a Python project (has .py files)
 if [[ "\$1" == "--project" && "\$2" == "." ]]; then
-    if [[ ! -f "*.py" ]] && [[ ! \$(find . -name "*.py" -type f 2>/dev/null | head -1) ]]; then
+    if [[ ! \$(find . -name "*.py" -type f 2>/dev/null | head -1) ]]; then
         echo -e "\${YELLOW}Warning: No Python files found in current directory${NC}"
         echo -e "\${YELLOW}Make sure you're in a Python project directory${NC}"
     fi

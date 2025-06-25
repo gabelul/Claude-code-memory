@@ -4,3 +4,4 @@ jedi==0.19.2
 requests==2.32.4
 qdrant-client==1.12.1
 openai==1.58.1
+watchdog==3.0.0

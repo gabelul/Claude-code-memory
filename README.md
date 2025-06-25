@@ -90,33 +90,59 @@ Knowledge graph is automatically loaded into Qdrant - no manual steps required!
 mcp__my-project-memory__search_similar("your search query")
 ```
 
-## 🔄 Daily Usage
+## 🔄 Usage Modes
 
+### Basic Indexing
 ```bash
-# Index new project
+# Index new project (auto-loads to Qdrant)
 claude-indexer --project /path/to/project --collection project-name
 
 # Incremental updates (15x faster)
 claude-indexer --project /path/to/project --collection project-name --incremental
 
-# Full re-index after major changes
-claude-indexer --project /path/to/project --collection project-name
-
 # Debug mode (generate commands file)
 claude-indexer --project /path/to/project --collection project-name --generate-commands
 ```
 
-## 🎯 When to Run Indexer
+### 🤖 Automated File Watching (NEW)
+```bash
+# Real-time indexing with file watching
+claude-indexer --watch --project /path/to/project --collection project-name
 
-- **New project**: First time setup
-- **Major code changes**: Functions/classes added/removed
-- **Before important Claude sessions**: Get latest context
-- **After refactoring**: Capture structural changes
+# Background service for multiple projects
+claude-indexer --service-add-project "/path/to/project" "collection-name"
+claude-indexer --service-start
+
+# Check service status
+claude-indexer --service-status
+```
+
+### 🔗 Git Hooks Integration (NEW)
+```bash
+# Install pre-commit hooks for automatic indexing
+claude-indexer --install-hooks --project /path/to/project --collection project-name
+
+# Check git hooks status
+claude-indexer --hooks-status --project /path/to/project --collection project-name
+
+# Uninstall hooks
+claude-indexer --uninstall-hooks --project /path/to/project --collection project-name
+```
+
+## 🎯 When to Use Each Mode
+
+- **Basic Indexing**: New projects, major refactoring, scheduled updates
+- **File Watching**: Active development sessions, real-time feedback
+- **Background Service**: Multiple projects, continuous development
+- **Git Hooks**: Team workflows, automated CI/CD integration
 
 ## ✨ Features
 
 - **True Automation**: Direct Qdrant integration with zero manual intervention
 - **Incremental updates**: 15x faster processing of changed files only
+- **Real-time file watching**: Automatic indexing on code changes
+- **Multi-project service**: Background watching for multiple projects
+- **Git hooks integration**: Pre-commit automatic indexing
 - **Project isolation**: Separate memory collections per project
 - **Semantic search**: Find code by intent, not just keywords
 - **Knowledge graphs**: Understands relationships between code components
@@ -156,4 +182,7 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive architecture, setup instructions, a
 ✅ **15x performance improvement** with incremental updates  
 ✅ **Enterprise-grade accuracy** with Tree-sitter + Jedi analysis  
 ✅ **True Automation** - Zero manual copy-paste steps eliminated  
-✅ **Direct Qdrant Integration** - Instant knowledge graph loading
+✅ **Direct Qdrant Integration** - Instant knowledge graph loading  
+✅ **Real-time file watching** - 2-second debounced indexing  
+✅ **Multi-project service** - Background automation for teams  
+✅ **Git hooks integration** - Pre-commit automatic updates

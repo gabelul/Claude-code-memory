@@ -26,6 +26,13 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct
 import openai
 
+# Import file watching and service functionality
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import signal
+import threading
+from threading import Timer
+
 class UniversalIndexer:
     """Universal semantic indexer for Python codebases"""
     
@@ -691,6 +698,19 @@ class UniversalIndexer:
         
         return successful > 0 or (incremental and not files_to_process)
 
+    def process_single_file_for_watching(self, file_path: str, collection_name: str) -> bool:
+        """Process a single file for file watching (simplified interface)"""
+        try:
+            # Create a minimal indexer instance for this file
+            if self.process_file(Path(file_path)):
+                # Send to MCP if we have entities/relations
+                if self.entities or self.relations:
+                    return self.send_to_mcp(self.entities, self.relations, use_mcp_api=True)
+            return False
+        except Exception as e:
+            self.log(f"Error processing file for watching: {e}", "ERROR")
+            return False
+
     def create_mcp_commands(self) -> str:
         """Generate MCP commands that can be copy-pasted into Claude Code"""
         commands = []
@@ -717,27 +737,497 @@ class UniversalIndexer:
         
         return "\n".join(commands)
 
+
+class IndexingEventHandler(FileSystemEventHandler):
+    """File system event handler for automatic indexing"""
+    
+    def __init__(self, project_path: str, collection_name: str, debounce_seconds: float = 2.0):
+        super().__init__()
+        self.project_path = Path(project_path)
+        self.collection_name = collection_name
+        self.debounce_seconds = debounce_seconds
+        self.pending_files = {}
+        self.timers = {}
+        
+    def on_modified(self, event):
+        if not event.is_directory and event.src_path.endswith('.py'):
+            self._debounced_index(event.src_path)
+    
+    def on_created(self, event):
+        if not event.is_directory and event.src_path.endswith('.py'):
+            self._debounced_index(event.src_path)
+    
+    def on_deleted(self, event):
+        if not event.is_directory and event.src_path.endswith('.py'):
+            self._handle_file_deletion(event.src_path)
+    
+    def _debounced_index(self, file_path):
+        """Debounce file changes to avoid duplicate processing"""
+        # Cancel existing timer for this file
+        if file_path in self.timers:
+            self.timers[file_path].cancel()
+        
+        # Start new timer
+        self.timers[file_path] = Timer(
+            self.debounce_seconds, 
+            self._execute_indexing, 
+            args=[file_path]
+        )
+        self.timers[file_path].start()
+    
+    def _execute_indexing(self, file_path):
+        """Execute incremental indexing for single file"""
+        try:
+            print(f"🔄 Auto-indexing: {file_path}")
+            
+            # Create indexer instance for this file
+            indexer = UniversalIndexer(
+                project_path=str(self.project_path),
+                collection_name=self.collection_name,
+                verbose=False
+            )
+            
+            # Process single file
+            if indexer.process_file(Path(file_path)):
+                # Send to MCP if we have entities/relations
+                if indexer.entities or indexer.relations:
+                    success = indexer.send_to_mcp(indexer.entities, indexer.relations, use_mcp_api=True)
+                    if success:
+                        print(f"✅ Auto-indexed: {Path(file_path).name}")
+                    else:
+                        print(f"❌ Auto-indexing failed: {Path(file_path).name}")
+                
+        except Exception as e:
+            print(f"❌ Auto-indexing error for {file_path}: {e}")
+        finally:
+            # Cleanup timer reference
+            if file_path in self.timers:
+                del self.timers[file_path]
+    
+    def _handle_file_deletion(self, file_path):
+        """Handle file deletion from knowledge graph"""
+        try:
+            print(f"🗑️ File deleted: {Path(file_path).name}")
+            # TODO: Implement entity cleanup for deleted files
+        except Exception as e:
+            print(f"❌ Cleanup failed for {file_path}: {e}")
+
+
+class IndexingService:
+    """Background service for continuous file watching across multiple projects"""
+    
+    def __init__(self, config_file: str = None):
+        self.config_file = config_file or str(Path.home() / '.claude-indexer' / 'config.json')
+        self.observers = {}
+        self.running = False
+        
+        # Setup signal handlers for graceful shutdown
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+    
+    def load_config(self) -> Dict[str, Any]:
+        """Load service configuration from file"""
+        try:
+            config_path = Path(self.config_file)
+            if config_path.exists():
+                with open(config_path) as f:
+                    return json.load(f)
+            else:
+                # Create default config
+                default_config = {
+                    "projects": [],
+                    "settings": {
+                        "debounce_seconds": 2.0,
+                        "watch_patterns": ["*.py"],
+                        "ignore_patterns": ["*.pyc", "__pycache__", ".git", ".venv", "node_modules"]
+                    }
+                }
+                
+                # Ensure config directory exists
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                with open(config_path, 'w') as f:
+                    json.dump(default_config, f, indent=2)
+                
+                print(f"📝 Created default config at {config_path}")
+                return default_config
+                
+        except Exception as e:
+            print(f"❌ Failed to load config: {e}")
+            return {"projects": [], "settings": {}}
+    
+    def save_config(self, config: Dict[str, Any]):
+        """Save configuration to file"""
+        try:
+            config_path = Path(self.config_file)
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(config_path, 'w') as f:
+                json.dump(config, f, indent=2)
+            
+            print(f"💾 Saved config to {config_path}")
+            
+        except Exception as e:
+            print(f"❌ Failed to save config: {e}")
+    
+    def add_project(self, project_path: str, collection_name: str, watch_enabled: bool = True):
+        """Add a project to the watch list"""
+        config = self.load_config()
+        
+        # Check if project already exists
+        for project in config["projects"]:
+            if project["path"] == project_path:
+                project["collection"] = collection_name
+                project["watch_enabled"] = watch_enabled
+                self.save_config(config)
+                print(f"✅ Updated project: {project_path}")
+                return
+        
+        # Add new project
+        config["projects"].append({
+            "path": project_path,
+            "collection": collection_name,
+            "watch_enabled": watch_enabled
+        })
+        
+        self.save_config(config)
+        print(f"✅ Added project: {project_path} -> {collection_name}")
+    
+    def start_project_watching(self, project_path: str, collection_name: str) -> Optional[Observer]:
+        """Start watching a single project"""
+        try:
+            if not Path(project_path).exists():
+                print(f"❌ Project path does not exist: {project_path}")
+                return None
+            
+            event_handler = IndexingEventHandler(
+                project_path=project_path,
+                collection_name=collection_name,
+                debounce_seconds=2.0
+            )
+            
+            observer = Observer()
+            observer.schedule(event_handler, project_path, recursive=True)
+            observer.start()
+            
+            print(f"👁️  Started watching: {project_path} -> {collection_name}")
+            return observer
+            
+        except Exception as e:
+            print(f"❌ Failed to start watching {project_path}: {e}")
+            return None
+    
+    def start_service(self):
+        """Start the background indexing service"""
+        config = self.load_config()
+        
+        if not config["projects"]:
+            print("📝 No projects configured. Use --add-project to add projects to watch.")
+            return
+        
+        print("🚀 Starting Claude Code Indexing Service")
+        print("=" * 50)
+        
+        # Start watchers for enabled projects
+        for project in config["projects"]:
+            if project.get("watch_enabled", False):
+                observer = self.start_project_watching(
+                    project["path"], 
+                    project["collection"]
+                )
+                if observer:
+                    self.observers[project["path"]] = observer
+        
+        if not self.observers:
+            print("⚠️  No projects enabled for watching")
+            return
+        
+        self.running = True
+        print(f"✅ Service started - watching {len(self.observers)} projects")
+        print("💡 Press Ctrl+C to stop the service")
+        print()
+        
+        # Keep service running
+        try:
+            while self.running:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self._shutdown()
+    
+    def stop_service(self):
+        """Stop the service gracefully"""
+        self.running = False
+    
+    def _signal_handler(self, signum, frame):
+        """Handle shutdown signals gracefully"""
+        print(f"\n🛑 Received signal {signum}, shutting down service...")
+        self.running = False
+    
+    def _shutdown(self):
+        """Graceful shutdown of all observers"""
+        print("\n🛑 Stopping file watchers...")
+        for path, observer in self.observers.items():
+            try:
+                observer.stop()
+                observer.join(timeout=5)
+                print(f"✅ Stopped watcher for {path}")
+            except Exception as e:
+                print(f"⚠️  Error stopping watcher for {path}: {e}")
+        
+        print("✅ All watchers stopped - service shutdown complete")
+
+
+class GitHooksManager:
+    """Manage git hooks for automatic indexing"""
+    
+    def __init__(self, project_path: str, collection_name: str):
+        self.project_path = Path(project_path)
+        self.collection_name = collection_name
+        self.git_dir = self.project_path / '.git'
+        
+    def is_git_repository(self) -> bool:
+        """Check if the project is a git repository"""
+        return self.git_dir.exists() and self.git_dir.is_dir()
+    
+    def install_pre_commit_hook(self, indexer_path: str = None) -> bool:
+        """Install pre-commit hook for automatic indexing"""
+        if not self.is_git_repository():
+            print("❌ Not a git repository - cannot install git hooks")
+            return False
+        
+        try:
+            hooks_dir = self.git_dir / 'hooks'
+            hooks_dir.mkdir(exist_ok=True)
+            
+            pre_commit_path = hooks_dir / 'pre-commit'
+            
+            # Determine indexer path
+            if not indexer_path:
+                # Try to find indexer in PATH or use current script
+                indexer_path = 'claude-indexer'
+                
+            # Create pre-commit hook script
+            hook_content = f"""#!/bin/bash
+# Claude Code Memory - Pre-commit Hook
+# Automatically index changed Python files before commit
+
+echo "🔄 Running Claude Code indexing..."
+
+# Run incremental indexing
+{indexer_path} --project "{self.project_path}" --collection "{self.collection_name}" --incremental --quiet
+
+# Check if indexing succeeded
+if [ $? -eq 0 ]; then
+    echo "✅ Indexing complete"
+else
+    echo "⚠️  Indexing failed - proceeding with commit"
+fi
+
+# Always allow commit to proceed
+exit 0
+"""
+            
+            # Write hook file
+            with open(pre_commit_path, 'w') as f:
+                f.write(hook_content)
+            
+            # Make executable
+            pre_commit_path.chmod(0o755)
+            
+            print(f"✅ Installed pre-commit hook: {pre_commit_path}")
+            print(f"🔄 Will auto-index changed files before each commit")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to install pre-commit hook: {e}")
+            return False
+    
+    def uninstall_pre_commit_hook(self) -> bool:
+        """Remove the pre-commit hook"""
+        if not self.is_git_repository():
+            return False
+        
+        try:
+            pre_commit_path = self.git_dir / 'hooks' / 'pre-commit'
+            
+            if pre_commit_path.exists():
+                # Check if it's our hook
+                content = pre_commit_path.read_text()
+                if 'Claude Code Memory' in content:
+                    pre_commit_path.unlink()
+                    print(f"✅ Removed pre-commit hook")
+                    return True
+                else:
+                    print("⚠️  Pre-commit hook exists but is not ours - not removing")
+                    return False
+            else:
+                print("ℹ️  No pre-commit hook found")
+                return True
+                
+        except Exception as e:
+            print(f"❌ Failed to remove pre-commit hook: {e}")
+            return False
+    
+    def status(self) -> Dict[str, Any]:
+        """Get status of git hooks"""
+        status = {
+            "is_git_repo": self.is_git_repository(),
+            "pre_commit_installed": False,
+            "pre_commit_ours": False
+        }
+        
+        if status["is_git_repo"]:
+            pre_commit_path = self.git_dir / 'hooks' / 'pre-commit'
+            if pre_commit_path.exists():
+                status["pre_commit_installed"] = True
+                try:
+                    content = pre_commit_path.read_text()
+                    status["pre_commit_ours"] = 'Claude Code Memory' in content
+                except:
+                    pass
+        
+        return status
+
+
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(description="Universal Semantic Indexer for Claude Code Memory")
-    parser.add_argument("--project", required=True, help="Path to Python project")
-    parser.add_argument("--collection", required=True, help="MCP collection name")
+    
+    # Basic indexing arguments
+    parser.add_argument("--project", help="Path to Python project")
+    parser.add_argument("--collection", help="MCP collection name")
     parser.add_argument("--include-tests", action="store_true", help="Include test files")
     parser.add_argument("--incremental", action="store_true", help="Only process changed files since last run")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--depth", choices=["basic", "full"], default="full", help="Analysis depth")
     parser.add_argument("--generate-commands", action="store_true", help="Generate MCP commands for manual execution instead of auto-loading")
     
+    # File watching arguments
+    parser.add_argument("--watch", action="store_true", help="Start file watching for real-time indexing")
+    parser.add_argument("--debounce", type=float, default=2.0, help="Debounce delay in seconds for file watching")
+    
+    # Service management arguments
+    parser.add_argument("--service-start", action="store_true", help="Start background indexing service")
+    parser.add_argument("--service-stop", action="store_true", help="Stop background indexing service")
+    parser.add_argument("--service-add-project", nargs=2, metavar=('PROJECT_PATH', 'COLLECTION'), help="Add project to service watch list")
+    parser.add_argument("--service-status", action="store_true", help="Show service status")
+    parser.add_argument("--service-config", help="Path to service config file")
+    
+    # Git hooks arguments
+    parser.add_argument("--install-hooks", action="store_true", help="Install git pre-commit hooks")
+    parser.add_argument("--uninstall-hooks", action="store_true", help="Uninstall git pre-commit hooks")
+    parser.add_argument("--hooks-status", action="store_true", help="Show git hooks status")
+    parser.add_argument("--indexer-path", help="Path to indexer executable for git hooks")
+    
     args = parser.parse_args()
+    
+    # Handle service management commands
+    if args.service_start or args.service_stop or args.service_add_project or args.service_status:
+        service = IndexingService(args.service_config)
+        
+        if args.service_add_project:
+            project_path, collection = args.service_add_project
+            service.add_project(project_path, collection)
+            return
+        
+        if args.service_status:
+            config = service.load_config()
+            print("🔧 Claude Code Indexing Service Status")
+            print("=" * 40)
+            print(f"📁 Config file: {service.config_file}")
+            print(f"📋 Projects configured: {len(config.get('projects', []))}")
+            for project in config.get('projects', []):
+                status = "✅ enabled" if project.get('watch_enabled', False) else "❌ disabled"
+                print(f"  • {project['path']} -> {project['collection']} ({status})")
+            return
+        
+        if args.service_start:
+            service.start_service()
+            return
+        
+        if args.service_stop:
+            # This would require process management in a real implementation
+            print("⚠️  Service stop not implemented - use Ctrl+C to stop running service")
+            return
+    
+    # Handle git hooks commands
+    if args.install_hooks or args.uninstall_hooks or args.hooks_status:
+        if not args.project or not args.collection:
+            print("❌ --project and --collection are required for git hooks operations")
+            sys.exit(1)
+            
+        hooks_manager = GitHooksManager(args.project, args.collection)
+        
+        if args.hooks_status:
+            status = hooks_manager.status()
+            print("🔧 Git Hooks Status")
+            print("=" * 20)
+            print(f"📁 Git repository: {'✅ yes' if status['is_git_repo'] else '❌ no'}")
+            if status['is_git_repo']:
+                print(f"🪝 Pre-commit hook: {'✅ installed' if status['pre_commit_installed'] else '❌ not installed'}")
+                if status['pre_commit_installed']:
+                    print(f"🏷️  Our hook: {'✅ yes' if status['pre_commit_ours'] else '❌ no (different hook)'}")
+            return
+        
+        if args.install_hooks:
+            hooks_manager.install_pre_commit_hook(args.indexer_path)
+            return
+        
+        if args.uninstall_hooks:
+            hooks_manager.uninstall_pre_commit_hook()
+            return
+    
+    # Handle file watching mode
+    if args.watch:
+        if not args.project or not args.collection:
+            print("❌ --project and --collection are required for file watching")
+            sys.exit(1)
+            
+        project_path = Path(args.project).resolve()
+        if not project_path.exists():
+            print(f"❌ Project path does not exist: {project_path}")
+            sys.exit(1)
+        
+        print(f"👁️  Starting file watching for {project_path} -> {args.collection}")
+        print("💡 Press Ctrl+C to stop watching")
+        
+        event_handler = IndexingEventHandler(
+            project_path=str(project_path),
+            collection_name=args.collection,
+            debounce_seconds=args.debounce
+        )
+        
+        observer = Observer()
+        observer.schedule(event_handler, str(project_path), recursive=True)
+        observer.start()
+        
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\n🛑 Stopping file watcher...")
+            observer.stop()
+        
+        observer.join()
+        print("✅ File watching stopped")
+        return
+    
+    # Handle basic indexing (default mode)
+    if not args.project or not args.collection:
+        print("❌ --project and --collection are required for indexing operations")
+        parser.print_help()
+        sys.exit(1)
     
     # Validate project path
     project_path = Path(args.project).resolve()
     if not project_path.exists():
-        print(f"Error: Project path {project_path} does not exist")
+        print(f"❌ Project path does not exist: {project_path}")
         sys.exit(1)
     
     if not project_path.is_dir():
-        print(f"Error: Project path {project_path} is not a directory")
+        print(f"❌ Project path is not a directory: {project_path}")
         sys.exit(1)
     
     # Create and run indexer
@@ -762,7 +1252,9 @@ def main():
         
         # Generate MCP commands if requested, otherwise auto-load
         if args.generate_commands:
-            commands_file = project_path / 'mcp_output' / f"{args.collection}_mcp_commands.txt"
+            output_dir = project_path / 'mcp_output'
+            output_dir.mkdir(exist_ok=True)
+            commands_file = output_dir / f"{args.collection}_mcp_commands.txt"
             with open(commands_file, 'w') as f:
                 f.write("# MCP Commands for Claude Code\n")
                 f.write(f"# Copy and paste these commands into Claude Code to load the knowledge graph\n")
@@ -775,7 +1267,7 @@ def main():
         else:
             print(f"🚀 Directly loaded entities and relations into Qdrant vector database")
             print(f"💡 Knowledge graph stored in collection '{args.collection}' with semantic search enabled")
-            print(f"🔍 Use Qdrant API or Claude Code MCP tools to search the knowledge graph")
+            print(f"🔍 Use semantic search: mcp__${args.collection}-memory__search_similar(\"query\")")
             
     else:
         print(f"❌ Failed to index {args.project}")
