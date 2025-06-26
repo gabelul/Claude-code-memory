@@ -67,13 +67,6 @@ class Entity:
             return f"{self.file_path}:{self.name}"
         return self.name
     
-    def to_mcp_dict(self) -> Dict[str, Any]:
-        """Convert to MCP-compatible dictionary format."""
-        return {
-            "name": self.name,
-            "entityType": self.entity_type.value,
-            "observations": list(self.observations)  # Copy to avoid mutation
-        }
     
     def add_observation(self, observation: str) -> 'Entity':
         """Create new entity with additional observation (immutable)."""
@@ -112,13 +105,6 @@ class Relation:
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError("Confidence must be between 0.0 and 1.0")
     
-    def to_mcp_dict(self) -> Dict[str, Any]:
-        """Convert to MCP-compatible dictionary format."""
-        return {
-            "from": self.from_entity,
-            "to": self.to_entity, 
-            "relationType": self.relation_type.value
-        }
     
     @property
     def is_bidirectional(self) -> bool:

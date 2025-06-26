@@ -141,9 +141,8 @@ Knowledge graph is automatically loaded into Qdrant - no manual steps required!
 mcp__my-project-memory__search_similar("your search query")
 ```
 
-## 🔄 Dual-Mode Operation
+## 🔄 Direct Qdrant Integration
 
-### Auto-Loading Mode (Default)
 Direct Qdrant integration with zero manual steps:
 ```bash
 # Index new project (auto-loads to Qdrant)
@@ -160,16 +159,6 @@ claude-indexer -p /path/to/project -c project-name --clear
 
 # Clear entire collection (deletes all memories including manual)
 claude-indexer -p /path/to/project -c project-name --clear-all
-```
-
-### Manual Command Mode
-Generate MCP commands for manual execution:
-```bash
-# Generate commands without API calls (uses dummy embedder)
-claude-indexer -p /path/to/project -c project-name --generate-commands
-
-# Commands saved to: mcp_output/project-name_mcp_commands.txt
-# Copy and paste commands into Claude Code for manual execution
 ```
 
 ### CLI Help

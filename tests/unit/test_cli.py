@@ -174,13 +174,64 @@ class TestIndexCommands:
             # Verify clear_collection was called (not index_project since CLI exits after clearing)
             mock_indexer.clear_collection.assert_called_once_with('test-collection', preserve_manual=True)
     
+    @patch('claude_indexer.cli_full.create_store_from_config')
+    @patch('claude_indexer.cli_full.load_config')
+    def test_index_project_qdrant_connection_error(self, mock_load_config, mock_create_store):
+        """Test proper error handling when Qdrant is unavailable."""
+        # Mock configuration
+        mock_config = MagicMock()
+        mock_config.openai_api_key = "sk-test123"
+        mock_config.qdrant_api_key = "test-key"
+        mock_config.qdrant_url = "http://localhost:6333"
+        mock_load_config.return_value = mock_config
+        
+        # Simulate Qdrant connection failure
+        mock_create_store.side_effect = ConnectionError("Cannot connect to Qdrant")
+        
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("test_project").mkdir()
+            Path("test_project/main.py").write_text("def hello(): pass")
+            
+            result = runner.invoke(cli, [
+                'index',
+                '--project', 'test_project', 
+                '--collection', 'test-collection'
+            ])
+            
+            assert result.exit_code != 0
+            assert "Cannot connect to Qdrant" in result.output
+
+    @patch('claude_indexer.cli_full.load_config')
+    def test_index_project_missing_openai_key(self, mock_load_config):
+        """Test error handling for missing OpenAI API key."""
+        # Mock configuration with missing OpenAI key
+        mock_config = MagicMock()
+        mock_config.openai_api_key = None
+        mock_config.qdrant_api_key = "test-key"
+        mock_config.qdrant_url = "http://localhost:6333"
+        mock_load_config.return_value = mock_config
+        
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("test_project").mkdir()
+            Path("test_project/main.py").write_text("def hello(): pass")
+            
+            result = runner.invoke(cli, [
+                'index',
+                '--project', 'test_project',
+                '--collection', 'test-collection'
+            ])
+            
+            assert result.exit_code != 0
+
     @patch('claude_indexer.cli_full.CoreIndexer')
     @patch('claude_indexer.cli_full.create_embedder_from_config')
     @patch('claude_indexer.cli_full.create_store_from_config')
     @patch('claude_indexer.cli_full.load_config')
-    def test_index_project_generate_commands(self, mock_load_config, mock_create_store, 
-                                           mock_create_embedder, mock_indexer_class):
-        """Test project indexing with command generation."""
+    def test_index_project_qdrant_only_mode(self, mock_load_config, mock_create_store, 
+                                          mock_create_embedder, mock_indexer_class):
+        """Test that indexing only uses Qdrant mode (no MCP fallback)."""
         # Mock configuration and components
         mock_config = MagicMock()
         mock_config.openai_api_key = "sk-test123"
@@ -189,16 +240,16 @@ class TestIndexCommands:
         mock_load_config.return_value = mock_config
         
         mock_embedder = MagicMock()
+        mock_embedder.get_model_info.return_value = {
+            'model': 'text-embedding-3-small',
+            'cost_per_1k_tokens': 0.00002
+        }
         mock_store = MagicMock()
-        # Mock finalize_commands for MCP store
-        mock_store.finalize_commands = MagicMock(return_value=MagicMock(success=True))
         mock_create_embedder.return_value = mock_embedder
         mock_create_store.return_value = mock_store
         
-        # Mock indexer and parser
+        # Mock indexer
         mock_indexer = MagicMock()
-        # Make sure indexer has vector_store attribute for finalize_commands to be called
-        mock_indexer.vector_store = mock_store
         mock_result = MagicMock()
         mock_result.success = True
         mock_result.processing_time = 1.2
@@ -207,18 +258,10 @@ class TestIndexCommands:
         mock_result.relations_created = 5
         mock_result.warnings = []
         mock_result.errors = []
-        mock_result.total_tokens = 0  # Add missing attribute for cost tracking
+        mock_result.total_tokens = 1000
+        mock_result.total_cost_estimate = 0.05
+        mock_result.embedding_requests = 10
         mock_indexer.index_project.return_value = mock_result
-        
-        # Mock file finding and parsing
-        mock_indexer._find_all_files.return_value = [Path("test.py")]
-        mock_parse_result = MagicMock()
-        mock_parse_result.success = True
-        mock_parse_result.entities = []
-        mock_parse_result.relations = []
-        mock_indexer.parser_registry.parse_file.return_value = mock_parse_result
-        mock_indexer.save_mcp_commands_to_file.return_value = Path("commands.txt")
-        
         mock_indexer_class.return_value = mock_indexer
         
         runner = CliRunner()
@@ -229,22 +272,19 @@ class TestIndexCommands:
             result = runner.invoke(cli, [
                 'index',
                 '--project', 'test_project',
-                '--collection', 'test-collection',
-                '--generate-commands'
+                '--collection', 'test-collection'
             ])
             
             assert result.exit_code == 0
-            assert "Using command generation mode (saves to mcp_output/)" in result.output
+            assert "Using Qdrant + OpenAI (direct mode)" in result.output
             
-            # Verify that the command generation mode was used by checking that:
-            # 1. The dummy embedder was created (not OpenAI)
-            # 2. The MCP store backend was created
+            # Verify that only Qdrant components were created
             create_embedder_call = mock_create_embedder.call_args[0][0]
-            assert create_embedder_call["provider"] == "dummy"
+            assert create_embedder_call["provider"] == "openai"
             
             create_store_call = mock_create_store.call_args[0][0]
-            assert create_store_call["backend"] == "mcp"
-    
+            assert create_store_call["backend"] == "qdrant"
+
     def test_index_project_quiet_and_verbose_error(self):
         """Test that quiet and verbose flags are mutually exclusive."""
         runner = CliRunner()

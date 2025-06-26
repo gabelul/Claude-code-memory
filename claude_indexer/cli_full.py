@@ -79,10 +79,8 @@ else:
     @click.option('--clear-all', is_flag=True, help='Clear ALL memories before indexing (including manual ones)')
     @click.option('--depth', type=click.Choice(['basic', 'full']), default='full',
                   help='Analysis depth')
-    @click.option('--generate-commands', is_flag=True, 
-                  help='Generate MCP commands for manual execution instead of auto-loading')
     def index(project, collection, verbose, quiet, config, include_tests, 
-            incremental, clear, clear_all, depth, generate_commands):
+            incremental, clear, clear_all, depth):
         """Index an entire project."""
         
         if quiet and verbose:
@@ -102,62 +100,23 @@ else:
                 click.echo(f"Error: Project path does not exist: {project_path}", err=True)
                 sys.exit(1)
             
-            # Create components based on mode
-            if generate_commands:
-                # Use dummy embedder + command generation mode
-                embedder = create_embedder_from_config({
-                    "provider": "dummy",
-                    "dimension": 1536,
-                    "enable_caching": False
-                })
-                
-                # Save commands to mcp_output directory
-                output_dir = project_path / "mcp_output"
-                vector_store = create_store_from_config({
-                    "backend": "mcp",
-                    "output_dir": str(output_dir),
-                    "auto_print": True,
-                    "enable_caching": False
-                })
-                
-                if not quiet:
-                    click.echo("🔧 Using command generation mode (saves to mcp_output/)")
-            else:
-                # Try Qdrant first (automatic like old system), fallback to MCP if unavailable
-                try:
-                    embedder = create_embedder_from_config({
-                        "provider": "openai",
-                        "api_key": config_obj.openai_api_key,
-                        "model": "text-embedding-3-small",
-                        "enable_caching": True
-                    })
-                    
-                    vector_store = create_store_from_config({
-                        "backend": "qdrant",
-                        "url": config_obj.qdrant_url,
-                        "api_key": config_obj.qdrant_api_key,
-                        "enable_caching": True
-                    })
-                    
-                    if not quiet:
-                        click.echo("⚡ Using Qdrant + OpenAI (automatic mode)")
-                        
-                except Exception as e:
-                    # Fallback to MCP if Qdrant unavailable
-                    if not quiet:
-                        click.echo(f"⚠️ Qdrant unavailable ({e}), using MCP fallback")
-                    
-                    embedder = create_embedder_from_config({
-                        "provider": "dummy",
-                        "dimension": 1536,
-                        "enable_caching": False
-                    })
-                    
-                    vector_store = create_store_from_config({
-                        "backend": "mcp",
-                        "auto_print": True,
-                        "enable_caching": False
-                    })
+            # Create components using direct Qdrant integration
+            embedder = create_embedder_from_config({
+                "provider": "openai",
+                "api_key": config_obj.openai_api_key,
+                "model": "text-embedding-3-small",
+                "enable_caching": True
+            })
+            
+            vector_store = create_store_from_config({
+                "backend": "qdrant",
+                "url": config_obj.qdrant_url,
+                "api_key": config_obj.qdrant_api_key,
+                "enable_caching": True
+            })
+            
+            if not quiet:
+                click.echo("⚡ Using Qdrant + OpenAI (direct mode)")
             
             # Create indexer
             indexer = CoreIndexer(config_obj, embedder, vector_store, project_path)
@@ -212,8 +171,8 @@ else:
                     click.echo(f"   Entities created: {result.entities_created}")
                     click.echo(f"   Relations created: {result.relations_created}")
                     
-                    # Report cost information if available (only for real OpenAI usage, not dummy mode)
-                    if result.total_tokens > 0 and not generate_commands:
+                    # Report cost information if available 
+                    if result.total_tokens > 0:
                         click.echo("💰 OpenAI Usage:")
                         click.echo(f"   Tokens consumed: {result.total_tokens:,}")
                         if result.embedding_requests > 0:
@@ -231,12 +190,6 @@ else:
                             model_name = model_info.get('model', 'unknown')
                             cost_per_1k = model_info.get('cost_per_1k_tokens', 0)
                             click.echo(f"   Model: {model_name} (${cost_per_1k:.5f}/1K tokens)")
-                    
-                    # Report MCP command file location if in generate-commands mode
-                    if generate_commands:
-                        commands_file = project_path / 'mcp_output' / f"{collection}_mcp_commands.txt"
-                        if commands_file.exists():
-                            click.echo(f"📋 MCP commands saved to: {commands_file}")
                     
                     if result.warnings and verbose:
                         click.echo("⚠️  Warnings:")

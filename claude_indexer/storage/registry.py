@@ -3,7 +3,6 @@
 from typing import Dict, Any, Type, List
 from .base import VectorStore, CachingVectorStore
 from .qdrant import QdrantStore, QDRANT_AVAILABLE
-from .mcp import MCPStore, MCP_AVAILABLE
 
 
 class StorageRegistry:
@@ -17,8 +16,6 @@ class StorageRegistry:
         """Register default storage implementations."""
         if QDRANT_AVAILABLE:
             self.register("qdrant", QdrantStore)
-        if MCP_AVAILABLE:
-            self.register("mcp", MCPStore)
     
     def register(self, name: str, store_class: Type[VectorStore]):
         """Register a storage backend."""

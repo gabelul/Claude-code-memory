@@ -192,35 +192,16 @@ class CoreIndexer:
                 result.files_processed += len([f for f in batch if f not in batch_errors])
                 result.files_failed += len(batch_errors)
             
-            # Choose storage method based on vector store type
+            # Store vectors using direct Qdrant automation
             if all_entities or all_relations:
-                # Check for Qdrant backend (direct or cached) for direct automation
-                is_qdrant_backend = (
-                    hasattr(self.vector_store, 'client') or  # Direct QdrantStore
-                    (hasattr(self.vector_store, 'backend') and hasattr(self.vector_store.backend, 'client'))  # CachingVectorStore wrapping QdrantStore
-                )
-                
-                if is_qdrant_backend:
-                    # Use direct Qdrant automation via existing _store_vectors method
-                    storage_success = self._store_vectors(collection_name, all_entities, all_relations)
-                    if not storage_success:
-                        result.success = False
-                        result.errors.append("Failed to store vectors in Qdrant")
-                    else:
-                        result.entities_created = len(all_entities)
-                        result.relations_created = len(all_relations)
+                # Use direct Qdrant automation via existing _store_vectors method
+                storage_success = self._store_vectors(collection_name, all_entities, all_relations)
+                if not storage_success:
+                    result.success = False
+                    result.errors.append("Failed to store vectors in Qdrant")
                 else:
-                    # Fall back to MCP command generation (for MCP backend)
-                    mcp_success = self._send_to_mcp(all_entities, all_relations)
-                    if not mcp_success:
-                        result.success = False
-                        result.errors.append("Failed to generate MCP commands")
-                    else:
-                        result.entities_created = len(all_entities)
-                        result.relations_created = len(all_relations)
-            
-            # Finalize storage (important for MCP command generator)
-            self._finalize_storage(collection_name)
+                    result.entities_created = len(all_entities)
+                    result.relations_created = len(all_relations)
             
             # Update state file
             if result.success:
@@ -332,52 +313,7 @@ class CoreIndexer:
             print(f"Failed to clear collection: {e}")
             return False
     
-    def generate_mcp_commands(self, entities: List[Entity], relations: List[Relation],
-                             collection_name: str) -> str:
-        """Generate MCP commands for manual execution."""
-        commands = []
-        
-        if entities:
-            # Convert entities to MCP format
-            entity_dicts = [entity.to_mcp_dict() for entity in entities]
-            
-            # Split into batches of 10 for readability
-            batch_size = 10
-            for i in range(0, len(entity_dicts), batch_size):
-                batch = entity_dicts[i:i + batch_size]
-                entities_json = json.dumps(batch, indent=2)
-                commands.append(f"# Entity batch {(i // batch_size) + 1}")
-                commands.append(f"mcp__{collection_name}-memory__create_entities({entities_json})")
-                commands.append("")
-        
-        if relations:
-            # Convert relations to MCP format
-            relation_dicts = [relation.to_mcp_dict() for relation in relations]
-            
-            # Split into batches of 20 for readability
-            batch_size = 20
-            for i in range(0, len(relation_dicts), batch_size):
-                batch = relation_dicts[i:i + batch_size]
-                relations_json = json.dumps(batch, indent=2)
-                commands.append(f"# Relation batch {(i // batch_size) + 1}")
-                commands.append(f"mcp__{collection_name}-memory__create_relations({relations_json})")
-                commands.append("")
-        
-        return "\n".join(commands)
     
-    def save_mcp_commands_to_file(self, entities: List[Entity], relations: List[Relation],
-                                  collection_name: str) -> Path:
-        """Save MCP commands to file for manual execution."""
-        output_dir = self.project_path / 'mcp_output'
-        output_dir.mkdir(exist_ok=True)
-        
-        commands = self.generate_mcp_commands(entities, relations, collection_name)
-        commands_file = output_dir / f"{collection_name}_mcp_commands.txt"
-        
-        with open(commands_file, 'w') as f:
-            f.write(commands)
-        
-        return commands_file
     
     def _find_all_files(self, include_tests: bool = False) -> List[Path]:
         """Find all source files in the project."""
@@ -690,90 +626,9 @@ class CoreIndexer:
         except Exception as e:
             print(f"Error handling deleted files: {e}")
     
-    def _send_to_mcp(self, entities: List[Entity], relations: List[Relation]) -> bool:
-        """Send to MCP (auto-printing like old indexer.py)."""
-        try:
-            success = True
-            
-            # Convert entities to MCP format
-            if entities:
-                mcp_entities = []
-                for entity in entities:
-                    mcp_entity = {
-                        "name": entity.name,
-                        "entityType": entity.entity_type.value,
-                        "observations": entity.observations
-                    }
-                    mcp_entities.append(mcp_entity)
-                
-                success &= self._call_mcp_api("create_entities", {"entities": mcp_entities})
-            
-            # Convert relations to MCP format  
-            if relations:
-                mcp_relations = []
-                for relation in relations:
-                    mcp_relation = {
-                        "from": relation.from_entity,
-                        "to": relation.to_entity, 
-                        "relationType": relation.relation_type.value
-                    }
-                    mcp_relations.append(mcp_relation)
-                
-                success &= self._call_mcp_api("create_relations", {"relations": mcp_relations})
-            
-            return success
-            
-        except Exception as e:
-            print(f"❌ MCP send failed: {e}")
-            return False
     
-    def _call_mcp_api(self, method: str, params: Dict[str, Any]) -> bool:
-        """Execute MCP commands automatically - call functions directly from globals."""
-        try:
-            print(f"🚀 Executing MCP {method} automatically with {len(params.get('entities', params.get('relations', [])))} items")
-            
-            # Execute MCP commands directly - we have access to these functions in this environment
-            if method == "create_entities":
-                result = mcp__memory_project_memory__create_entities(params)
-                print(f"✅ Entities created successfully: {result}")
-                return True
-                
-            elif method == "create_relations":
-                result = mcp__memory_project_memory__create_relations(params)
-                print(f"✅ Relations created successfully: {result}")
-                return True
-                
-            else:
-                print(f"❌ Unknown MCP method: {method}")
-                return False
-            
-        except NameError as e:
-            # MCP functions not available in this environment - fall back to printing
-            print(f"🔧 MCP functions not available ({e}), printing commands for manual execution:")
-            return self._fallback_print_commands(method, params)
-            
-        except Exception as e:
-            print(f"❌ MCP execution failed: {e}")
-            # Fallback to printing commands for manual execution
-            return self._fallback_print_commands(method, params)
     
-    def _fallback_print_commands(self, method: str, params: Dict[str, Any]) -> bool:
-        """Fallback to printing commands for manual execution."""
-        collection_memory = f"memory-project-memory"
-        mcp_command = f"mcp__{collection_memory}__{method}"
-        params_json = json.dumps(params, indent=2)
-        print(f"{mcp_command}({params_json})")
-        print(f"✅ MCP {method} command printed for execution")
-        return True
 
-    def _finalize_storage(self, collection_name: str):
-        """Finalize storage operations (important for MCP command generator)."""
-        try:
-            # Check if vector store has finalize method (e.g., MCPCommandGenerator)
-            if hasattr(self.vector_store, 'finalize_commands'):
-                result = self.vector_store.finalize_commands(collection_name)
-        except Exception as e:
-            print(f"Error finalizing storage: {e}")
     
     def _is_test_file(self, file_path: Path) -> bool:
         """Check if a file is a test file."""

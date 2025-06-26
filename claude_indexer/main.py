@@ -35,42 +35,23 @@ def run_indexing(project_path: str, collection_name: str,
                 print(f"❌ Project path does not exist: {project}")
             return False
         
-        # Create components using intelligent defaults (like old system)
-        # Try Qdrant first (automatic like old system), fallback to MCP if unavailable
-        try:
-            embedder = create_embedder_from_config({
-                "provider": "openai",
-                "api_key": config.openai_api_key,
-                "model": "text-embedding-3-small",
-                "enable_caching": True
-            })
-            
-            vector_store = create_store_from_config({
-                "backend": "qdrant",
-                "url": config.qdrant_url,
-                "api_key": config.qdrant_api_key,
-                "enable_caching": True
-            })
-            
-            if not quiet:
-                print("⚡ Using Qdrant + OpenAI (automatic mode)")
-                
-        except Exception as e:
-            # Fallback to MCP if Qdrant unavailable
-            if not quiet:
-                print(f"⚠️ Qdrant unavailable ({e}), using MCP fallback")
-            
-            embedder = create_embedder_from_config({
-                "provider": "dummy",
-                "dimension": 1536,
-                "enable_caching": False
-            })
-            
-            vector_store = create_store_from_config({
-                "backend": "mcp",
-                "auto_print": True,
-                "enable_caching": False
-            })
+        # Create components using direct Qdrant integration
+        embedder = create_embedder_from_config({
+            "provider": "openai",
+            "api_key": config.openai_api_key,
+            "model": "text-embedding-3-small",
+            "enable_caching": True
+        })
+        
+        vector_store = create_store_from_config({
+            "backend": "qdrant",
+            "url": config.qdrant_url,
+            "api_key": config.qdrant_api_key,
+            "enable_caching": True
+        })
+        
+        if not quiet:
+            print("⚡ Using Qdrant + OpenAI (direct mode)")
         
         # Create indexer
         indexer = CoreIndexer(config, embedder, vector_store, project)

@@ -8,7 +8,7 @@ Complete memory solution for Claude Code providing context-aware conversations w
 - 🏗️ Modular `claude_indexer` package (refactored from 2000+ LOC monolith)
 - 📊 Knowledge graph with entities & relations via **enhanced** delorenj/mcp-qdrant-memory
 - ⚡ Tree-sitter + Jedi parsing (36x faster, 70% LLM-quality understanding)
-- 🔄 Dual-mode operation: Direct Qdrant automation OR manual command generation
+- 🔄 Direct Qdrant automation: Fully automated knowledge graph loading
 - 📁 Project-specific collections for isolation
 - 🎯 Zero code duplication with clean separation of concerns
 - 🛡️ Smart clearing: --clear preserves manual memories, --clear-all removes everything
@@ -89,9 +89,8 @@ claude-indexer -p /path/to/project -c project-name
 
 ## Usage Patterns
 
-### Dual-Mode Operation
+### Direct Qdrant Integration
 
-**Auto-Loading Mode (Default):**
 ```bash
 # Direct Qdrant automation - zero manual steps
 claude-indexer -p /path -c name
@@ -104,15 +103,6 @@ claude-indexer -p /path -c name --clear
 
 # Clear entire collection (deletes all memories including manual)
 claude-indexer -p /path -c name --clear-all
-```
-
-**Manual Command Mode:**
-```bash
-# Generate MCP commands without API calls (uses DummyEmbedder)
-claude-indexer -p /path -c name --generate-commands
-
-# Output: mcp_output/collection-name_mcp_commands.txt
-# Contains ready-to-execute MCP commands for manual copy-paste
 ```
 
 ### Advanced Automation Features
@@ -522,7 +512,7 @@ python -m pytest tests/integration/ -v
 
 ## Automation Modes
 
-1. **Manual Mode**: Traditional indexing with incremental updates
+1. **Standard Mode**: Direct Qdrant indexing with incremental updates
 2. **File Watching**: Real-time indexing during development
 3. **Service Mode**: Background automation for multiple projects  
 4. **Git Hooks**: Automatic indexing on commits
