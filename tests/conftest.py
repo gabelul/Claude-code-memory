@@ -132,6 +132,9 @@ def qdrant_client() -> Iterator[QdrantClient]:
             client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+                optimizers_config={
+                    "indexing_threshold": 1000
+                }
             )
     except Exception as e:
         pytest.skip(f"Qdrant not available: {e}")

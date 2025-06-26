@@ -97,7 +97,10 @@ class QdrantStore(ManagedVectorStore):
             
             self.client.create_collection(
                 collection_name=collection_name,
-                vectors_config=VectorParams(size=vector_size, distance=distance)
+                vectors_config=VectorParams(size=vector_size, distance=distance),
+                optimizers_config={
+                    "indexing_threshold": 1000
+                }
             )
             
             return StorageResult(

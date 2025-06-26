@@ -394,12 +394,10 @@ class Watcher:
     async def _run_initial_indexing(self):
         """Run initial indexing to ensure collection exists and project is indexed."""
         try:
-            print(f"🔄 Running initial indexing for {self.collection_name}")
-            
-            # Create indexer in executor to avoid blocking
+            # Check if state file exists to determine if initial indexing is needed
             loop = asyncio.get_event_loop()
             
-            def run_indexing():
+            def check_and_run_indexing():
                 from ..indexer import CoreIndexer
                 indexer = CoreIndexer(
                     config=self.config,
@@ -407,12 +405,22 @@ class Watcher:
                     vector_store=self.store,
                     project_path=self.repo_path
                 )
+                
+                # Check if state file exists for this collection
+                state_file = indexer._get_state_file(self.collection_name)
+                should_be_incremental = state_file.exists()
+                
+                if should_be_incremental:
+                    print(f"📋 State file exists for {self.collection_name}, using incremental indexing")
+                else:
+                    print(f"🔄 No state file found for {self.collection_name}, running full initial indexing")
+                
                 return indexer.index_project(
                     collection_name=self.collection_name,
-                    incremental=False  # Full index to ensure everything is set up
+                    incremental=should_be_incremental  # Use incremental if state file exists
                 )
             
-            result = await loop.run_in_executor(None, run_indexing)
+            result = await loop.run_in_executor(None, check_and_run_indexing)
             if result.success:
                 print(f"✅ Initial indexing completed for {self.collection_name}")
             else:
