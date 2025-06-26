@@ -4,11 +4,25 @@
 
 Complete memory solution for Claude Code providing context-aware conversations with semantic search across Python codebases.
 
+## Version History
+
+**v2.0 - Breaking Changes (Current)**
+- 🚨 **BREAKING**: Removed MCP storage backend entirely
+- 🎯 **Simplified Architecture**: Single backend design (Direct Qdrant only)
+- ❌ **Removed**: `--generate-commands` flag and manual command mode
+- 🏗️ **Code Reduction**: Removed ~445 lines across multiple files
+- ✅ **All Tests Passing**: 158/158 tests now pass with simplified architecture
+
+**v1.x - Dual Mode Architecture**
+- 🔄 Dual-mode operation: Direct Qdrant OR manual command generation
+- 📝 MCP storage backend with `--generate-commands` support
+- 🏗️ Plugin architecture with multiple storage backends
+
 **Key Features:**
 - 🏗️ Modular `claude_indexer` package (refactored from 2000+ LOC monolith)
 - 📊 Knowledge graph with entities & relations via **enhanced** delorenj/mcp-qdrant-memory
 - ⚡ Tree-sitter + Jedi parsing (36x faster, 70% LLM-quality understanding)
-- 🔄 Direct Qdrant automation: Fully automated knowledge graph loading
+- 🔄 **v2.0: Simplified Architecture** - Direct Qdrant integration only (removed MCP backend)
 - 📁 Project-specific collections for isolation
 - 🎯 Zero code duplication with clean separation of concerns
 - 🛡️ Smart clearing: --clear preserves manual memories, --clear-all removes everything
@@ -239,7 +253,7 @@ claude_indexer/
 ├── cli_full.py      # Complete CLI interface
 └── main.py          # Entry point coordination
 
-tests/               # 181 tests (149 passing, 32 skipped)
+tests/               # 158 tests (all passing in v2.0)
 ├── conftest.py      # Shared fixtures and test utilities
 ├── unit/           # Component isolation tests
 ├── integration/    # Workflow tests
@@ -462,7 +476,7 @@ claude-indexer -p /path/to/your/python/project -c test-setup --verbose
 
 **Test Architecture:**
 - **334-line `conftest.py`** with production-ready fixtures and Qdrant authentication
-- **181 Total Tests**: Unit (149 passing) + Integration/E2E (32 skipped - require Qdrant)
+- **158 Total Tests**: All passing with simplified v2.0 architecture
 - **Unit Tests**: 6 files covering all core components
 - **Integration Tests**: 3 files testing component interactions
 - **End-to-End Tests**: Complete CLI and workflow validation
@@ -471,7 +485,7 @@ claude-indexer -p /path/to/your/python/project -c test-setup --verbose
 
 **Test Commands:**
 ```bash
-# Complete test suite with coverage (149 passed, 32 skipped)
+# Complete test suite with coverage (all 158 tests passing)
 python -m pytest --cov=claude_indexer --cov-report=term-missing -v
 
 # Fast unit tests only (no external dependencies)

@@ -2,13 +2,22 @@
 
 🧠 **Refactored Universal Semantic Indexer** - Modular, production-ready package providing persistent memory for Claude Code through direct Qdrant integration, knowledge graphs, and Tree-sitter parsing
 
-## ✨ What's New in v2.0
+## ✨ What's New in v2.0 - Breaking Changes
 
-🎯 **Complete Refactor**: Transformed from 2000+ LOC monolith to clean modular package  
-🔧 **Improved CLI**: Command-based interface with `python -m claude_indexer`  
-🏗️ **Plugin Architecture**: Extensible embedders, storage backends, and parsers  
-📦 **Python Standards**: Proper package structure and imports  
-⚡ **Same Performance**: All optimizations preserved (15x incremental updates)  
+🚨 **BREAKING**: Removed MCP storage backend entirely - **Direct Qdrant integration only**  
+🎯 **Simplified Architecture**: Single backend design eliminates dual-mode complexity  
+❌ **Removed**: `--generate-commands` flag and manual command mode  
+🔧 **Streamlined CLI**: Cleaner interface with direct automation only  
+🏗️ **Code Reduction**: Removed ~445 lines across multiple files  
+✅ **All Tests Passing**: 158/158 tests now pass with simplified architecture  
+⚡ **Same Performance**: All optimizations preserved (15x incremental updates)
+
+### Migration from v1.x
+**v1.x users upgrading to v2.0:**
+- Remove any `--generate-commands` flags from your scripts
+- The MCP storage backend is no longer available - use direct Qdrant only
+- All existing functionality preserved except manual command generation mode
+- No changes needed to MCP server configuration or API usage  
 
 ## 🚀 Quick Start
 
@@ -313,7 +322,7 @@ claude-indexer service status
 
 ## ✨ Features
 
-- **True Automation**: Direct Qdrant integration with zero manual intervention
+- **Simplified Architecture**: Direct Qdrant integration only (v2.0 removed MCP backend)
 - **Incremental updates**: 15x faster processing of changed files only
 - **Real-time file watching**: Automatic indexing on code changes
 - **Multi-project service**: Background watching for multiple projects
