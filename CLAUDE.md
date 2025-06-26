@@ -6,12 +6,13 @@ Complete memory solution for Claude Code providing context-aware conversations w
 
 **Key Features:**
 - 🏗️ Modular `claude_indexer` package (refactored from 2000+ LOC monolith)
-- 📊 Knowledge graph with entities & relations via delorenj/mcp-qdrant-memory
+- 📊 Knowledge graph with entities & relations via **enhanced** delorenj/mcp-qdrant-memory
 - ⚡ Tree-sitter + Jedi parsing (36x faster, 70% LLM-quality understanding)
 - 🔄 Dual-mode operation: Direct Qdrant automation OR manual command generation
 - 📁 Project-specific collections for isolation
 - 🎯 Zero code duplication with clean separation of concerns
 - 🛡️ Smart clearing: --clear preserves manual memories, --clear-all removes everything
+- ✨ **NEW: Smart token management** - read_graph returns <25k tokens vs 393k overflow
 
 ## Problem Statement
 
@@ -374,9 +375,9 @@ python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**3. Install MCP Memory Server**
+**3. Install Enhanced MCP Memory Server**
 ```bash
-git clone https://github.com/delorenj/mcp-qdrant-memory.git
+git clone https://github.com/Durafen/mcp-qdrant-memory.git
 cd mcp-qdrant-memory && npm install && npm run build && cd ..
 ```
 
@@ -517,6 +518,7 @@ python -m pytest tests/integration/ -v
 - **Multi-project Service**: Background automation for team workflows
 - **Git Hooks Integration**: Pre-commit automatic indexing
 - **Zero Manual Steps**: Complete automation from indexing to semantic search
+- ✅ **Smart Token Management**: Enhanced read_graph with <25k token responses vs 393k overflow
 
 ## Automation Modes
 

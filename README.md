@@ -31,8 +31,8 @@ pip install -r requirements.txt
 cp settings.template.txt settings.txt
 # Edit settings.txt with your OpenAI API key and Qdrant settings
 
-# 3. Install MCP memory server
-git clone https://github.com/delorenj/mcp-qdrant-memory.git
+# 3. Install enhanced MCP memory server
+git clone https://github.com/Durafen/mcp-qdrant-memory.git
 cd mcp-qdrant-memory && npm install && npm run build && cd ..
 
 # 4. Install global wrapper (creates claude-indexer command)
