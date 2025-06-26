@@ -158,8 +158,18 @@ class IndexingEventHandler(FileSystemEventHandler):
             # Remove from processed files
             self.processed_files.discard(str(path))
             
-            # TODO: Implement entity deletion from vector store
-            # This would require tracking which entities belong to which files
+            # Trigger incremental indexing to handle deletion and cleanup orphaned relations
+            # This uses the existing state-based deletion detection which will:
+            # 1. Detect the deleted file via SHA256 state comparison
+            # 2. Call _handle_deleted_files() which removes entities
+            # 3. Automatically clean up orphaned relations via _cleanup_orphaned_relations()
+            print(f"🔍 Running incremental indexing to clean up entities...")
+            success = self._run_incremental_indexing()
+            
+            if success:
+                print(f"✅ Cleanup completed for deleted file: {relative_path}")
+            else:
+                print(f"❌ Cleanup may have failed for deleted file: {relative_path}")
             
         except Exception as e:
             print(f"❌ Error processing file deletion {path}: {e}")
@@ -290,11 +300,19 @@ class AsyncIndexingEventHandler:
     async def _handle_batch_deletions(self, file_paths: list):
         """Handle batch file deletions."""
         try:
-            # TODO: Implement batch entity deletion
-            # This would require tracking entity-to-file mappings
-            for file_path in file_paths:
-                relative_path = Path(file_path).relative_to(self.project_path)
-                print(f"   Deleted: {relative_path}")
+            print(f"🗑️  Processing batch deletion of {len(file_paths)} files...")
+            
+            # Trigger incremental indexing to handle deletions and cleanup orphaned relations
+            # This uses the existing state-based deletion detection which will:
+            # 1. Detect the deleted files via SHA256 state comparison
+            # 2. Call _handle_deleted_files() which removes entities
+            # 3. Automatically clean up orphaned relations via _cleanup_orphaned_relations()
+            success = await self._run_batch_indexing([])  # Empty list triggers incremental indexing
+            
+            if success:
+                print(f"✅ Batch cleanup completed for {len(file_paths)} deleted files")
+            else:
+                print(f"❌ Batch cleanup may have failed for {len(file_paths)} deleted files")
         
         except Exception as e:
             print(f"❌ Error handling deletions: {e}")
@@ -626,11 +644,19 @@ class AsyncWatcherHandler:
     async def _handle_deletions(self, file_paths: list):
         """Handle file deletions by removing related entities."""
         try:
-            # For now, just log deletions
-            # TODO: Implement proper entity deletion based on file paths
-            for file_path in file_paths:
-                relative_path = Path(file_path).relative_to(self.repo_path)
-                print(f"🗑️  File deleted: {relative_path}")
+            print(f"🗑️  Processing {len(file_paths)} deleted files...")
+            
+            # Trigger incremental indexing to handle deletions and cleanup orphaned relations
+            # This uses the existing state-based deletion detection which will:
+            # 1. Detect the deleted files via SHA256 state comparison
+            # 2. Call _handle_deleted_files() which removes entities
+            # 3. Automatically clean up orphaned relations via _cleanup_orphaned_relations()
+            success = await self._index_files([])  # Empty list triggers incremental indexing
+            
+            if success:
+                print(f"✅ Cleanup completed for {len(file_paths)} deleted files")
+            else:
+                print(f"❌ Cleanup may have failed for {len(file_paths)} deleted files")
             
         except Exception as e:
             print(f"❌ Error handling deletions: {e}")

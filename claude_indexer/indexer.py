@@ -145,7 +145,7 @@ class CoreIndexer:
         """Default state file for backward compatibility with tests."""
         return self._get_state_file("default")
     
-    def index_project(self, collection_name: str, include_tests: bool = False) -> IndexingResult:
+    def index_project(self, collection_name: str, include_tests: bool = False, verbose: bool = False) -> IndexingResult:
         """Index an entire project with automatic incremental detection."""
         start_time = time.time()
         
@@ -162,7 +162,7 @@ class CoreIndexer:
                 
                 # Handle deleted files
                 if deleted_files:
-                    self._handle_deleted_files(collection_name, deleted_files)
+                    self._handle_deleted_files(collection_name, deleted_files, verbose)
                     result.warnings.append(f"Handled {len(deleted_files)} deleted files")
             else:
                 files_to_process = self._find_all_files(include_tests)
@@ -564,14 +564,17 @@ class CoreIndexer:
         except Exception as e:
             print(f"Failed to save state: {e}")
     
-    def _handle_deleted_files(self, collection_name: str, deleted_files: List[str]):
-        """Handle deleted files by removing their entities."""
+    def _handle_deleted_files(self, collection_name: str, deleted_files: List[str], verbose: bool = False):
+        """Handle deleted files by removing their entities and orphaned relations."""
         if not deleted_files:
             return
         
+        total_entities_deleted = 0
+        
         try:
             for deleted_file in deleted_files:
-                print(f"   Removing entities from deleted file: {deleted_file}")
+                if verbose:
+                    print(f"   Removing entities from deleted file: {deleted_file}")
                 
                 # Convert relative path to absolute path for matching
                 if not deleted_file.startswith('/'):
@@ -621,11 +624,24 @@ class CoreIndexer:
                     delete_result = self.vector_store.delete_points(collection_name, point_ids)
                     
                     if delete_result.success:
-                        print(f"   Removed {len(point_ids)} entities from {deleted_file}")
+                        entities_deleted = len(point_ids)
+                        total_entities_deleted += entities_deleted
+                        if verbose:
+                            print(f"   Removed {entities_deleted} entities from {deleted_file}")
                     else:
-                        print(f"   Warning: Failed to remove entities from {deleted_file}: {delete_result.errors}")
+                        if verbose:
+                            print(f"   Warning: Failed to remove entities from {deleted_file}: {delete_result.errors}")
                 else:
-                    print(f"   No entities found for {deleted_file}")
+                    if verbose:
+                        print(f"   No entities found for {deleted_file}")
+            
+            # NEW: Clean up orphaned relations after entity deletion
+            if total_entities_deleted > 0:
+                orphaned_deleted = self.vector_store._cleanup_orphaned_relations(collection_name, verbose)
+                if verbose and orphaned_deleted > 0:
+                    print(f"✅ Cleanup complete: {total_entities_deleted} entities, {orphaned_deleted} relations removed")
+                elif verbose:
+                    print(f"✅ Cleanup complete: {total_entities_deleted} entities removed")
                         
         except Exception as e:
             print(f"Error handling deleted files: {e}")

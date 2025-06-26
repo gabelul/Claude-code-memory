@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Generic backup utility to extract manual entries from any Qdrant collection.
-Creates a JSON backup of all manual entries before clearing the collection.
+Generic backup and restore utility for manual entries from any Qdrant collection.
+Creates JSON backups of manual entries and can restore them to any collection.
 """
 
 import json
@@ -173,37 +173,44 @@ def backup_manual_entries(collection_name: str, output_file: str = None):
                     'to': payload.get('to', 'unknown'),
                     'relationType': payload.get('relationType', 'unknown')
                 })
-            # Check if it's a manual entity type AND truly manual (strict check)
-            elif entity_type in manual_entity_types and is_truly_manual_entry(payload):
+            # PRIORITY: Check automation fields FIRST (most reliable)
+            elif is_truly_manual_entry(payload):
                 manual_entries.append({
                     'id': str(point.id),
                     'payload': payload
                 })
-            # Check if it's an automated code entity type
+            # Check if it's an automated code entity type  
             elif entity_type in code_types:
                 code_entries.append({
                     'id': str(point.id),
                     'entityType': entity_type,
                     'name': payload.get('name', 'unknown')
                 })
-            # Use strict detection for truly manual entries
-            elif is_truly_manual_entry(payload):
-                manual_entries.append({
-                    'id': str(point.id),
-                    'payload': payload
-                })
+            # All other entries are auto-indexed (have automation fields or unknown structure)
             else:
-                unknown_entries.append({
+                code_entries.append({
                     'id': str(point.id),
                     'entityType': entity_type,
-                    'name': payload.get('name', 'unknown'),
-                    'type': point_type
+                    'name': payload.get('name', 'unknown')
                 })
+        
+        # Filter relations to only those connected to manual entries
+        manual_entity_names = set(entry['payload'].get('name') for entry in manual_entries)
+        relevant_relations = []
+        
+        for relation in relation_entries:
+            from_entity = relation.get('from', '')
+            to_entity = relation.get('to', '')
+            
+            # Keep relation if either end connects to a manual entry
+            if from_entity in manual_entity_names or to_entity in manual_entity_names:
+                relevant_relations.append(relation)
         
         # Print statistics
         print(f"📝 Manual entries: {len(manual_entries)}")
         print(f"🤖 Code entries: {len(code_entries)}")
-        print(f"🔗 Relation entries: {len(relation_entries)}")
+        print(f"🔗 All relations: {len(relation_entries)}")
+        print(f"🎯 Relevant relations (connected to manual): {len(relevant_relations)}")
         print(f"❓ Unknown entries: {len(unknown_entries)}")
         
         if unknown_entries:
@@ -222,7 +229,7 @@ def backup_manual_entries(collection_name: str, output_file: str = None):
             "manual_entity_types": sorted(list(manual_entity_types)),
             "code_entity_types": sorted(list(code_types)),
             "manual_entries": manual_entries,
-            "relation_entries": relation_entries,  # Include relations for completeness
+            "relation_entries": relevant_relations,  # Only relations connected to manual entries
             "unknown_entries": unknown_entries  # Include for review
         }
         
@@ -271,23 +278,140 @@ def backup_manual_entries(collection_name: str, output_file: str = None):
         print(f"❌ Error during backup: {e}")
         raise
 
+def restore_manual_entries_mcp_format(backup_file: str, collection_name: str = None, batch_size: int = 10, dry_run: bool = False):
+    """Generate MCP commands to restore manual entries from backup file."""
+    
+    backup_path = Path(backup_file)
+    
+    if not backup_path.exists():
+        print(f"❌ Backup file not found: {backup_path}")
+        return False
+    
+    # Load the backup data
+    try:
+        with open(backup_path, 'r') as f:
+            backup_data = json.load(f)
+    except Exception as e:
+        print(f"❌ Error reading backup file: {e}")
+        return False
+    
+    # Extract collection info and manual entries
+    original_collection = backup_data.get("collection_name", "unknown")
+    target_collection = collection_name or original_collection
+    manual_entries = backup_data.get("manual_entries", [])
+    backup_timestamp = backup_data.get("backup_timestamp", "unknown")
+    
+    if not manual_entries:
+        print(f"📭 No manual entries found in backup file")
+        return True
+    
+    print(f"🔍 Generating MCP restore commands from: {backup_path}")
+    print(f"📅 Backup timestamp: {backup_timestamp}")
+    print(f"📦 Original collection: {original_collection}")
+    print(f"🎯 Target collection: {target_collection}")
+    print(f"📋 Found {len(manual_entries)} manual entries to restore")
+    
+    if dry_run:
+        print(f"\n🔍 DRY RUN MODE - No commands will be generated")
+        entity_types = {}
+        for entry in manual_entries:
+            et = entry.get("payload", {}).get("entityType", "unknown")
+            entity_types[et] = entity_types.get(et, 0) + 1
+        
+        for et, count in sorted(entity_types.items()):
+            print(f"  - {et}: {count} entries")
+        return True
+    
+    # Format entities for MCP restoration
+    entities_for_mcp = []
+    for entry in manual_entries:
+        payload = entry.get("payload", {})
+        mcp_entity = {
+            "name": payload.get("name", f"restored_entry_{entry.get('id', 'unknown')}"),
+            "entityType": payload.get("entityType", "unknown"),
+            "observations": payload.get("observations", [])
+        }
+        entities_for_mcp.append(mcp_entity)
+    
+    # Determine MCP server name based on collection
+    if "memory-project" in target_collection or target_collection == "memory-project":
+        mcp_server = "mcp__memory-project-memory__create_entities"
+    elif "general" in target_collection:
+        mcp_server = "mcp__general-memory__create_entities"
+    elif "github-utils" in target_collection:
+        mcp_server = "mcp__github-utils-memory__create_entities"
+    else:
+        mcp_server = f"mcp__{target_collection}-memory__create_entities"
+    
+    print(f"\n🔧 MCP Commands for restoration:")
+    print(f"Collection: {target_collection}")
+    print(f"MCP Server: {mcp_server}")
+    
+    # Split into batches
+    total_batches = (len(entities_for_mcp) + batch_size - 1) // batch_size
+    
+    for i in range(0, len(entities_for_mcp), batch_size):
+        batch = entities_for_mcp[i:i + batch_size]
+        batch_num = (i // batch_size) + 1
+        
+        print(f"\n📦 Batch {batch_num}/{total_batches} ({len(batch)} entities):")
+        print(json.dumps({"entities": batch}, indent=2))
+    
+    # Create restoration summary
+    summary_file = Path(f"restore_summary_{target_collection}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+    with open(summary_file, 'w') as f:
+        f.write(f"MCP Restoration Commands\\n")
+        f.write("=" * 50 + "\\n\\n")
+        f.write(f"Backup file: {backup_path}\\n")
+        f.write(f"Target collection: {target_collection}\\n")
+        f.write(f"MCP Server: {mcp_server}\\n")
+        f.write(f"Total entities: {len(manual_entries)}\\n")
+        f.write(f"Batch size: {batch_size}\\n")
+        f.write(f"Total batches: {total_batches}\\n")
+    
+    print(f"\\n✅ MCP restoration commands generated for {len(manual_entries)} entries")
+    print(f"📋 Summary saved to: {summary_file}")
+    return True
+
 def main():
     """Main CLI interface."""
     parser = argparse.ArgumentParser(
-        description="Generic backup utility for manual entries from any Qdrant collection",
+        description="Generic backup and restore utility for manual entries from any Qdrant collection",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python backup_manual_entries.py -c github-utils
-  python backup_manual_entries.py -c memory-project -o my_backup.json
+  # Backup operations
+  python backup_manual_entries.py backup -c github-utils
+  python backup_manual_entries.py backup -c memory-project -o my_backup.json
   python backup_manual_entries.py --list-types
+  
+  # Restore operations  
+  python backup_manual_entries.py restore -f manual_entries_backup_memory-project.json
+  python backup_manual_entries.py restore -f backup.json -c memory-project --dry-run
         """
     )
     
-    parser.add_argument("--collection", "-c", required=True,
-                       help="Collection name to backup")
-    parser.add_argument("--output", "-o", 
-                       help="Output file name (default: manual_entries_backup_{collection}.json)")
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # Backup command
+    backup_parser = subparsers.add_parser('backup', help='Backup manual entries from collection')
+    backup_parser.add_argument("--collection", "-c", required=True,
+                              help="Collection name to backup")
+    backup_parser.add_argument("--output", "-o", 
+                              help="Output file name (default: manual_entries_backup_{collection}.json)")
+    
+    # Restore command  
+    restore_parser = subparsers.add_parser('restore', help='Generate MCP commands to restore manual entries')
+    restore_parser.add_argument("--file", "-f", required=True,
+                               help="Path to backup file (JSON format)")
+    restore_parser.add_argument("--collection", "-c",
+                               help="Target collection name (default: use original collection from backup)")
+    restore_parser.add_argument("--batch-size", type=int, default=10,
+                               help="Number of entities per batch (default: 10)")
+    restore_parser.add_argument("--dry-run", action="store_true",
+                               help="Show what would be restored without generating commands")
+    
+    # Global options
     parser.add_argument("--list-types", action="store_true",
                        help="List manual and code entity types and exit")
     
@@ -307,11 +431,34 @@ Examples:
         
         return
     
+    if not args.command:
+        parser.print_help()
+        return
+    
     try:
-        backup_file, count = backup_manual_entries(args.collection, args.output)
-        print(f"\n🎉 Backup complete! {count} manual entries saved to {backup_file}")
+        if args.command == 'backup':
+            backup_file, count = backup_manual_entries(args.collection, args.output)
+            print(f"\n🎉 Backup complete! {count} manual entries saved to {backup_file}")
+            
+        elif args.command == 'restore':
+            success = restore_manual_entries_mcp_format(
+                backup_file=args.file,
+                collection_name=args.collection,
+                batch_size=args.batch_size,
+                dry_run=args.dry_run
+            )
+            
+            if success:
+                if args.dry_run:
+                    print(f"\n🔍 Dry run complete")
+                else:
+                    print(f"\n🎉 MCP restoration commands generated!")
+            else:
+                print(f"\n❌ Restore operation failed")
+                sys.exit(1)
+                
     except Exception as e:
-        print(f"\n❌ Backup failed: {e}")
+        print(f"\n❌ Operation failed: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

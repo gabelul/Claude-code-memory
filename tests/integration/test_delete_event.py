@@ -441,3 +441,114 @@ class TestDeleteEventEdgeCases:
         # Try to index again - should handle gracefully
         result2 = indexer.index_project("test_delete_race")
         assert result2.success  # Should not crash
+    
+    def test_orphan_relation_cleanup_integration(self, temp_repo, dummy_embedder, qdrant_store):
+        """Test that orphaned relations are cleaned up when entities are deleted."""
+        config = IndexerConfig(
+            collection_name="test_orphan_cleanup",
+            embedder_type="dummy",
+            storage_type="qdrant"
+        )
+        
+        indexer = CoreIndexer(
+            config=config,
+            embedder=dummy_embedder,
+            vector_store=qdrant_store,
+            project_path=temp_repo
+        )
+        
+        # Create files with relationships
+        main_file = temp_repo / "main_module.py"
+        main_file.write_text("""
+import utils
+from helpers import helper_function
+
+class MainClass:
+    def main_method(self):
+        return helper_function()
+""")
+        
+        utils_file = temp_repo / "utils.py"
+        utils_file.write_text("""
+def utility_function():
+    return "utility"
+""")
+        
+        helpers_file = temp_repo / "helpers.py"
+        helpers_file.write_text("""
+def helper_function():
+    return "helper"
+""")
+        
+        # Initial indexing - creates entities and relations
+        result1 = indexer.index_project("test_orphan_cleanup")
+        assert result1.success
+        assert result1.entities_created >= 6  # Files, classes, functions
+        assert result1.relations_created >= 3  # Imports, contains relationships
+        
+        # Count total vectors before deletion
+        initial_count = qdrant_store.count("test_orphan_cleanup")
+        assert initial_count > 0
+        
+        # Get initial relation count for verification
+        initial_relations = qdrant_store._get_all_relations("test_orphan_cleanup")
+        initial_relation_count = len(initial_relations)
+        assert initial_relation_count > 0
+        
+        # Delete the helpers file - this should orphan relations pointing to helper_function
+        helpers_file.unlink()
+        
+        # Re-index to trigger deletion cleanup (which includes orphan cleanup)
+        result2 = indexer.index_project("test_orphan_cleanup", verbose=True)
+        assert result2.success
+        
+        # Verify vector count decreased (entities + orphaned relations removed)
+        final_count = qdrant_store.count("test_orphan_cleanup")
+        assert final_count < initial_count, f"Expected count to decrease from {initial_count} to {final_count}"
+        
+        # Verify no orphaned relations remain
+        final_relations = qdrant_store._get_all_relations("test_orphan_cleanup")
+        final_entities = qdrant_store._get_all_entity_names("test_orphan_cleanup")
+        
+        # Check that all remaining relations reference existing entities
+        orphaned_relations = []
+        for relation in final_relations:
+            from_entity = relation.payload.get('from', '')
+            to_entity = relation.payload.get('to', '')
+            
+            if from_entity not in final_entities or to_entity not in final_entities:
+                orphaned_relations.append((from_entity, to_entity))
+        
+        assert len(orphaned_relations) == 0, f"Found orphaned relations: {orphaned_relations}"
+        
+        # Verify that some relations were actually deleted
+        assert len(final_relations) < initial_relation_count, (
+            f"Expected relation count to decrease from {initial_relation_count} to {len(final_relations)}"
+        )
+        
+        # Verify entities from deleted file are gone
+        search_embedding = dummy_embedder.embed_single("helper_function")
+        hits = qdrant_store.search("test_orphan_cleanup", search_embedding, top_k=20)
+        
+        helpers_entities = [
+            hit for hit in hits 
+            if hit.payload.get("file_path", "").endswith("helpers.py") and "utils/" not in hit.payload.get("file_path", "")
+        ]
+        
+        # Debug information if assertion fails
+        if len(helpers_entities) > 0:
+            print(f"Found {len(helpers_entities)} entities from helpers.py:")
+            for entity in helpers_entities:
+                print(f"  - Entity: {entity.payload}")
+        
+        assert len(helpers_entities) == 0, f"Should not find entities from deleted helpers.py file, but found: {[e.payload for e in helpers_entities]}"
+        
+        # Verify remaining entities from main_module.py and utils.py still exist
+        main_search = dummy_embedder.embed_single("MainClass")
+        main_hits = qdrant_store.search("test_orphan_cleanup", main_search, top_k=10)
+        
+        main_entities = [
+            hit for hit in main_hits 
+            if "main_module.py" in hit.payload.get("file_path", "")
+        ]
+        assert len(main_entities) > 0, "Should still find entities from main_module.py"

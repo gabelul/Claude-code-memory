@@ -520,3 +520,149 @@ class QdrantStore(ManagedVectorStore):
             vector=embedding,
             payload=payload
         )
+    
+    def _get_all_entity_names(self, collection_name: str) -> set:
+        """Get all entity names from the collection.
+        
+        Returns:
+            Set of entity names currently in the collection.
+        """
+        entity_names = set()
+        
+        try:
+            # Check if collection exists
+            if not self.collection_exists(collection_name):
+                return entity_names
+            
+            # Use scroll to get all entities (type != "relation")
+            from qdrant_client import models
+            
+            scroll_result = self.client.scroll(
+                collection_name=collection_name,
+                scroll_filter=models.Filter(
+                    must_not=[
+                        models.FieldCondition(
+                            key="type",
+                            match=models.MatchValue(value="relation")
+                        )
+                    ]
+                ),
+                limit=1000,
+                with_payload=True,
+                with_vectors=False
+            )
+            
+            for point in scroll_result[0]:
+                name = point.payload.get('name', '')
+                if name:
+                    entity_names.add(name)
+                    
+        except Exception as e:
+            # Log error but continue - empty set means no entities found
+            pass
+        
+        return entity_names
+    
+    def _get_all_relations(self, collection_name: str) -> List:
+        """Get all relations from the collection.
+        
+        Returns:
+            List of relation points from the collection.
+        """
+        relations = []
+        
+        try:
+            # Check if collection exists
+            if not self.collection_exists(collection_name):
+                return relations
+            
+            # Use scroll to get all relations (type = "relation")  
+            from qdrant_client import models
+            
+            scroll_result = self.client.scroll(
+                collection_name=collection_name,
+                scroll_filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="type",
+                            match=models.MatchValue(value="relation")
+                        )
+                    ]
+                ),
+                limit=1000,
+                with_payload=True,
+                with_vectors=False
+            )
+            
+            relations.extend(scroll_result[0])
+            
+        except Exception as e:
+            # Log error but continue - empty list means no relations found
+            pass
+        
+        return relations
+    
+    def _cleanup_orphaned_relations(self, collection_name: str, verbose: bool = False) -> int:
+        """Clean up relations that reference non-existent entities.
+        
+        Args:
+            collection_name: Name of the collection to clean
+            verbose: Whether to log detailed information about orphaned relations
+            
+        Returns:
+            Number of orphaned relations deleted
+        """
+        if verbose:
+            print("🔍 Searching for orphaned relations...")
+        
+        try:
+            # Step 1: Get all entity names currently in collection
+            existing_entities = self._get_all_entity_names(collection_name)
+            
+            if not existing_entities:
+                if verbose:
+                    print("   No entities found in collection")
+                return 0
+            
+            # Step 2: Find all relations
+            all_relations = self._get_all_relations(collection_name)
+            
+            if not all_relations:
+                if verbose:
+                    print("   No relations found in collection")
+                return 0
+            
+            # Step 3: Check each relation for orphaned references
+            orphaned_relations = []
+            for relation in all_relations:
+                from_entity = relation.payload.get('from', '')
+                to_entity = relation.payload.get('to', '')
+                
+                # Check if either end of the relation references a non-existent entity
+                if from_entity not in existing_entities or to_entity not in existing_entities:
+                    orphaned_relations.append(relation)
+                    if verbose:
+                        print(f"🔍 Found orphaned relation: {from_entity} -> {to_entity}")
+            
+            # Step 4: Batch delete orphaned relations
+            if orphaned_relations:
+                relation_ids = [r.id for r in orphaned_relations]
+                delete_result = self.delete_points(collection_name, relation_ids)
+                
+                if delete_result.success:
+                    if verbose:
+                        print(f"🗑️  Deleted {len(orphaned_relations)} orphaned relations")
+                    return len(orphaned_relations)
+                else:
+                    if verbose:
+                        print(f"❌ Failed to delete orphaned relations: {delete_result.errors}")
+                    return 0
+            else:
+                if verbose:
+                    print("   No orphaned relations found")
+                return 0
+                
+        except Exception as e:
+            if verbose:
+                print(f"❌ Error during orphaned relation cleanup: {e}")
+            return 0

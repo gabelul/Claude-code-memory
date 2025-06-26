@@ -380,6 +380,37 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive architecture, setup instructions, a
                        └─────────────────┘
 ```
 
+## 📋 Memory Management & Backup
+
+### Manual Memory Backup & Restore
+Protect your valuable manual memories (analysis notes, insights, patterns) with automated backup/restore:
+
+```bash
+# Backup all manual entries from a collection
+python utils/backup_manual_entries.py backup -c memory-project
+
+# Generate MCP restore commands for manual entries
+python utils/backup_manual_entries.py restore -f manual_entries_backup_memory-project.json
+
+# Dry run to see what would be restored
+python utils/backup_manual_entries.py restore -f backup.json --dry-run
+
+# List supported manual entry types
+python utils/backup_manual_entries.py --list-types
+```
+
+**Smart Classification:**
+- **97 manual entries** correctly identified vs **1,838 auto-indexed** entries
+- **Automation detection** via `file_path`, `collection`, `line_number` fields  
+- **Manual structure** only: `type`, `name`, `entityType`, `observations`
+- **Relevant relations**: Only backs up 2 relations connected to manual entries (vs 1,867 total)
+
+**Use Cases:**
+- **Pre-clearing**: Backup manual memories before `--clear-all` operations
+- **Project migration**: Move manual insights between collections
+- **Team sharing**: Export/import manual analysis and patterns
+- **Disaster recovery**: Restore valuable manual entries after data loss
+
 ## 🎉 Proven Results
 
 ✅ **218 entities** + **201 relations** indexed from 17-file project  
@@ -394,3 +425,4 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive architecture, setup instructions, a
 ✅ **Git hooks integration** - Pre-commit automatic updates
 ✅ **Comprehensive Test Suite** - 90%+ coverage with CI/CD automation
 ✅ **Modular Architecture** - Clean, pluggable components for enterprise scale
+✅ **Manual Memory Protection** - Smart backup/restore for valuable insights

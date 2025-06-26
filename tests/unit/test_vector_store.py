@@ -548,6 +548,159 @@ class TestQdrantStore:
                 mock_client.delete.assert_not_called()
                 mock_client.delete_collection.assert_not_called()
 
+    @patch('claude_indexer.storage.qdrant.QdrantClient')
+    def test_cleanup_orphaned_relations_success(self, mock_client_class):
+        """Test successful cleanup of orphaned relations."""
+        with patch('claude_indexer.storage.qdrant.QDRANT_AVAILABLE', True):
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.get_collections.return_value = MagicMock()
+            
+            store = QdrantStore()
+            
+            # Mock existing entities
+            mock_entity_points = [
+                MagicMock(payload={"name": "entity1"}),
+                MagicMock(payload={"name": "entity2"}),
+                MagicMock(payload={"name": "entity3"})
+            ]
+            
+            # Mock relations - some orphaned, some valid
+            mock_relation_points = [
+                MagicMock(id="rel1", payload={"from": "entity1", "to": "entity2"}),  # Valid
+                MagicMock(id="rel2", payload={"from": "entity1", "to": "deleted_entity"}),  # Orphaned
+                MagicMock(id="rel3", payload={"from": "deleted_entity2", "to": "entity3"}),  # Orphaned
+                MagicMock(id="rel4", payload={"from": "entity2", "to": "entity3"})  # Valid
+            ]
+            
+            # Configure scroll calls - first for entities, second for relations
+            mock_client.scroll.side_effect = [
+                (mock_entity_points, None),  # Entities
+                (mock_relation_points, None)  # Relations
+            ]
+            
+            # Mock collection exists and delete_points method
+            with patch.object(store, 'collection_exists', return_value=True), \
+                 patch.object(store, 'delete_points') as mock_delete_points:
+                
+                mock_delete_points.return_value = StorageResult(
+                    success=True,
+                    operation="delete",
+                    items_processed=2
+                )
+                
+                # Execute cleanup
+                result = store._cleanup_orphaned_relations("test_collection", verbose=True)
+                
+                # Verify results
+                assert result == 2  # 2 orphaned relations deleted
+                
+                # Verify delete was called with orphaned relation IDs
+                mock_delete_points.assert_called_once_with("test_collection", ["rel2", "rel3"])
+                
+                # Verify scroll was called correctly
+                assert mock_client.scroll.call_count == 2
+
+    @patch('claude_indexer.storage.qdrant.QdrantClient')
+    def test_cleanup_orphaned_relations_no_orphans(self, mock_client_class):
+        """Test cleanup when no orphaned relations exist."""
+        with patch('claude_indexer.storage.qdrant.QDRANT_AVAILABLE', True):
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.get_collections.return_value = MagicMock()
+            
+            store = QdrantStore()
+            
+            # Mock existing entities
+            mock_entity_points = [
+                MagicMock(payload={"name": "entity1"}),
+                MagicMock(payload={"name": "entity2"})
+            ]
+            
+            # Mock valid relations only
+            mock_relation_points = [
+                MagicMock(id="rel1", payload={"from": "entity1", "to": "entity2"}),
+                MagicMock(id="rel2", payload={"from": "entity2", "to": "entity1"})
+            ]
+            
+            mock_client.scroll.side_effect = [
+                (mock_entity_points, None),  # Entities
+                (mock_relation_points, None)  # Relations
+            ]
+            
+            # Mock collection exists
+            with patch.object(store, 'collection_exists', return_value=True):
+                # Execute cleanup
+                result = store._cleanup_orphaned_relations("test_collection", verbose=True)
+                
+                # Verify no deletions occurred
+                assert result == 0
+                mock_client.delete.assert_not_called()
+
+    @patch('claude_indexer.storage.qdrant.QdrantClient')
+    def test_cleanup_orphaned_relations_no_entities(self, mock_client_class):
+        """Test cleanup when no entities exist."""
+        with patch('claude_indexer.storage.qdrant.QDRANT_AVAILABLE', True):
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.get_collections.return_value = MagicMock()
+            
+            store = QdrantStore()
+            
+            # Mock no entities
+            mock_client.scroll.return_value = ([], None)
+            
+            # Mock collection exists
+            with patch.object(store, 'collection_exists', return_value=True):
+                # Execute cleanup
+                result = store._cleanup_orphaned_relations("test_collection", verbose=True)
+                
+                # Verify no deletions occurred
+                assert result == 0
+                # Only one scroll call should happen (for entities)
+                assert mock_client.scroll.call_count == 1
+
+    @patch('claude_indexer.storage.qdrant.QdrantClient')
+    def test_cleanup_orphaned_relations_collection_not_exists(self, mock_client_class):
+        """Test cleanup when collection doesn't exist."""
+        with patch('claude_indexer.storage.qdrant.QDRANT_AVAILABLE', True):
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.get_collections.return_value = MagicMock()
+            
+            store = QdrantStore()
+            
+            # Mock collection doesn't exist
+            with patch.object(store, 'collection_exists', return_value=False):
+                # Execute cleanup
+                result = store._cleanup_orphaned_relations("nonexistent_collection", verbose=True)
+                
+                # Verify no operations occurred
+                assert result == 0
+                mock_client.scroll.assert_not_called()
+                mock_client.delete.assert_not_called()
+
+    @patch('claude_indexer.storage.qdrant.QdrantClient')
+    def test_cleanup_orphaned_relations_error_handling(self, mock_client_class):
+        """Test error handling during orphan cleanup."""
+        with patch('claude_indexer.storage.qdrant.QDRANT_AVAILABLE', True):
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.get_collections.return_value = MagicMock()
+            
+            store = QdrantStore()
+            
+            # Mock scroll to raise exception
+            mock_client.scroll.side_effect = Exception("Connection error")
+            
+            # Mock collection exists
+            with patch.object(store, 'collection_exists', return_value=True):
+                # Execute cleanup
+                result = store._cleanup_orphaned_relations("test_collection", verbose=True)
+                
+                # Verify error handled gracefully
+                assert result == 0
+
 
 class TestVectorPoint:
     """Test VectorPoint data structure."""
