@@ -150,7 +150,7 @@ class TestIndexingState:
             test_files.append(file_path)
         
         # Save state
-        indexer._save_state(test_files, "default")
+        indexer._update_state(test_files, "default", full_rebuild=True)
         
         # Verify state file exists
         assert indexer.state_file.exists()
@@ -183,7 +183,7 @@ class TestIndexingState:
         current_state = indexer._get_current_state([test_file])
         
         # Save state
-        indexer._save_state([test_file], "default")
+        indexer._update_state([test_file], "default", full_rebuild=True)
         
         # Load state
         loaded_state = indexer._load_state("default")
@@ -270,7 +270,7 @@ class TestIndexingState:
         test_file.write_text("test")
         
         # Should not raise exception
-        indexer._save_state([test_file], "default")
+        indexer._update_state([test_file], "default", full_rebuild=True)
         
         # Should return empty state
         loaded_state = indexer._load_state("default")
@@ -292,7 +292,7 @@ class TestIncrementalIndexing:
         test_file.write_text("original content")
         
         # Save initial state
-        indexer._save_state([test_file], "test")
+        indexer._update_state([test_file], "test", full_rebuild=True)
         
         # Check if file needs processing (should not, as it's unchanged)
         files_to_process = indexer._get_files_needing_processing(include_tests=False, collection_name="test")
@@ -311,7 +311,7 @@ class TestIncrementalIndexing:
         test_file.write_text("original content")
         
         # Save initial state
-        indexer._save_state([test_file], "test")
+        indexer._update_state([test_file], "test", full_rebuild=True)
         
         # Modify file
         import time
@@ -334,7 +334,7 @@ class TestIncrementalIndexing:
         # Create and save state for first file
         file1 = tmp_path / "file1.py"
         file1.write_text("content 1")
-        indexer._save_state([file1], "test")
+        indexer._update_state([file1], "test", full_rebuild=True)
         
         # Create new file
         file2 = tmp_path / "file2.py"
@@ -362,7 +362,7 @@ class TestIncrementalIndexing:
             files.append(file_path)
         
         # Save state
-        indexer._save_state(files, "test")
+        indexer._update_state(files, "test", full_rebuild=True)
         
         # Get all files (full mode - not incremental)
         all_files = indexer._find_all_files(include_tests=False)

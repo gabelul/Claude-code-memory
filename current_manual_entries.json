@@ -1,0 +1,450 @@
+{
+  "collection_name": "memory-project",
+  "backup_timestamp": "2025-06-27T00:10:34.401055",
+  "total_points": 3096,
+  "manual_entries_count": 22,
+  "code_entries_count": 1889,
+  "relation_entries_count": 1185,
+  "unknown_entries_count": 0,
+  "manual_entity_types": [
+    "analysis-report",
+    "annotation",
+    "architecture_pattern",
+    "best_practice",
+    "bug",
+    "bug-analysis",
+    "bug-reproduction",
+    "changelog",
+    "checklist",
+    "code-analysis",
+    "code-pattern",
+    "code_analysis",
+    "comment",
+    "completed_optimization",
+    "configuration_pattern",
+    "critical-bug",
+    "debugging-analysis",
+    "debugging-report",
+    "debugging_solution",
+    "decision",
+    "decision_record",
+    "design_document",
+    "design_patterns",
+    "documentation",
+    "example",
+    "faq",
+    "feature-verification",
+    "guide",
+    "howto",
+    "implementation_note",
+    "infrastructure-analysis",
+    "insight",
+    "learning",
+    "manual_test",
+    "meeting_notes",
+    "milestone",
+    "optimization_pattern",
+    "performance-metric",
+    "performance_improvement",
+    "project_architecture",
+    "project_milestone",
+    "refactoring_project",
+    "reference",
+    "release_notes",
+    "requirement",
+    "research_summary",
+    "section",
+    "solution",
+    "solution_pattern",
+    "specification",
+    "summary",
+    "system_validation",
+    "task-completion",
+    "technical-analysis",
+    "technical_pattern",
+    "template",
+    "test",
+    "tips",
+    "tricks",
+    "troubleshooting",
+    "tutorial",
+    "user_note",
+    "verification_plan",
+    "verification_report",
+    "verification_result",
+    "workflow_pattern"
+  ],
+  "code_entity_types": [
+    "class",
+    "directory",
+    "file",
+    "function",
+    "import",
+    "project",
+    "variable"
+  ],
+  "manual_entries": [
+    {
+      "id": "2119624",
+      "payload": {
+        "type": "entity",
+        "name": "GitHub-Utils Indexing Discrepancy - Root Cause Analysis June 26, 2025",
+        "entityType": "critical_bug_analysis",
+        "observations": [
+          "ISSUE: github-utils collection shows 0 indexed items despite having 1,167 total points (481 manual + 686 automated)",
+          "ROOT CAUSE: Qdrant indexing_threshold=20000 is too high for collection with only 1,171 points",
+          "TECHNICAL EVIDENCE: Qdrant requires indexing_threshold points before building HNSW index for vector search",
+          "CURRENT STATE: Collection status='green', points=1171, indexed_vectors_count=0, threshold=20000",
+          "COUNTING LOGIC CONFIRMED: qdrant_stats.py correctly identifies 686 automated vs 481 manual entries",
+          "AUTOMATED DETECTION: Uses file_path field presence or relation structure (from/to/relationType) to identify code-indexed entries",
+          "NO STATE FILE ISSUE: No .indexer_state_github-utils.json found, suggesting indexing was done via different method",
+          "IMPACT: Vector search completely non-functional - semantic search returns no meaningful results",
+          "PERFORMANCE: Collection healthy otherwise - 8 segments, 18.6ms response time for basic operations",
+          "SOLUTION REQUIRED: Lower indexing_threshold to 1000 (as done for other collections) and force optimization"
+        ]
+      }
+    },
+    {
+      "id": "23802968",
+      "payload": {
+        "type": "entity",
+        "name": "Backup Script Classification Logic Fixed - June 26, 2025",
+        "entityType": "bug_fix",
+        "observations": [
+          "ISSUE IDENTIFIED: Script incorrectly classified 1,226 auto-indexed entries as 'unknown' instead of 'auto-indexed'",
+          "ROOT CAUSE: Entity type matching took priority over automation field detection in classification logic",
+          "SPECIFIC PROBLEM: 'documentation' entityType in manual_entity_types set, but auto-indexed docs had automation fields like file_path, collection, line_number",
+          "LOGIC FIX: Moved is_truly_manual_entry() check to FIRST priority before entity type checks",
+          "VERIFICATION: All 1,226 'unknown' entries actually had automation fields confirming they were auto-indexed",
+          "RESULT: Now correctly classifies entries as manual (90) vs auto-indexed (2,840) vs relations (1,867)",
+          "AUTOMATION DETECTION: file_path, collection, line_number fields definitively indicate auto-indexing",
+          "MANUAL STRUCTURE: Truly manual entries have only: type, name, entityType, observations fields",
+          "TESTING CONFIRMED: Fixed script eliminates false 'unknown' category entirely",
+          "CLASSIFICATION ACCURACY: 100% accurate detection using automation field presence over entity type matching"
+        ]
+      }
+    },
+    {
+      "id": "88534457",
+      "payload": {
+        "type": "entity",
+        "name": "Token Management Fix Success",
+        "entityType": "success_record",
+        "observations": [
+          "RESOLVED: 25k token limit blocking issue by building and deploying streaming response",
+          "Streaming response architecture now active with 20,400 token limit (24k with safety margin)",
+          "Response metadata shows successful token management: 3,668/20,400 tokens used",
+          "All sections delivered without truncation: summary, structure, apiSurface, dependencies, relations",
+          "Production deployment successful - MCP server now enforces intelligent token limits"
+        ]
+      }
+    },
+    {
+      "id": "186595175",
+      "payload": {
+        "type": "entity",
+        "name": "State File Organization Solution",
+        "entityType": "solution",
+        "observations": [
+          "IMPLEMENTED: State file organization using centralized ~/.claude-indexer/state/ directory",
+          "Uses project path hash (ef8b4e06) + collection name for unique filenames",
+          "Automatic migration from legacy locations to new centralized directory",
+          "Migration triggered on first access via _get_state_file() method",
+          "Successfully migrated 6 state files from project directory",
+          "Zero breaking changes - maintains backward compatibility",
+          "Uses existing Path.home() pattern consistent with service configuration",
+          "State files now organized as: ~/.claude-indexer/state/{hash}_{collection}.json"
+        ]
+      }
+    },
+    {
+      "id": "221958305",
+      "payload": {
+        "type": "entity",
+        "name": "Vector Database Duplication Analysis - Claude Indexer",
+        "entityType": "debugging_analysis",
+        "observations": [
+          "Found extensive memory patterns for vector database management and entity deduplication strategies",
+          "Claude Indexer uses SHA256-based incremental indexing with state file tracking in .indexer_state_{collection}.json format",
+          "QdrantStore implements deterministic ID generation using file_path::entity_name for collision prevention",
+          "Clear collection strategy: delete entire collection rather than individual points for cleanup efficiency",
+          "Upsert strategy: Qdrant native upsert handles existing entities by overwriting with same deterministic ID",
+          "State management: File hash tracking prevents reprocessing unchanged files, provides 15x performance improvement"
+        ]
+      }
+    },
+    {
+      "id": "239193997",
+      "payload": {
+        "type": "entity",
+        "name": "File watcher debouncing pattern",
+        "entityType": "debugging_pattern",
+        "observations": [
+          "Pattern for handling rapid file changes during development",
+          "Problem: Multiple save operations trigger redundant indexing",
+          "Solution: Timer-based debouncing with 2-second default delay",
+          "Implementation: Cancel previous timer on new event, only process after quiet period",
+          "Configuration: Debounce time adjustable via service settings",
+          "Best practice: Set longer debounce (3-5 seconds) for large projects with frequent saves"
+        ]
+      }
+    },
+    {
+      "id": "267936803",
+      "payload": {
+        "type": "entity",
+        "name": "110 Manual Entries Restoration Investigation",
+        "entityType": "debugging_analysis",
+        "observations": [
+          "User reported not seeing 110 restored manual entries in memory-project collection",
+          "Investigation findings: Restore summary shows 110 entities were to be restored from manual_entries_backup_memory-project.json",
+          "However, the actual backup file manual_entries_backup_memory-project.json contains only 31 entries",
+          "A different file manual_entries_backup_memory-project1.json contains the 110 entries mentioned",
+          "The restore_complete_summary.txt confirms only 31 entries were successfully restored",
+          "Root cause: The restore command referenced the wrong backup file (31 entries) while reporting the count from the other file (110 entries)",
+          "Current state: memory-project collection has 3,092 total points with only 12 manual entries detected by qdrant_stats",
+          "Recommendation: Re-run restoration using the correct file manual_entries_backup_memory-project1.json to restore all 110 entries"
+        ]
+      }
+    },
+    {
+      "id": "314643496",
+      "payload": {
+        "type": "entity",
+        "name": "Token overflow fix in read_graph",
+        "entityType": "bug_fix",
+        "observations": [
+          "Fixed critical token overflow issue in read_graph that was returning 393k tokens and breaking Claude's context window",
+          "Root cause: The graph reading function was fetching entire collection without any filtering or summarization",
+          "Solution: Implemented smart filtering with entity type limits and intelligent summarization",
+          "Result: Reduced token count from 393k to under 25k while preserving essential information",
+          "Added configurable limits per entity type to prevent future overflows"
+        ]
+      }
+    },
+    {
+      "id": "821376374",
+      "payload": {
+        "type": "entity",
+        "name": "Manual memory backup system design",
+        "entityType": "implementation_success",
+        "observations": [
+          "Successfully implemented manual memory backup and restore functionality",
+          "Key innovation: Smart classification logic distinguishes manual entries from auto-indexed ones",
+          "Detection criteria: Entries without file_path, collection, or line_number fields are manual",
+          "Accuracy: 97 manual entries correctly identified out of 3564 total points",
+          "Features: Backup to JSON, restore via MCP batches, support for all manual entry types",
+          "Use cases: Pre-clearing backup, project migration, team collaboration, disaster recovery"
+        ]
+      }
+    },
+    {
+      "id": "953095998",
+      "payload": {
+        "type": "entity",
+        "name": "Custom test enhancement verification",
+        "entityType": "verification_result",
+        "observations": [
+          "VERIFIED: All 4 custom incremental behavior tests have enhanced validation",
+          "IMPLEMENTED: Helper functions in test_indexer_flow.py lines 38-130",
+          "validate_state_file_structure() - validates JSON state file format and expected files",
+          "extract_deletion_info_from_cli_output() - parses deletion information from verbose CLI output",
+          "extract_processed_files_from_cli_output() - extracts processed filenames from CLI output",
+          "USAGE CONFIRMED: All 4 tests use validation functions at lines 571, 575, 691, 816, 821, 954",
+          "TEST STATUS: All 4 custom tests collect and run successfully",
+          "FUNCTIONALITY: Helper functions work correctly with sample data",
+          "COVERAGE: JSON state validation + CLI filename parsing implemented as requested"
+        ]
+      }
+    },
+    {
+      "id": "1158347185",
+      "payload": {
+        "type": "entity",
+        "name": "Incremental indexing auto-detection",
+        "entityType": "enhancement",
+        "observations": [
+          "Enhancement: Automatic detection of incremental vs full indexing mode",
+          "Previous behavior: Users had to manually specify --incremental flag",
+          "New behavior: System checks for state file existence and automatically chooses mode",
+          "Implementation: If .indexer_state_{collection}.json exists, use incremental mode",
+          "User impact: 15x performance improvement happens automatically without user intervention",
+          "Code changes: Removed --incremental flag, added auto-detection logic in main indexing flow"
+        ]
+      }
+    },
+    {
+      "id": "1558367279",
+      "payload": {
+        "type": "entity",
+        "name": "Service configuration hierarchy",
+        "entityType": "code-pattern",
+        "observations": [
+          "Established clear configuration precedence for the indexing service",
+          "Order: CLI args (highest) -> service config JSON -> project settings.txt -> defaults (lowest)",
+          "Benefits: Flexible configuration while maintaining predictable behavior",
+          "Implementation: Each component checks for config in order and stops at first found",
+          "Use case: Global defaults in service config, project overrides in settings.txt"
+        ]
+      }
+    },
+    {
+      "id": "1754288939",
+      "payload": {
+        "type": "entity",
+        "name": "Orphaned relations cleanup implementation",
+        "entityType": "technical_analysis",
+        "observations": [
+          "Analysis of orphaned relations problem after entity deletion",
+          "Issue: When entities are deleted, their relationships remain in the database pointing to non-existent entities",
+          "Impact: Database grows with invalid data, searches return broken relationships",
+          "Solution approach: Implement Layer 2 cleanup using Qdrant scroll API to find and remove orphaned relations",
+          "Implementation plan: Add _cleanup_orphaned_relations() method triggered after all deletion operations"
+        ]
+      }
+    },
+    {
+      "id": "2308075890",
+      "payload": {
+        "type": "entity",
+        "name": "CLI filename parsing validation pattern",
+        "entityType": "implementation_pattern",
+        "observations": [
+          "Location: tests/integration/test_indexer_flow.py lines 103-130",
+          "Function: extract_processed_files_from_cli_output(output)",
+          "Purpose: Extract processed filenames from verbose CLI output",
+          "Patterns: Looks for 'processing', 'indexing', 'file:' keywords",
+          "Extraction: Finds .py files in CLI output text",
+          "Usage: Called in custom tests to verify correct filenames processed",
+          "Validation: Confirms CLI reports match expected file operations"
+        ]
+      }
+    },
+    {
+      "id": "2402027331",
+      "payload": {
+        "type": "entity",
+        "name": "pytest fixture authentication fix",
+        "entityType": "bug-analysis",
+        "observations": [
+          "Fixed authentication issues in pytest fixtures for Qdrant integration tests",
+          "Problem: Tests were failing due to missing API key configuration in test environment",
+          "Solution: Modified conftest.py to automatically load API keys from settings.txt",
+          "Implementation: Added fallback logic to use environment variables or settings file",
+          "Result: All 158 tests now pass with proper Qdrant authentication"
+        ]
+      }
+    },
+    {
+      "id": "2750249079",
+      "payload": {
+        "type": "entity",
+        "name": "JSON state file validation pattern",
+        "entityType": "implementation_pattern",
+        "observations": [
+          "Location: tests/integration/test_indexer_flow.py lines 38-67",
+          "Function: validate_state_file_structure(state_file_path, expected_files)",
+          "Validates: JSON structure, expected files present, metadata structure",
+          "Checks: SHA256 hash format (64 chars), size (int), mtime (number)",
+          "Usage: Called in all 4 custom tests with different file expectations",
+          "Purpose: Ensure state files accurately reflect processed files as requested"
+        ]
+      }
+    },
+    {
+      "id": "3054448049",
+      "payload": {
+        "type": "entity",
+        "name": "AsyncRestorer race condition analysis",
+        "entityType": "critical_bug_analysis",
+        "observations": [
+          "CRITICAL: Race condition discovered in AsyncRestorer when handling multiple batch executions concurrently",
+          "Root cause: Shared state between restoration batches was not properly isolated, causing data corruption when parallel operations occurred",
+          "Specific issue: The batch_results list was being modified by multiple async operations without proper synchronization",
+          "Symptoms: Intermittent restoration failures, duplicate entries, and corrupted entity relationships when restoring large backups",
+          "Fix applied: Implemented proper async locks around shared state modifications and ensured batch operations are properly sequenced",
+          "Verification: Stress tested with 100+ concurrent restoration operations without failures"
+        ]
+      }
+    },
+    {
+      "id": "3358384790",
+      "payload": {
+        "type": "entity",
+        "name": "Multi-pattern detection bug in regex matching",
+        "entityType": "bug-analysis",
+        "observations": [
+          "Critical bug discovered in the pattern matching logic where multiple patterns were not being properly detected in the search functionality",
+          "Root cause: The regex pattern was not correctly escaping special characters when multiple search terms were combined with OR logic",
+          "Symptoms: Searches with multiple terms connected by OR operators would return incomplete results, missing valid matches",
+          "Impact: Users were getting incomplete search results when using complex queries, affecting the reliability of the memory search feature",
+          "Solution implemented: Properly escape special regex characters in each search term before combining them with OR operators",
+          "Testing verified: Added comprehensive tests for multi-pattern searches including edge cases with special characters"
+        ]
+      }
+    },
+    {
+      "id": "3513599745",
+      "payload": {
+        "type": "entity",
+        "name": "MCP command generation architecture",
+        "entityType": "architecture_decision",
+        "observations": [
+          "Decision: Remove MCP command generation mode entirely in favor of direct Qdrant operations",
+          "Rationale: The --generate-commands flag added complexity without providing significant value",
+          "Benefits: Simplified codebase by removing 445+ lines, improved maintainability, faster execution",
+          "Migration path: All operations now use direct Qdrant client, no manual command copying needed",
+          "Result: Single backend architecture is cleaner and more reliable"
+        ]
+      }
+    },
+    {
+      "id": "3585831208",
+      "payload": {
+        "type": "entity",
+        "name": "Test enhancement plan for state validation",
+        "entityType": "implementation_plan",
+        "observations": [
+          "Current tests already validate state file JSON structure and file counts",
+          "Need to add: CLI verbose output parsing for specific filename verification",
+          "Enhancement 1: Parse verbose CLI output to extract processed filenames",
+          "Enhancement 2: Verify deleted filenames appear in verbose deletion logs",
+          "Enhancement 3: Cross-validate state file contents with CLI reported filenames",
+          "Target: All 4 custom tests get enhanced filename parsing validation"
+        ]
+      }
+    },
+    {
+      "id": "4098956222",
+      "payload": {
+        "type": "entity",
+        "name": "Git hooks error tolerance",
+        "entityType": "system_validation",
+        "observations": [
+          "Validated that git hooks never block commits even on indexing failure",
+          "Design principle: Developer workflow should never be interrupted by memory system",
+          "Implementation: Pre-commit hook catches all exceptions and exits with code 0",
+          "Testing: Simulated various failure scenarios (missing API keys, network errors, file permissions)",
+          "Result: Commits always succeed, indexing failures are logged but don't block"
+        ]
+      }
+    },
+    {
+      "id": "4184635614",
+      "payload": {
+        "type": "entity",
+        "name": "Memory search optimization pattern",
+        "entityType": "solution_pattern",
+        "observations": [
+          "Pattern: When implementing semantic search over large collections, always implement pagination and result limiting at the database level, not in application code",
+          "Rationale: Fetching all results and then filtering in Python causes memory issues and performance degradation with large datasets",
+          "Implementation: Use Qdrant's built-in limit and offset parameters in search queries",
+          "Performance impact: Reduced memory usage from 2GB to 50MB for large collection searches",
+          "Best practice: Set reasonable default limits (10-20 results) and allow users to request more via pagination"
+        ]
+      }
+    }
+  ],
+  "relation_entries": [],
+  "unknown_entries": []
+}

@@ -125,25 +125,38 @@ class QdrantStatsCollector:
             return {"total_files": 0, "entity_breakdown": {}, "manual_entity_breakdown": {}, "file_extensions": {}, "auto_vs_manual": {}, "total_analyzed": 0}
     
     def _count_manual_entries(self, collection_name: str) -> int:
-        """Count manually added entries (non-automated entries)."""
+        """Count manually added entries using comprehensive detection logic."""
         try:
-            # Look for entries without automated indexing metadata
-            results = self.storage.search(
+            # Use scroll to get ALL points like backup script
+            all_points = []
+            
+            scroll_result = self.storage.client.scroll(
                 collection_name=collection_name,
-                query_vector=[0.0] * 1536,  # Dummy vector
-                top_k=1000
+                limit=1000,
+                with_payload=True,
+                with_vectors=False
             )
             
+            points, next_page_offset = scroll_result
+            all_points.extend(points)
+            
+            # Continue scrolling if there are more points
+            while next_page_offset:
+                scroll_result = self.storage.client.scroll(
+                    collection_name=collection_name,
+                    limit=1000,
+                    offset=next_page_offset,
+                    with_payload=True,
+                    with_vectors=False
+                )
+                points, next_page_offset = scroll_result
+                all_points.extend(points)
+            
             manual_count = 0
-            # Handle list-based results (legacy search format)
-            for result in results:
-                if hasattr(result, 'payload') and result.payload:
-                    # Check if entry has automated indexing markers
-                    has_file_path = 'file_path' in result.payload
-                    has_entity_type = 'entity_type' in result.payload
-                    has_automated_fields = has_file_path or has_entity_type
-                    
-                    if not has_automated_fields:
+            for point in all_points:
+                if hasattr(point, 'payload') and point.payload:
+                    # Use same logic as backup script
+                    if self._is_truly_manual_entry(point.payload):
                         manual_count += 1
             
             return manual_count
@@ -151,6 +164,37 @@ class QdrantStatsCollector:
         except Exception as e:
             print(f"Error counting manual entries for {collection_name}: {e}")
             return 0
+    
+    def _is_truly_manual_entry(self, payload: Dict[str, Any]) -> bool:
+        """Same logic as backup script for consistent results."""
+        # Pattern 1: Auto entities have file_path field
+        if 'file_path' in payload:
+            return False
+        
+        # Pattern 2: Auto relations have from/to/relationType structure  
+        if all(field in payload for field in ['from', 'to', 'relationType']):
+            return False
+        
+        # Pattern 3: Auto entities have extended metadata fields
+        automation_fields = {
+            'line_number', 'ast_data', 'signature', 'docstring', 'full_name', 
+            'ast_type', 'start_line', 'end_line', 'source_hash', 'parsed_at'
+            # Removed 'collection' - manual docs can have collection field
+        }
+        if any(field in payload for field in automation_fields):
+            return False
+        
+        # True manual entries have minimal fields: name, entityType, observations
+        required_manual_fields = {'name', 'entityType'}
+        if not all(field in payload for field in required_manual_fields):
+            return False
+        
+        # Additional check: Manual entries typically have meaningful observations
+        observations = payload.get('observations', [])
+        if not observations or not isinstance(observations, list) or len(observations) == 0:
+            return False
+        
+        return True
     
     def _get_health_status(self, stats: Dict[str, Any]) -> str:
         """Determine comprehensive health status based on collection statistics."""
@@ -439,6 +483,52 @@ class QdrantStatsCollector:
         
         return recommendations
     
+    def _get_tracked_files_count(self, collection_name: str) -> int:
+        """Get count of files actually tracked in indexer state files for this collection."""
+        try:
+            # Get project path from config for project-specific state files
+            config_path = Path.home() / '.claude-indexer' / 'config.json'
+            project_path = None
+            if config_path.exists():
+                with open(config_path) as f:
+                    config = json.load(f)
+                projects = config.get('projects', [])
+                for project in projects:
+                    if project.get('collection') == collection_name:
+                        project_path = Path(project.get('path', ''))
+                        break
+            
+            # Check global state directory first
+            global_state_dir = Path.home() / '.claude-indexer' / 'state'
+            if global_state_dir.exists():
+                # Look for state files with collection name
+                for state_file in global_state_dir.glob(f'*_{collection_name}.json'):
+                    try:
+                        with open(state_file) as f:
+                            state_data = json.load(f)
+                        # Count file entries (exclude metadata keys)
+                        file_count = len([k for k in state_data.keys() if not k.startswith('_')])
+                        if file_count > 0:
+                            return file_count
+                    except Exception:
+                        continue
+            
+            # Check project-specific state file
+            if project_path and project_path.exists():
+                project_state_file = project_path / f'.indexer_state_{collection_name}.json'
+                if project_state_file.exists():
+                    try:
+                        with open(project_state_file) as f:
+                            state_data = json.load(f)
+                        # Count file entries (exclude metadata keys)
+                        return len([k for k in state_data.keys() if not k.startswith('_')])
+                    except Exception:
+                        pass
+            
+        except Exception:
+            pass
+        return 0
+    
     def get_database_overview(self) -> Dict[str, Any]:
         """Get overall database statistics."""
         collections = self.get_all_collections()
@@ -631,6 +721,11 @@ class QdrantStatsCollector:
                     print("  " + "-" * 20)
                     print(f"    Total Files:     {file_analysis['total_files']:>6}")
                     
+                    # Add tracked files count
+                    tracked_count = self._get_tracked_files_count(collection_name)
+                    if tracked_count > 0:
+                        print(f"    Tracked Files:   {tracked_count:>6}")
+                    
                     file_extensions = file_analysis.get('file_extensions', {})
                     if file_extensions:
                         py_count = file_extensions.get('.py', 0)
@@ -652,7 +747,7 @@ class QdrantStatsCollector:
                     
                     for entity_type, count in sorted_manual:
                         if entity_type != 'documentation':  # Skip auto-generated documentation
-                            print(f"    {entity_type:<20} {count:>6,} 📝 MANUAL")
+                            print(f"    {entity_type:<25} {count:>6,}")
                     print()
 
 

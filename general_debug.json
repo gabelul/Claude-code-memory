@@ -1,0 +1,363 @@
+{
+  "collection_name": "general",
+  "backup_timestamp": "2025-06-26T20:13:22.721876",
+  "total_points": 16,
+  "manual_entries_count": 16,
+  "code_entries_count": 0,
+  "relation_entries_count": 0,
+  "unknown_entries_count": 0,
+  "manual_entity_types": [
+    "analysis-report",
+    "annotation",
+    "architecture_pattern",
+    "best_practice",
+    "bug",
+    "bug-analysis",
+    "bug-reproduction",
+    "changelog",
+    "checklist",
+    "code-analysis",
+    "code-pattern",
+    "code_analysis",
+    "comment",
+    "completed_optimization",
+    "configuration_pattern",
+    "critical-bug",
+    "debugging-analysis",
+    "debugging-report",
+    "debugging_solution",
+    "decision",
+    "decision_record",
+    "design_document",
+    "design_patterns",
+    "documentation",
+    "example",
+    "faq",
+    "feature-verification",
+    "guide",
+    "howto",
+    "implementation_note",
+    "infrastructure-analysis",
+    "insight",
+    "learning",
+    "manual_test",
+    "meeting_notes",
+    "milestone",
+    "optimization_pattern",
+    "performance-metric",
+    "performance_improvement",
+    "project_architecture",
+    "project_milestone",
+    "refactoring_project",
+    "reference",
+    "release_notes",
+    "requirement",
+    "research_summary",
+    "section",
+    "solution",
+    "solution_pattern",
+    "specification",
+    "summary",
+    "system_validation",
+    "task-completion",
+    "technical-analysis",
+    "technical_pattern",
+    "template",
+    "test",
+    "tips",
+    "tricks",
+    "troubleshooting",
+    "tutorial",
+    "user_note",
+    "verification_plan",
+    "verification_report",
+    "verification_result",
+    "workflow_pattern"
+  ],
+  "code_entity_types": [
+    "class",
+    "directory",
+    "file",
+    "function",
+    "import",
+    "project",
+    "variable"
+  ],
+  "manual_entries": [
+    {
+      "id": "769973227",
+      "payload": {
+        "type": "entity",
+        "name": "Claude Indexer State File Bug",
+        "entityType": "critical_bug",
+        "observations": [
+          "State file always named .indexer_state_core.json regardless of collection",
+          "Line 82 in indexer.py: self.state_file = project_path / f\".indexer_state_core.json\"",
+          "Expected behavior: .indexer_state_{collection_name}.json per test files",
+          "Impact: All collections share same state file causing cross-contamination",
+          "Incremental indexing fails when same project indexed to multiple collections",
+          "Files indexed in one collection appear as 'already indexed' in another",
+          "Breaks collection isolation principle",
+          "Solution: State file should include collection name in filename"
+        ]
+      }
+    },
+    {
+      "id": "1281285049",
+      "payload": {
+        "type": "entity",
+        "name": "JavaScript Debugging Memory Strategy",
+        "entityType": "strategy",
+        "observations": [
+          "Emphasize async/await patterns and promise chain debugging",
+          "Store npm dependency resolution patterns",
+          "Include browser compatibility matrices",
+          "Search patterns: 'async await error', 'npm dependency conflict', 'webpack build error'",
+          "Memory entity types: js_async_patterns, node_memory_leaks, browser_compatibility_issues"
+        ]
+      }
+    },
+    {
+      "id": "1760653414",
+      "payload": {
+        "type": "entity",
+        "name": "Memory Debugging Best Practices",
+        "entityType": "methodology",
+        "observations": [
+          "Always verify memory patterns apply to current context before using",
+          "Include technology versions and environment details in memory entries",
+          "Store patterns, not specific instances - focus on reusable solutions",
+          "Use memory as starting point, not replacement for investigation",
+          "Regular cleanup: remove outdated or rarely-accessed patterns",
+          "Timestamp all entries and include technology version context"
+        ]
+      }
+    },
+    {
+      "id": "1831315199",
+      "payload": {
+        "type": "entity",
+        "name": "manual-test-entry-2",
+        "entityType": "manual-memory",
+        "observations": [
+          "Second manual test entry for selective clearing verification",
+          "Also should be preserved during --clear operation",
+          "Used to test that multiple manual entries survive clearing"
+        ]
+      }
+    },
+    {
+      "id": "1973784531",
+      "payload": {
+        "type": "entity",
+        "name": "Python Threading Race Condition Pattern",
+        "entityType": "debugging_pattern",
+        "observations": [
+          "Common symptom: Garbled output or corrupted data in multi-threaded applications",
+          "Root cause: Multiple threads accessing shared resources without proper synchronization",
+          "Solution pattern: Use thread-safe display queues and per-resource locks",
+          "Prevention: Replace direct print() calls with queued display methods",
+          "Example: ParallelBaseProcessor uses _safe_display_* methods and _display_queue",
+          "Detection: Look for concurrent access to shared state or output streams"
+        ]
+      }
+    },
+    {
+      "id": "2214682887",
+      "payload": {
+        "type": "entity",
+        "name": "GitHub Branch Listing Analysis gh-utils",
+        "entityType": "debugging_analysis",
+        "observations": [
+          "Tool fetches branches using 'gh api repos/{owner}/{repo}/branches' via get_repository_branches() method",
+          "Key limiting factors: max_branches_per_repo config (default 5), max_branches_per_fork config (default 5)",
+          "Branch filtering in news processor: gets max_branches * 2, then filters non-default branches, sorts by name, limits to max_branches",
+          "Uses jq filtering: '.[:{limit}] | .[] | {name, commit: {sha, url}, protected}' with server-side pagination",
+          "Fork processor uses get_fork_branches() which calls get_repository_branches() with same jq filtering",
+          "No obvious special character filtering, but sorting by name could affect order",
+          "Pagination uses GitHub API per_page but no explicit page parameter - only gets first page",
+          "CRITICAL FINDING: Branch limit calculation in news_processor.py line 169",
+          "Uses get_repository_branches(owner, repo_name, limit=max_branches * 2) where max_branches defaults to 5",
+          "So GitHub API call uses limit=10 by default, applied via jq filter '[:{limit}] | .[] | {name, commit: {sha, url}, protected}'",
+          "This means tool only fetches first 10 branches from GitHub API, missing any branches beyond that",
+          "After fetching 10, it filters out default branch, sorts by name, then limits to max_branches (5)",
+          "ROOT CAUSE: GitHub API pagination - tool only gets first page of branches, no iteration through pages",
+          "Issue affects both news and forks processors since both use get_repository_branches()",
+          "Solution would require either: 1) Remove jq limit to get all branches, 2) Add pagination support, 3) Increase limit value"
+        ]
+      }
+    },
+    {
+      "id": "2237593030",
+      "payload": {
+        "type": "entity",
+        "name": "gh-utils Branch Filtering - Min Commits Ahead",
+        "entityType": "debugging_pattern",
+        "observations": [
+          "Symptom: Tool shows fewer branches than exist on GitHub",
+          "Root cause: min_branch_commits setting filters out branches with 0 commits ahead",
+          "Default behavior: Only shows branches with at least 1 commit ahead of main",
+          "Debug pattern: Look for 'X commits ahead' in debug output",
+          "Solution: Lower min_branch_commits in config.txt or check if branch is actually behind/even with main",
+          "Common scenario: Feature branches that are up-to-date with main get filtered out"
+        ]
+      }
+    },
+    {
+      "id": "2478171728",
+      "payload": {
+        "type": "entity",
+        "name": "Claude Indexer Duplication Prevention System",
+        "entityType": "architecture_pattern",
+        "observations": [
+          "Uses deterministic SHA256 hashing for all IDs to ensure consistency",
+          "Entity IDs: hash(file_path::entity_name) prevents cross-file collisions",
+          "Relation IDs: hash(from-type-to) ensures unique relationships",
+          "Qdrant's native upsert operation automatically prevents duplicates",
+          "No explicit deduplication logic needed - database handles it",
+          "Incremental indexing tracks file changes via SHA256 content hashes",
+          "State files (.indexer_state_{collection}.json) persist file hashes",
+          "File watcher uses 2-second debouncing to prevent rapid re-indexing",
+          "Git hooks run with --incremental flag for efficiency",
+          "Deleted files trigger explicit vector removal from database"
+        ]
+      }
+    },
+    {
+      "id": "2526989930",
+      "payload": {
+        "type": "entity",
+        "name": "Claude Indexer File Deletion Bug",
+        "entityType": "bug_report",
+        "observations": [
+          "File entities are not deleted during incremental indexing after file deletion",
+          "Root cause: File entities use full path as 'name' field, not just 'file_path' field",
+          "Deletion handler only filters by 'file_path' field, missing File entities",
+          "Result: Orphaned File entities remain in vector DB after file deletion",
+          "Impact: Vector database accumulates stale File entities over time",
+          "Fix needed: Update deletion filter to also check 'name' field for File entities",
+          "Test case shows: 3 vectors before deletion, only 1 removed, 2 remain (including File entity)"
+        ]
+      }
+    },
+    {
+      "id": "3156192092",
+      "payload": {
+        "type": "entity",
+        "name": "GitHub Branch Filtering Pattern - gh-utils",
+        "entityType": "debugging_pattern",
+        "observations": [
+          "Symptom: Tool shows fewer branches than expected when viewing GitHub website",
+          "Root cause: gh-utils excludes default branch from news processing by design",
+          "GitHub API returns all branches including main/default branch",
+          "gh-utils filters out default branch in news processing, only shows non-default branches",
+          "User confusion: Website shows 3 branches (including main), tool shows 2 (excluding main)",
+          "Solution: This is expected behavior - tool only processes non-default branches for news updates",
+          "Code location: modules/news_processor.py filters out default branch intentionally"
+        ]
+      }
+    },
+    {
+      "id": "3328208548",
+      "payload": {
+        "type": "entity",
+        "name": "Code Duplication Patterns in Claude Indexer",
+        "entityType": "refactoring_opportunity",
+        "observations": [
+          "StorageResult creation pattern repeated 10+ times with identical structure",
+          "Deterministic ID generation duplicated in base.py twice",
+          "Entity/Relation point creation follows identical patterns",
+          "File finding methods have similar iteration and filtering logic",
+          "Batch processing logic duplicated across multiple files",
+          "Error handling try-except patterns could use decorators",
+          "Search result conversion duplicated in qdrant.py",
+          "Command generation logic repeated in MCP and indexer",
+          "Collection management (exists/create) pattern repeated",
+          "Embedding methods follow identical structure across implementations"
+        ]
+      }
+    },
+    {
+      "id": "3351369836",
+      "payload": {
+        "type": "entity",
+        "name": "Python Debugging Memory Strategy",
+        "entityType": "strategy",
+        "observations": [
+          "Store exception patterns with full traceback context",
+          "Include virtual environment and dependency version information",
+          "Focus on import errors, dependency conflicts, and performance bottlenecks",
+          "Search patterns: '{exception_type} Python', 'import error {package}', 'performance {library}'",
+          "Memory entity types: python_error_patterns, dependency_conflicts, performance_bottlenecks"
+        ]
+      }
+    },
+    {
+      "id": "3541247339",
+      "payload": {
+        "type": "entity",
+        "name": "System-Level Debugging Memory Strategy",
+        "entityType": "strategy",
+        "observations": [
+          "Focus on permissions, process states, and network configuration",
+          "Include command-line diagnostic approaches",
+          "Store environment-specific solutions (Linux vs macOS vs Windows)",
+          "Search patterns: 'permission denied {operation}', 'port already in use', 'process zombie'",
+          "Memory entity types: system_permission_errors, process_management_patterns, network_debugging"
+        ]
+      }
+    },
+    {
+      "id": "3785770535",
+      "payload": {
+        "type": "entity",
+        "name": "Claude Indexer Critical Collection Mismatch Bug",
+        "entityType": "critical_bug",
+        "observations": [
+          "User ran claude-indexer -p . -c memory-project --clear-all, got success but 2816 entities remained",
+          "ROOT CAUSE: CLI cleared memory-project collection (doesn't exist) but user data is in memory collection",
+          "EVIDENCE: Qdrant collections - memory: 2816 points, memory-project: doesn't exist",
+          "QdrantStore.clear_collection returns false success for non-existent collections (lines 364-371)",
+          "Historical MCP server 'memory' used collection 'memory', current 'memory-project-memory' uses 'memory-project'",
+          "User indexed with -c memory but tried clearing with -c memory-project",
+          "All user entities tagged with collection='memory' field",
+          "MCP server memory-project-memory configured for wrong collection name",
+          "CLI clearing logic has false positive - reports success for non-existent collections"
+        ]
+      }
+    },
+    {
+      "id": "3972429751",
+      "payload": {
+        "type": "entity",
+        "name": "Vector Database Deduplication Pattern",
+        "entityType": "implementation_pattern",
+        "observations": [
+          "Qdrant upsert operation replaces existing points with same ID",
+          "Deterministic ID generation ensures same content gets same ID",
+          "No need to check for existing points before insertion",
+          "Batch processing (100 items) maintains efficiency",
+          "File path included in entity IDs prevents false duplicates",
+          "Relations use composite keys (from-type-to) for uniqueness",
+          "MCP storage mode doesn't handle deduplication (command generator only)",
+          "Updates automatically replace old vectors with new embeddings"
+        ]
+      }
+    },
+    {
+      "id": "4096943347",
+      "payload": {
+        "type": "entity",
+        "name": "manual-test-entry-1",
+        "entityType": "manual-memory",
+        "observations": [
+          "This is a manually added test entry to verify selective clearing functionality",
+          "Should be preserved when using --clear flag",
+          "Created for test-selective-clear collection verification"
+        ]
+      }
+    }
+  ],
+  "relation_entries": [],
+  "unknown_entries": []
+}

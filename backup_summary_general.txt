@@ -1,0 +1,21 @@
+Backup Summary for general
+==================================================
+
+Backup timestamp: 2025-06-26T20:13:22.721876
+Total points in collection: 16
+Manual entries backed up: 16
+Code entries (not backed up): 0
+Relation entries (identified): 0
+Unknown entries (included for review): 0
+
+Manual Entry Types Found:
+  - architecture_pattern: 1 entries
+  - bug_report: 1 entries
+  - critical_bug: 2 entries
+  - debugging_analysis: 1 entries
+  - debugging_pattern: 3 entries
+  - implementation_pattern: 1 entries
+  - manual-memory: 2 entries
+  - methodology: 1 entries
+  - refactoring_opportunity: 1 entries
+  - strategy: 3 entries

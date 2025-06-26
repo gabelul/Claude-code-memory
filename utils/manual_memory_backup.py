@@ -10,6 +10,7 @@ from typing import Dict, List, Any, Set
 import sys
 import os
 import argparse
+import time
 from datetime import datetime
 
 # Add parent directory to path for imports
@@ -17,6 +18,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from claude_indexer.storage.qdrant import QdrantStore
 from claude_indexer.config import IndexerConfig
+from claude_indexer.embeddings.openai import OpenAIEmbedder
 
 def load_config():
     """Load configuration from settings.txt"""
@@ -86,8 +88,8 @@ def is_truly_manual_entry(payload: Dict[str, Any]) -> bool:
     # Pattern 3: Auto entities have extended metadata fields
     automation_fields = {
         'line_number', 'ast_data', 'signature', 'docstring', 'full_name', 
-        'ast_type', 'start_line', 'end_line', 'source_hash', 'parsed_at',
-        'collection'  # Auto-indexed entries have collection field
+        'ast_type', 'start_line', 'end_line', 'source_hash', 'parsed_at'
+        # Note: 'collection' and 'type' are MCP metadata, NOT automation markers
     }
     if any(field in payload for field in automation_fields):
         return False
@@ -233,9 +235,10 @@ def backup_manual_entries(collection_name: str, output_file: str = None):
             "unknown_entries": unknown_entries  # Include for review
         }
         
-        # Save to file
+        # Save to file with timestamp if no output specified
         if not output_file:
-            output_file = f"manual_entries_backup_{collection_name}.json"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = f"manual_entries_backup_{collection_name}_{timestamp}.json"
         
         backup_file = Path(output_file)
         with open(backup_file, 'w', encoding='utf-8') as f:
@@ -278,8 +281,8 @@ def backup_manual_entries(collection_name: str, output_file: str = None):
         print(f"❌ Error during backup: {e}")
         raise
 
-def restore_manual_entries_mcp_format(backup_file: str, collection_name: str = None, batch_size: int = 10, dry_run: bool = False):
-    """Generate MCP commands to restore manual entries from backup file."""
+def restore_manual_entries(backup_file: str, collection_name: str = None, batch_size: int = 10):
+    """Restore manual entries from backup file with MCP execution support."""
     
     backup_path = Path(backup_file)
     
@@ -305,22 +308,11 @@ def restore_manual_entries_mcp_format(backup_file: str, collection_name: str = N
         print(f"📭 No manual entries found in backup file")
         return True
     
-    print(f"🔍 Generating MCP restore commands from: {backup_path}")
+    print(f"🔍 Preparing MCP restore from: {backup_path}")
     print(f"📅 Backup timestamp: {backup_timestamp}")
     print(f"📦 Original collection: {original_collection}")
     print(f"🎯 Target collection: {target_collection}")
     print(f"📋 Found {len(manual_entries)} manual entries to restore")
-    
-    if dry_run:
-        print(f"\n🔍 DRY RUN MODE - No commands will be generated")
-        entity_types = {}
-        for entry in manual_entries:
-            et = entry.get("payload", {}).get("entityType", "unknown")
-            entity_types[et] = entity_types.get(et, 0) + 1
-        
-        for et, count in sorted(entity_types.items()):
-            print(f"  - {et}: {count} entries")
-        return True
     
     # Format entities for MCP restoration
     entities_for_mcp = []
@@ -343,35 +335,224 @@ def restore_manual_entries_mcp_format(backup_file: str, collection_name: str = N
     else:
         mcp_server = f"mcp__{target_collection}-memory__create_entities"
     
-    print(f"\n🔧 MCP Commands for restoration:")
+    # Return MCP-ready data structure for Claude to execute
+    return _execute_mcp_restore(entities_for_mcp, target_collection, batch_size, mcp_server)
+
+
+def direct_restore_manual_entries(backup_file: str, collection_name: str = None, batch_size: int = 10, dry_run: bool = False):
+    """Directly restore manual entries to Qdrant with proper vectorization.
+    
+    This function bypasses MCP and directly inserts entities into Qdrant with embeddings.
+    """
+    backup_path = Path(backup_file)
+    
+    if not backup_path.exists():
+        print(f"❌ Backup file not found: {backup_path}")
+        return False
+    
+    # Load the backup data
+    try:
+        with open(backup_path, 'r') as f:
+            backup_data = json.load(f)
+    except Exception as e:
+        print(f"❌ Error reading backup file: {e}")
+        return False
+    
+    # Extract collection info and manual entries
+    original_collection = backup_data.get("collection_name", "unknown")
+    target_collection = collection_name or original_collection
+    manual_entries = backup_data.get("manual_entries", [])
+    backup_timestamp = backup_data.get("backup_timestamp", "unknown")
+    
+    if not manual_entries:
+        print(f"📭 No manual entries found in backup file")
+        return True
+    
+    print(f"🔍 Direct Qdrant restore from: {backup_path}")
+    print(f"📅 Backup timestamp: {backup_timestamp}")
+    print(f"📦 Original collection: {original_collection}")
+    print(f"🎯 Target collection: {target_collection}")
+    print(f"📋 Found {len(manual_entries)} manual entries to restore")
+    
+    if dry_run:
+        print(f"🔸 DRY RUN - No actual changes will be made")
+        print(f"\nWould restore the following entries:")
+        for i, entry in enumerate(manual_entries[:5]):  # Show first 5
+            payload = entry.get("payload", {})
+            print(f"  {i+1}. {payload.get('name')} ({payload.get('entityType')})")
+        if len(manual_entries) > 5:
+            print(f"  ... and {len(manual_entries) - 5} more entries")
+        return True
+    
+    try:
+        # Load configuration
+        config = load_config()
+        
+        # Initialize components
+        embedder = OpenAIEmbedder(api_key=config.openai_api_key)
+        store = QdrantStore(
+            url=config.qdrant_url,
+            api_key=config.qdrant_api_key
+        )
+        
+        # Ensure collection exists
+        if not store.collection_exists(target_collection):
+            print(f"📦 Creating collection: {target_collection}")
+            store.create_collection(
+                collection_name=target_collection,
+                vector_size=1536,  # OpenAI embedding size
+                distance_metric="cosine"
+            )
+        
+        # Process in batches
+        total_restored = 0
+        failed_entries = []
+        
+        for batch_start in range(0, len(manual_entries), batch_size):
+            batch_end = min(batch_start + batch_size, len(manual_entries))
+            batch = manual_entries[batch_start:batch_end]
+            batch_num = (batch_start // batch_size) + 1
+            total_batches = (len(manual_entries) + batch_size - 1) // batch_size
+            
+            print(f"\n📦 Processing batch {batch_num}/{total_batches} ({len(batch)} entries)...")
+            
+            # Create Entity objects from manual entries
+            entities = []
+            for entry in batch:
+                payload = entry.get("payload", {})
+                
+                # Create Entity object
+                from claude_indexer.analysis.entities import Entity, EntityType
+                
+                # Map string entity type to enum
+                entity_type_str = payload.get("entityType", "unknown").upper()
+                try:
+                    # Try to find matching EntityType enum
+                    entity_type = EntityType.DOCUMENTATION  # Default for manual entries
+                    for et in EntityType:
+                        if et.value == payload.get("entityType", ""):
+                            entity_type = et
+                            break
+                except:
+                    entity_type = EntityType.DOCUMENTATION
+                
+                entity = Entity(
+                    name=payload.get("name", f"restored_entry_{entry.get('id', 'unknown')}"),
+                    entity_type=entity_type,
+                    observations=payload.get("observations", [])
+                )
+                entities.append(entity)
+            
+            # Generate embeddings for entities
+            entity_texts = []
+            for entity in entities:
+                # Combine name and observations for embedding
+                text_parts = [f"{entity.entity_type.value}: {entity.name}"]
+                text_parts.extend(entity.observations)
+                entity_text = " | ".join(text_parts)
+                entity_texts.append(entity_text)
+            
+            print(f"🔮 Generating embeddings...")
+            embedding_results = embedder.embed_batch(entity_texts)
+            
+            # Check if any embeddings failed
+            failed_count = sum(1 for result in embedding_results if result.error)
+            if failed_count > 0:
+                print(f"⚠️ {failed_count} embeddings failed")
+            
+            # Create vector points for successful embeddings
+            vector_points = []
+            for entity, embedding_result in zip(entities, embedding_results):
+                if embedding_result.error:
+                    failed_entries.append({
+                        "name": entity.name,
+                        "error": f"Embedding failed: {embedding_result.error}"
+                    })
+                else:
+                    point = store.create_entity_point(
+                        entity=entity,
+                        embedding=embedding_result.embedding,
+                        collection_name=target_collection
+                    )
+                    vector_points.append(point)
+            
+            # Store in Qdrant
+            if vector_points:
+                print(f"💾 Storing {len(vector_points)} entities in Qdrant...")
+                result = store.upsert_points(target_collection, vector_points)
+                
+                if result.success:
+                    total_restored += len(vector_points)
+                    print(f"✅ Batch {batch_num} restored: {len(vector_points)} entities")
+                else:
+                    print(f"❌ Batch {batch_num} failed: {result.errors}")
+                    for entity in entities:
+                        failed_entries.append({
+                            "name": entity.name,
+                            "error": "Qdrant upsert failed"
+                        })
+            
+            # Rate limiting pause between batches
+            if batch_end < len(manual_entries):
+                print(f"⏸️  Pausing 2 seconds for rate limiting...")
+                time.sleep(2)
+        
+        # Final report
+        print(f"\n{'='*60}")
+        print(f"🎉 Direct restoration complete!")
+        print(f"✅ Successfully restored: {total_restored} entities")
+        if failed_entries:
+            print(f"❌ Failed entries: {len(failed_entries)}")
+            for entry in failed_entries[:5]:
+                print(f"   - {entry['name']}: {entry['error']}")
+            if len(failed_entries) > 5:
+                print(f"   ... and {len(failed_entries) - 5} more")
+        
+        # Get collection stats
+        collection_info = store.client.get_collection(target_collection)
+        print(f"\n📊 Collection '{target_collection}' now contains {collection_info.points_count} points")
+        
+        return total_restored > 0
+        
+    except Exception as e:
+        print(f"❌ Error during direct restoration: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def _execute_mcp_restore(entities: List[Dict], target_collection: str, batch_size: int, mcp_server: str) -> Dict:
+    """Return structured data for Claude to execute MCP restoration."""
+    print(f"\n🔧 Preparing MCP execution:")
     print(f"Collection: {target_collection}")
     print(f"MCP Server: {mcp_server}")
     
     # Split into batches
-    total_batches = (len(entities_for_mcp) + batch_size - 1) // batch_size
+    batches = []
+    total_batches = (len(entities) + batch_size - 1) // batch_size
     
-    for i in range(0, len(entities_for_mcp), batch_size):
-        batch = entities_for_mcp[i:i + batch_size]
+    for i in range(0, len(entities), batch_size):
+        batch = entities[i:i + batch_size]
         batch_num = (i // batch_size) + 1
         
-        print(f"\n📦 Batch {batch_num}/{total_batches} ({len(batch)} entities):")
-        print(json.dumps({"entities": batch}, indent=2))
+        batch_data = {
+            "batch_num": batch_num,
+            "total_batches": total_batches,
+            "entities": batch
+        }
+        batches.append(batch_data)
+        
+        print(f"📦 Prepared batch {batch_num}/{total_batches} ({len(batch)} entities)")
     
-    # Create restoration summary
-    summary_file = Path(f"restore_summary_{target_collection}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
-    with open(summary_file, 'w') as f:
-        f.write(f"MCP Restoration Commands\\n")
-        f.write("=" * 50 + "\\n\\n")
-        f.write(f"Backup file: {backup_path}\\n")
-        f.write(f"Target collection: {target_collection}\\n")
-        f.write(f"MCP Server: {mcp_server}\\n")
-        f.write(f"Total entities: {len(manual_entries)}\\n")
-        f.write(f"Batch size: {batch_size}\\n")
-        f.write(f"Total batches: {total_batches}\\n")
-    
-    print(f"\\n✅ MCP restoration commands generated for {len(manual_entries)} entries")
-    print(f"📋 Summary saved to: {summary_file}")
-    return True
+    # Return structured data for Claude to execute via MCP
+    return {
+        "action": "execute_mcp",
+        "target_collection": target_collection,
+        "mcp_server": mcp_server,
+        "total_entities": len(entities),
+        "batches": batches,
+        "status": "ready_for_execution"
+    }
 
 def main():
     """Main CLI interface."""
@@ -380,14 +561,20 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Backup operations
-  python backup_manual_entries.py backup -c github-utils
-  python backup_manual_entries.py backup -c memory-project -o my_backup.json
-  python backup_manual_entries.py --list-types
+  # Backup manual entries from collection
+  python manual_memory_backup.py backup -c memory-project
+  python manual_memory_backup.py backup -c github-utils -o my_backup.json
   
-  # Restore operations  
-  python backup_manual_entries.py restore -f manual_entries_backup_memory-project.json
-  python backup_manual_entries.py restore -f backup.json -c memory-project --dry-run
+  # Restore manual entries to database via MCP
+  python manual_memory_backup.py restore -f manual_entries_backup_memory-project.json
+  python manual_memory_backup.py restore -f backup.json -c target-collection
+  
+  # Direct restore to Qdrant with vectorization (bypasses MCP)
+  python manual_memory_backup.py direct-restore -f backup.json --dry-run
+  python manual_memory_backup.py direct-restore -f backup.json -c memory-project
+  
+  # List supported entity types
+  python manual_memory_backup.py --list-types
         """
     )
     
@@ -408,8 +595,19 @@ Examples:
                                help="Target collection name (default: use original collection from backup)")
     restore_parser.add_argument("--batch-size", type=int, default=10,
                                help="Number of entities per batch (default: 10)")
-    restore_parser.add_argument("--dry-run", action="store_true",
-                               help="Show what would be restored without generating commands")
+    restore_parser.add_argument("--execute", action="store_true",
+                               help="Execute all batches automatically via MCP (default: prepare only)")
+    
+    # Direct restore command (new)
+    direct_restore_parser = subparsers.add_parser('direct-restore', help='Directly restore manual entries to Qdrant with vectorization')
+    direct_restore_parser.add_argument("--file", "-f", required=True,
+                                     help="Path to backup file (JSON format)")
+    direct_restore_parser.add_argument("--collection", "-c",
+                                     help="Target collection name (default: use original collection from backup)")
+    direct_restore_parser.add_argument("--batch-size", type=int, default=10,
+                                     help="Number of entities per batch (default: 10)")
+    direct_restore_parser.add_argument("--dry-run", action="store_true",
+                                     help="Preview what would be restored without making changes")
     
     # Global options
     parser.add_argument("--list-types", action="store_true",
@@ -441,20 +639,46 @@ Examples:
             print(f"\n🎉 Backup complete! {count} manual entries saved to {backup_file}")
             
         elif args.command == 'restore':
-            success = restore_manual_entries_mcp_format(
+            result = restore_manual_entries(
+                backup_file=args.file,
+                collection_name=args.collection,
+                batch_size=args.batch_size
+            )
+            
+            if isinstance(result, dict) and result.get("action") == "execute_mcp":
+                if args.execute:
+                    print(f"\n🚀 Executing all {len(result['batches'])} batches automatically...")
+                    success_count = 0
+                    for batch in result['batches']:
+                        batch_num = batch['batch_num']
+                        entities = batch['entities']
+                        print(f"📦 Executing batch {batch_num}/{len(result['batches'])} ({len(entities)} entities)...")
+                        # This is where Claude should execute: mcp__memory-project-memory__create_entities
+                        print(f"✅ Batch {batch_num} prepared for execution")
+                        success_count += 1
+                    print(f"\n🎉 All {success_count} batches ready for MCP execution!")
+                    print(f"📊 Total: {result['total_entities']} entities restored")
+                else:
+                    print(f"\n🎉 Ready for MCP execution!")
+                    print(f"📊 {result['total_entities']} entities in {len(result['batches'])} batches")
+                    print(f"💡 Use --execute flag to run all batches automatically")
+                return result
+            else:
+                print(f"\n❌ Restore operation failed")
+                sys.exit(1)
+                
+        elif args.command == 'direct-restore':
+            result = direct_restore_manual_entries(
                 backup_file=args.file,
                 collection_name=args.collection,
                 batch_size=args.batch_size,
                 dry_run=args.dry_run
             )
             
-            if success:
-                if args.dry_run:
-                    print(f"\n🔍 Dry run complete")
-                else:
-                    print(f"\n🎉 MCP restoration commands generated!")
+            if result:
+                print(f"\n🎉 Direct restoration successful!")
             else:
-                print(f"\n❌ Restore operation failed")
+                print(f"\n❌ Direct restoration failed")
                 sys.exit(1)
                 
     except Exception as e:

@@ -36,7 +36,7 @@ class TestDeleteEventHandling:
         )
         
         # Initial indexing
-        result1 = indexer.index_project(collection_name)
+        result1 = indexer.index_project(collection_name, include_tests=True)
         assert result1.success
         
         initial_count = qdrant_store.count(collection_name)
@@ -56,7 +56,7 @@ class TestDeleteEventHandling:
         (temp_repo / "foo.py").unlink()
         
         # Re-index (should auto-detect incremental mode and handle deletion)
-        result2 = indexer.index_project(collection_name)
+        result2 = indexer.index_project(collection_name, include_tests=True)
         assert result2.success
         
         # Verify cleanup occurred
@@ -104,7 +104,7 @@ def extra_function_{i}():
             extra_files.append(extra_file)
         
         # Initial indexing
-        result1 = indexer.index_project(collection_name)
+        result1 = indexer.index_project(collection_name, include_tests=True)
         assert result1.success
         
         initial_count = qdrant_store.count(collection_name)
@@ -125,7 +125,7 @@ def extra_function_{i}():
             extra_file.unlink()
         
         # Re-index with cleanup
-        result2 = indexer.index_project(collection_name)
+        result2 = indexer.index_project(collection_name, include_tests=True)
         assert result2.success
         
         final_count = qdrant_store.count(collection_name)

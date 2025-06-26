@@ -206,7 +206,7 @@ class TestQdrantStore:
                 # Mock collection doesn't exist
                 store.ensure_collection = MagicMock(return_value=False)
                 
-                points = [VectorPoint(id="test", vector=[1.0] * 1536, payload={})]
+                points = [VectorPoint(id=1, vector=[1.0] * 1536, payload={})]
                 result = store.upsert_points("test_collection", points)
                 
                 assert not result.success
@@ -710,9 +710,9 @@ class TestVectorPoint:
         vector = list(np.random.rand(1536).astype(np.float32))
         payload = {"text": "test text", "type": "entity"}
         
-        point = VectorPoint(id="test_1", vector=vector, payload=payload)
+        point = VectorPoint(id=1, vector=vector, payload=payload)
         
-        assert point.id == "test_1"
+        assert point.id == 1
         assert point.vector == vector
         assert point.payload == payload
     
@@ -721,7 +721,7 @@ class TestVectorPoint:
         vector_array = np.random.rand(1536).astype(np.float32)
         payload = {"text": "test", "type": "entity"}
         
-        point = VectorPoint(id="test", vector=vector_array, payload=payload)
+        point = VectorPoint(id=2, vector=vector_array, payload=payload)
         
         # Should handle numpy arrays
         assert len(point.vector) == 1536
