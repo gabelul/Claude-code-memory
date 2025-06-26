@@ -80,6 +80,7 @@ class QdrantStatsCollector:
             entity_types = Counter()
             file_extensions = Counter()
             auto_vs_manual = Counter()
+            manual_entity_types = Counter()
             
             for point in all_points:
                 if hasattr(point, 'payload') and point.payload:
@@ -87,8 +88,8 @@ class QdrantStatsCollector:
                     entity_type = point.payload.get('entityType', 'unknown')
                     entity_types[entity_type] += 1
                     
-                    # Detect if auto-generated vs manual
-                    has_file_path = 'file_path' in point.payload
+                    # Detect if auto-generated vs manual using exact clear_collection logic
+                    has_file_path = 'file_path' in point.payload and point.payload['file_path']
                     has_relation_structure = ('from' in point.payload and 
                                             'to' in point.payload and 
                                             'relationType' in point.payload)
@@ -97,6 +98,8 @@ class QdrantStatsCollector:
                         auto_vs_manual['auto_generated'] += 1
                     else:
                         auto_vs_manual['manual'] += 1
+                        # Track manual entity types separately
+                        manual_entity_types[entity_type] += 1
                     
                     # Count file extensions for file entities
                     if entity_type == 'file':
@@ -111,6 +114,7 @@ class QdrantStatsCollector:
             return {
                 "total_files": entity_types.get('file', 0),
                 "entity_breakdown": dict(entity_types),
+                "manual_entity_breakdown": dict(manual_entity_types),
                 "file_extensions": dict(file_extensions),
                 "auto_vs_manual": dict(auto_vs_manual),
                 "total_analyzed": len(all_points)
@@ -118,7 +122,7 @@ class QdrantStatsCollector:
             
         except Exception as e:
             print(f"Error analyzing entity types for {collection_name}: {e}")
-            return {"total_files": 0, "entity_breakdown": {}, "file_extensions": {}, "auto_vs_manual": {}, "total_analyzed": 0}
+            return {"total_files": 0, "entity_breakdown": {}, "manual_entity_breakdown": {}, "file_extensions": {}, "auto_vs_manual": {}, "total_analyzed": 0}
     
     def _count_manual_entries(self, collection_name: str) -> int:
         """Count manually added entries (non-automated entries)."""
@@ -597,65 +601,20 @@ class QdrantStatsCollector:
         direct_api_health = stats.get('direct_api_health', {})
         
         if health_details:
-            print(f"  🏥 Health: {self._get_health_explanation(health_status, health_details)}")
-            
-            # Show detailed metrics
+            # Show simplified health metrics only
             if health_details.get('optimization_progress', 0) >= 0:
                 progress = health_details['optimization_progress']
-                print(f"    Indexing: {progress:.1f}% ({stats.get('indexed_vectors_count', 0):,}/{stats.get('points_count', 0):,})")
+                print(f"  🏥 Indexing:  ✅  {progress:.1f}% ({stats.get('indexed_vectors_count', 0):,}/{stats.get('points_count', 0):,})")
                 
             if health_details.get('segment_health') != 'UNKNOWN':
                 seg_health = health_details['segment_health']
                 segments = stats.get('segments_count', 0)
-                print(f"    Segments: {seg_health} ({segments} segments)")
+                print(f"     Segments: {seg_health} ({segments} segments)")
                 
             if health_details.get('response_time_ms'):
                 response_time = health_details['response_time_ms']
-                if response_time > 1000:
-                    print(f"    Response: {response_time}ms (SLOW - check connection)")
-                elif response_time > 500:
-                    print(f"    Response: {response_time}ms (elevated)")
-                else:
-                    print(f"    Response: {response_time}ms (good)")
-                    
-            if not health_details.get('connection_ok', True):
-                print(f"    ⚠️ Connection: FAILED - check Qdrant server")
-                
-            # Show direct API health status if available
-            if direct_api_health and direct_api_health.get('health_status') not in ['HEALTH_CHECK_FAILED', 'API_ERROR']:
-                api_health = direct_api_health.get('health_status', 'UNKNOWN')
-                severity = direct_api_health.get('severity', 'UNKNOWN')
-                progress = direct_api_health.get('indexing_progress', 0)
-                
-                # Create severity emoji
-                severity_emoji = {"HIGH": "🔥", "MEDIUM": "⚠️", "LOW": "✅"}.get(severity, "❓")
-                
-                print(f"    Direct API: {severity_emoji} {api_health} ({progress:.1f}% indexed)")
-                
-                # Show diagnostics
-                diagnostics = direct_api_health.get('diagnostics', {})
-                if diagnostics:
-                    efficiency = diagnostics.get('indexing_efficiency', 0)
-                    completeness = diagnostics.get('index_completeness', 'Unknown')
-                    print(f"    Diagnostics: {completeness} indexing, {efficiency:.1f}% efficiency")
-                
-                # Show recommendations if severity is not LOW
-                recommendations = direct_api_health.get('recommendations', [])
-                if recommendations and severity != 'LOW':
-                    print(f"    Recommendations:")
-                    for rec in recommendations[:3]:  # Show top 3 recommendations
-                        print(f"      • {rec}")
-            
-            # Show performance indicators if needed for comparison
-            perf = health_details.get('performance_indicators', {})
-            if perf and health_status in ['DEGRADED', 'FAILED', 'OPTIMIZING'] and not direct_api_health:
-                print(f"    Diagnosis:")
-                if perf.get('indexing_ratio', 0) < 0.9:
-                    print(f"      • Indexing incomplete ({perf.get('indexing_ratio', 0):.1%})")
-                if perf.get('segments_per_1k_points', 0) > 50:
-                    print(f"      • High fragmentation ({perf.get('segments_per_1k_points', 0):.1f} segments/1k)")
-                if health_details.get('response_time_ms', 0) > 1000:
-                    print(f"      • Slow responses - check network/server load")
+                response_rating = "excellent" if response_time < 10 else "good" if response_time < 50 else "slow"
+                print(f"     Response: {response_time:.1f}ms ({response_rating})")
         
         if detailed:
             print(f"  📏 Vector Size: {stats.get('vector_size', 0)}")
@@ -682,22 +641,18 @@ class QdrantStatsCollector:
                             print(f"    Markdown (.md):  {md_count:>6}")
                     print()
                 
-                # Entity types section (top 10)
-                entity_breakdown = file_analysis.get('entity_breakdown', {})
-                if entity_breakdown:
+                # Manual entity types section (top 10 manual entries only)
+                manual_entity_breakdown = file_analysis.get('manual_entity_breakdown', {})
+                
+                if manual_entity_breakdown:
                     print("  🏷️  ENTITY TYPES (TOP 10)")
                     print("  " + "-" * 30)
-                    # Show top 10 entity types
-                    sorted_entities = sorted(entity_breakdown.items(), key=lambda x: x[1], reverse=True)[:10]
+                    # Show top 10 manual entity types only
+                    sorted_manual = sorted(manual_entity_breakdown.items(), key=lambda x: x[1], reverse=True)[:10]
                     
-                    # Highlight key types
-                    for entity_type, count in sorted_entities:
-                        if entity_type in ['file', 'function', 'class', 'documentation']:
-                            print(f"    {entity_type:<20} {count:>6,}")
-                        elif entity_type in ['manual_test', 'bug_fix']:
-                            print(f"    {entity_type:<20} {count:>6,} 📝")
-                        else:
-                            print(f"    {entity_type:<20} {count:>6,}")
+                    for entity_type, count in sorted_manual:
+                        if entity_type != 'documentation':  # Skip auto-generated documentation
+                            print(f"    {entity_type:<20} {count:>6,} 📝 MANUAL")
                     print()
 
 

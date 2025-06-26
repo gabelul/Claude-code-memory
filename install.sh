@@ -72,8 +72,8 @@ if [[ ! -d "\$VENV_PATH" ]]; then
     exit 1
 fi
 
-# Activate virtual environment and run indexer
-source "\$VENV_PATH/bin/activate"
+# Use absolute python path instead of activating venv to avoid PATH conflicts
+PYTHON_BIN="\$VENV_PATH/bin/python"
 
 # Check if we're in a Python project (has .py files)
 if [[ "\$1" == "--project" && "\$2" == "." ]]; then
@@ -87,27 +87,34 @@ fi
 # Smart command detection and routing
 if [[ "\$1" =~ ^(hooks|watch|service|search|file)$ ]]; then
     # Advanced commands - pass through directly
-    exec python -m claude_indexer "\$@"
+    exec "\$PYTHON_BIN" -m claude_indexer "\$@"
 elif [[ "\$1" == "index" ]]; then
     # Explicit index command - pass through
-    exec python -m claude_indexer "\$@"
+    exec "\$PYTHON_BIN" -m claude_indexer "\$@"
 elif [[ "\$1" =~ ^--(help|version)$ ]]; then
     # Help and version commands
-    exec python -m claude_indexer "\$@"
+    exec "\$PYTHON_BIN" -m claude_indexer "\$@"
 elif [[ "\$1" == "--help" || "\$1" == "-h" || "\$1" == "help" ]]; then
     # Help command variations
-    exec python -m claude_indexer --help
+    exec "\$PYTHON_BIN" -m claude_indexer --help
 elif [[ \$# -eq 0 ]]; then
     # No arguments - show help
-    exec python -m claude_indexer --help
+    exec "\$PYTHON_BIN" -m claude_indexer --help
 else
     # Basic indexing - use default index command for backward compatibility
-    exec python -m claude_indexer index "\$@"
+    exec "\$PYTHON_BIN" -m claude_indexer index "\$@"
 fi
 EOF
 
 # Make the wrapper executable
 sudo chmod +x "$WRAPPER_PATH"
+
+# Remove problematic venv binary that conflicts with global wrapper
+VENV_CLAUDE_INDEXER="$VENV_PATH/bin/claude-indexer"
+if [[ -f "$VENV_CLAUDE_INDEXER" ]]; then
+    echo -e "${BLUE}Removing conflicting venv binary...${NC}"
+    rm "$VENV_CLAUDE_INDEXER"
+fi
 
 # Verify installation
 if [[ -x "$WRAPPER_PATH" ]]; then

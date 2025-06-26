@@ -356,7 +356,7 @@ class QdrantStore(ManagedVectorStore):
         
         Args:
             collection_name: Name of the collection
-            preserve_manual: If True, only delete code-indexed memories (those with file_path)
+            preserve_manual: If True, only delete auto-generated memories (entities with file_path or relations with from/to/relationType)
         """
         start_time = time.time()
         
@@ -371,13 +371,13 @@ class QdrantStore(ManagedVectorStore):
                 )
             
             if preserve_manual:
-                # Delete only points that have file_path (code-indexed memories)
+                # Delete only auto-generated memories (entities with file_path or relations)
                 from qdrant_client import models
                 
                 # Count points before deletion for reporting
                 count_before = self.client.count(collection_name=collection_name).count
                 
-                # Delete points with file_path field (code-indexed memories)
+                # Get all points to identify auto-generated content
                 # Use scroll to get all points, filter manually, then delete by IDs
                 all_points = self.client.scroll(
                     collection_name=collection_name,
@@ -385,17 +385,22 @@ class QdrantStore(ManagedVectorStore):
                     with_payload=True
                 )[0]
                 
-                # Find points that have file_path (code-indexed)
-                code_point_ids = []
+                # Find points that are auto-generated (code-indexed entities or relations)
+                auto_generated_ids = []
                 for point in all_points:
+                    # Auto-generated entities have file_path
                     if 'file_path' in point.payload and point.payload['file_path']:
-                        code_point_ids.append(point.id)
+                        auto_generated_ids.append(point.id)
+                    # Auto-generated relations have from/to/relationType structure
+                    elif ('from' in point.payload and 'to' in point.payload and 
+                          'relationType' in point.payload):
+                        auto_generated_ids.append(point.id)
                 
-                # Delete code points by ID if any found
-                if code_point_ids:
+                # Delete auto-generated points by ID if any found
+                if auto_generated_ids:
                     self.client.delete(
                         collection_name=collection_name,
-                        points_selector=code_point_ids,
+                        points_selector=auto_generated_ids,
                         wait=True
                     )
                 
