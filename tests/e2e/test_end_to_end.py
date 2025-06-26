@@ -237,8 +237,8 @@ def search_test_function():
         assert result2.success
         assert qdrant_store.count("test_incremental_e2e") == initial_count  # Should be same
         
-        # Add a file
-        new_file = temp_repo / "incremental_test.py"
+        # Add a file (use a name that won't be filtered as a test file)
+        new_file = temp_repo / "additional_module.py"
         new_file.write_text('def incremental_func(): return "incremental"')
         
         # Second incremental run (with changes)

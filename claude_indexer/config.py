@@ -16,10 +16,24 @@ class IndexerConfig(BaseModel):
     # URLs and Endpoints
     qdrant_url: str = Field(default="http://localhost:6333")
     
+    # Collection Management
+    collection_name: str = Field(default="default")
+    
+    # Component Types
+    embedder_type: str = Field(default="openai")
+    storage_type: str = Field(default="qdrant")
+    
     # Indexing Behavior
     indexer_debug: bool = Field(default=False)
     indexer_verbose: bool = Field(default=True)
     debounce_seconds: float = Field(default=2.0, ge=0.1, le=30.0)
+    
+    # Watcher Settings
+    watch_debounce: float = Field(default=2.0, ge=0.1, le=30.0)
+    include_patterns: list = Field(default_factory=lambda: ['*.py', '*.md'])
+    exclude_patterns: list = Field(default_factory=lambda: [
+        '*.pyc', '__pycache__', '.git', '.venv', 'node_modules'
+    ])
     
     # File Processing
     include_markdown: bool = Field(default=True)

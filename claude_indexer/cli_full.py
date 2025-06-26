@@ -401,6 +401,7 @@ else:
                     import time
                     time.sleep(1)
             except KeyboardInterrupt:
+                observer.stop()
                 observer.join(timeout=3)  # Add timeout
                 if observer.is_alive():
                     if not quiet:

@@ -50,7 +50,7 @@ class TestWatcherFlow:
             await asyncio.sleep(0.2)
             
             # Get initial count
-            initial_count = qdrant_store.count()
+            initial_count = qdrant_store.count("test_watcher")
             
             # Modify a file
             modified_file = temp_repo / "foo.py"
@@ -62,12 +62,12 @@ class TestWatcherFlow:
             await asyncio.sleep(0.5)
             
             # Check that re-indexing occurred
-            final_count = qdrant_store.count()
+            final_count = qdrant_store.count("test_watcher")
             assert final_count >= initial_count
             
             # Verify we can find the new function
             search_embedding = dummy_embedder.embed_single("new_watched_function")
-            hits = qdrant_store.search(search_embedding, top_k=5)
+            hits = qdrant_store.search("test_watcher", search_embedding, top_k=5)
             
             new_function_found = any(
                 "new_watched_function" in hit.payload.get("name", "")
@@ -123,7 +123,7 @@ class TestWatcherFlow:
             # Verify all changes were processed
             for i in range(len(files_to_modify)):
                 search_embedding = dummy_embedder.embed_single(f"batch_function_{i}")
-                hits = qdrant_store.search(search_embedding, top_k=5)
+                hits = qdrant_store.search("test_multi_watch", search_embedding, top_k=5)
                 
                 function_found = any(
                     f"batch_function_{i}" in hit.payload.get("name", "")
@@ -178,7 +178,7 @@ class NewClass:
             
             # Verify new file was indexed
             search_embedding = dummy_embedder.embed_single("fresh_function")
-            hits = qdrant_store.search(search_embedding, top_k=5)
+            hits = qdrant_store.search("test_new_files", search_embedding, top_k=5)
             
             fresh_function_found = any(
                 "fresh_function" in hit.payload.get("name", "")
@@ -188,7 +188,7 @@ class NewClass:
             
             # Also check for the new class
             search_embedding = dummy_embedder.embed_single("NewClass")
-            hits = qdrant_store.search(search_embedding, top_k=5)
+            hits = qdrant_store.search("test_new_files", search_embedding, top_k=5)
             
             new_class_found = any(
                 "NewClass" in hit.payload.get("name", "")
@@ -236,7 +236,7 @@ def temp_function():
             
             # Verify the function exists
             search_embedding = dummy_embedder.embed_single("temp_function")
-            hits = qdrant_store.search(search_embedding, top_k=5)
+            hits = qdrant_store.search("test_deletions", search_embedding, top_k=5)
             
             temp_function_found = any(
                 "temp_function" in hit.payload.get("name", "")
@@ -252,7 +252,7 @@ def temp_function():
             
             # Verify the function is no longer findable or properly cleaned up
             search_embedding = dummy_embedder.embed_single("temp_function")
-            hits = qdrant_store.search(search_embedding, top_k=5)
+            hits = qdrant_store.search("test_deletions", search_embedding, top_k=5)
             
             # After deletion, either no hits for temp_function or hits don't reference the deleted file
             remaining_temp_hits = [
@@ -325,13 +325,13 @@ def temp_function():
         
         # Track indexing calls
         index_calls = []
-        original_index = qdrant_store.upsert
+        original_index = qdrant_store.upsert_points
         
         def tracking_upsert(*args, **kwargs):
             index_calls.append(time.time())
             return original_index(*args, **kwargs)
         
-        qdrant_store.upsert = tracking_upsert
+        qdrant_store.upsert_points = tracking_upsert
         
         watcher = Watcher(
             repo_path=temp_repo,
@@ -406,7 +406,7 @@ class TestWatcherConfiguration:
             
             # Check that only valid file was indexed
             search_embedding = dummy_embedder.embed_single("valid_func")
-            hits = qdrant_store.search(search_embedding, top_k=10)
+            hits = qdrant_store.search("test_patterns", search_embedding, top_k=10)
             
             valid_found = any(
                 "valid_func" in hit.payload.get("name", "")
@@ -417,7 +417,7 @@ class TestWatcherConfiguration:
             # Check that ignored files were not indexed
             for ignored_func in ["test_func", "temp_func"]:
                 search_embedding = dummy_embedder.embed_single(ignored_func)
-                hits = qdrant_store.search(search_embedding, top_k=10)
+                hits = qdrant_store.search("test_patterns", search_embedding, top_k=10)
                 
                 ignored_found = any(
                     ignored_func in hit.payload.get("name", "")

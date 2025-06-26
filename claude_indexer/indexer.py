@@ -281,6 +281,11 @@ class CoreIndexer:
                       limit: int = 10, filter_type: str = None) -> List[Dict[str, Any]]:
         """Search for similar entities/relations."""
         try:
+            # Check if collection exists before searching
+            if not self.vector_store.collection_exists(collection_name):
+                print(f"Collection '{collection_name}' does not exist")
+                return []
+            
             # Generate query embedding
             embedding_result = self.embedder.embed_text(query)
             if not embedding_result.success:

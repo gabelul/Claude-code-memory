@@ -310,3 +310,331 @@ class AsyncIndexingEventHandler:
             "files_processed": self.files_processed,
             "debouncer_stats": self.debouncer.get_stats()
         }
+
+
+class Watcher:
+    """Unified watcher class that bridges sync file events to async processing."""
+    
+    def __init__(self, repo_path: str, config, embedder, store):
+        """Initialize the watcher with required dependencies.
+        
+        Args:
+            repo_path: Path to the repository to watch
+            config: IndexerConfig object with settings
+            embedder: Embedder instance for creating embeddings
+            store: VectorStore instance for storage operations
+        """
+        if not WATCHDOG_AVAILABLE:
+            raise ImportError("Watchdog not available. Install with: pip install watchdog")
+        
+        from watchdog.observers import Observer
+        
+        self.repo_path = Path(repo_path)
+        self.config = config
+        self.embedder = embedder
+        self.store = store
+        
+        # Extract settings from config for compatibility
+        self.collection_name = getattr(config, 'collection_name', 'default')
+        self.debounce_seconds = getattr(config, 'watch_debounce', getattr(config, 'debounce_seconds', 2.0))
+        
+        # File filtering from config
+        self.include_patterns = getattr(config, 'include_patterns', ['*.py', '*.md'])
+        self.exclude_patterns = getattr(config, 'exclude_patterns', [
+            '*.pyc', '__pycache__', '.git', '.venv', 'node_modules', '*test*', '*temp*'
+        ])
+        
+        # Observer and async handler
+        self.observer = Observer()
+        self.async_handler = None
+        self._bridge_handler = None
+        self._running = False
+        
+    async def start(self):
+        """Start file watching with async processing."""
+        if self._running:
+            return
+            
+        try:
+            # Run initial indexing to ensure collection exists
+            await self._run_initial_indexing()
+            
+            # Create async handler
+            self.async_handler = AsyncWatcherHandler(
+                repo_path=self.repo_path,
+                config=self.config,
+                embedder=self.embedder,
+                store=self.store,
+                debounce_seconds=self.debounce_seconds
+            )
+            
+            # Create bridge handler for watchdog -> async
+            self._bridge_handler = WatcherBridgeHandler(
+                repo_path=self.repo_path,
+                async_handler=self.async_handler,
+                include_patterns=self.include_patterns,
+                exclude_patterns=self.exclude_patterns,
+                loop=asyncio.get_event_loop()
+            )
+            
+            # Start async processing
+            await self.async_handler.start()
+            
+            # Start file system watching
+            self.observer.schedule(self._bridge_handler, str(self.repo_path), recursive=True)
+            self.observer.start()
+            
+            self._running = True
+            
+        except Exception as e:
+            print(f"❌ Failed to start watcher: {e}")
+            await self.stop()
+            raise
+    
+    async def _run_initial_indexing(self):
+        """Run initial indexing to ensure collection exists and project is indexed."""
+        try:
+            print(f"🔄 Running initial indexing for {self.collection_name}")
+            
+            # Create indexer in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            
+            def run_indexing():
+                from ..indexer import CoreIndexer
+                indexer = CoreIndexer(
+                    config=self.config,
+                    embedder=self.embedder,
+                    vector_store=self.store,
+                    project_path=self.repo_path
+                )
+                return indexer.index_project(
+                    collection_name=self.collection_name,
+                    incremental=False  # Full index to ensure everything is set up
+                )
+            
+            result = await loop.run_in_executor(None, run_indexing)
+            if result.success:
+                print(f"✅ Initial indexing completed for {self.collection_name}")
+            else:
+                print(f"⚠️ Initial indexing had issues: {result.errors}")
+                
+        except Exception as e:
+            print(f"❌ Initial indexing failed: {e}")
+    
+    async def stop(self):
+        """Stop file watching and cleanup."""
+        if not self._running:
+            return
+            
+        self._running = False
+        
+        try:
+            # Stop file system observer
+            if self.observer and self.observer.is_alive():
+                self.observer.stop()
+                self.observer.join(timeout=5.0)
+            
+            # Stop async handler
+            if self.async_handler:
+                await self.async_handler.stop()
+                
+        except Exception as e:
+            print(f"❌ Error stopping watcher: {e}")
+
+
+class WatcherBridgeHandler(FileSystemEventHandler):
+    """Bridge handler that connects watchdog events to async processing."""
+    
+    def __init__(self, repo_path: Path, async_handler, include_patterns: list, exclude_patterns: list, loop=None):
+        super().__init__()
+        self.repo_path = repo_path
+        self.async_handler = async_handler
+        self.include_patterns = include_patterns or ['*.py', '*.md']
+        self.exclude_patterns = exclude_patterns or []
+        self.loop = loop  # Event loop reference
+        
+    def on_modified(self, event):
+        """Handle file modification events."""
+        if not event.is_directory:
+            self._schedule_event(event.src_path, "modified")
+    
+    def on_created(self, event):
+        """Handle file creation events."""
+        if not event.is_directory:
+            self._schedule_event(event.src_path, "created")
+    
+    def on_deleted(self, event):
+        """Handle file deletion events."""
+        if not event.is_directory:
+            self._schedule_event(event.src_path, "deleted")
+    
+    def on_moved(self, event):
+        """Handle file move events."""
+        if not event.is_directory:
+            # Treat as delete + create
+            self._schedule_event(event.src_path, "deleted")
+            self._schedule_event(event.dest_path, "created")
+    
+    def _schedule_event(self, file_path: str, event_type: str):
+        """Schedule an event to be processed in the main thread."""
+        try:
+            if self.loop and not self.loop.is_closed():
+                # Use call_soon_threadsafe to schedule the coroutine from any thread
+                asyncio.run_coroutine_threadsafe(
+                    self._handle_event(file_path, event_type), 
+                    self.loop
+                )
+        except Exception as e:
+            print(f"❌ Error scheduling event {file_path}: {e}")
+    
+    async def _handle_event(self, file_path: str, event_type: str):
+        """Process a file system event asynchronously."""
+        try:
+            path = Path(file_path)
+            
+            # Check if we should process this file
+            if not self._should_process_file(path):
+                return
+            
+            # Forward to async handler
+            await self.async_handler.handle_file_event(file_path, event_type)
+            
+        except Exception as e:
+            print(f"❌ Error in bridge handler: {e}")
+    
+    def _should_process_file(self, path: Path) -> bool:
+        """Check if a file should be processed based on patterns."""
+        try:
+            # Check if file is within project
+            try:
+                path.relative_to(self.repo_path)
+            except ValueError:
+                return False
+            
+            # Check include patterns
+            if not self._matches_patterns(path.name, self.include_patterns):
+                return False
+            
+            # Check exclude patterns
+            if self._matches_patterns(str(path), self.exclude_patterns):
+                return False
+            
+            return True
+            
+        except Exception:
+            return False
+    
+    def _matches_patterns(self, text: str, patterns: list) -> bool:
+        """Check if text matches any pattern."""
+        import fnmatch
+        
+        for pattern in patterns:
+            if fnmatch.fnmatch(text, pattern) or pattern in text:
+                return True
+        return False
+
+
+class AsyncWatcherHandler:
+    """Async handler that processes file events and triggers indexing."""
+    
+    def __init__(self, repo_path: Path, config, embedder, store, debounce_seconds: float = 2.0):
+        self.repo_path = repo_path
+        self.config = config
+        self.embedder = embedder
+        self.store = store
+        
+        # Import here to avoid circular imports
+        from .debounce import AsyncDebouncer
+        
+        self.debouncer = AsyncDebouncer(
+            delay=debounce_seconds,
+            max_batch_size=50
+        )
+        self.debouncer.set_callback(self._process_batch)
+        
+        # Stats
+        self.files_processed = 0
+        self.batches_processed = 0
+    
+    async def start(self):
+        """Start async processing."""
+        await self.debouncer.start()
+    
+    async def stop(self):
+        """Stop async processing."""
+        await self.debouncer.stop()
+    
+    async def handle_file_event(self, file_path: str, event_type: str):
+        """Handle a file system event."""
+        await self.debouncer.add_file_event(file_path, event_type)
+    
+    async def _process_batch(self, batch_event: Dict[str, Any]):
+        """Process a batch of file changes using the provided embedder and store."""
+        try:
+            modified_files = batch_event.get("modified_files", [])
+            deleted_files = batch_event.get("deleted_files", [])
+            
+            if modified_files:
+                success = await self._index_files(modified_files)
+                if success:
+                    self.files_processed += len(modified_files)
+            
+            if deleted_files:
+                await self._handle_deletions(deleted_files)
+            
+            self.batches_processed += 1
+            
+        except Exception as e:
+            print(f"❌ Error processing batch: {e}")
+    
+    async def _index_files(self, file_paths: list) -> bool:
+        """Index the given files using the provided embedder and store."""
+        try:
+            # Run indexing in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            
+            def run_indexing():
+                # Import here to avoid circular imports
+                from ..indexer import CoreIndexer
+                
+                indexer = CoreIndexer(
+                    config=self.config,
+                    embedder=self.embedder,
+                    vector_store=self.store,
+                    project_path=self.repo_path
+                )
+                
+                # Run incremental indexing for the project
+                result = indexer.index_project(
+                    collection_name=getattr(self.config, 'collection_name', 'default'),
+                    incremental=True,
+                    include_tests=False
+                )
+                
+                return result.success
+            
+            return await loop.run_in_executor(None, run_indexing)
+            
+        except Exception as e:
+            print(f"❌ File indexing failed: {e}")
+            return False
+    
+    async def _handle_deletions(self, file_paths: list):
+        """Handle file deletions by removing related entities."""
+        try:
+            # For now, just log deletions
+            # TODO: Implement proper entity deletion based on file paths
+            for file_path in file_paths:
+                relative_path = Path(file_path).relative_to(self.repo_path)
+                print(f"🗑️  File deleted: {relative_path}")
+            
+        except Exception as e:
+            print(f"❌ Error handling deletions: {e}")
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get handler statistics."""
+        return {
+            "files_processed": self.files_processed,
+            "batches_processed": self.batches_processed,
+            "debouncer_stats": self.debouncer.get_stats()
+        }

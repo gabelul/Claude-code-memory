@@ -171,21 +171,51 @@ class TestOpenAIEmbedder:
                 # Mock the API response
                 mock_client = MagicMock()
                 mock_response = MagicMock()
-                # Create responses for batches
-                mock_response.data = [MagicMock() for _ in range(100)]
+                # Create responses for all 150 texts (since batch_size=min(500,150)=150, it's one API call)
+                mock_response.data = [MagicMock() for _ in range(150)]
                 for data in mock_response.data:
                     data.embedding = list(np.random.rand(1536))
-                mock_response.usage.total_tokens = 1000
+                mock_response.usage.total_tokens = 1500
                 mock_client.embeddings.create.return_value = mock_response
                 mock_openai.return_value = mock_client
                 
                 embedder = OpenAIEmbedder(api_key="sk-test123")
-                texts = [f"text {i}" for i in range(150)]  # More than batch size
+                texts = [f"text {i}" for i in range(150)]  # Less than batch size (500)
                 results = embedder.embed_batch(texts)
                 
                 assert len(results) == 150
-                # Should have called API multiple times for large batch
-                assert mock_client.embeddings.create.call_count >= 2
+                # Should have called API only once since 150 < batch_size(500)
+                assert mock_client.embeddings.create.call_count == 1
+    
+    def test_embed_batch_very_large_batch(self):
+        """Test batch embedding with very large batch (should split into multiple API calls)."""
+        with patch('claude_indexer.embeddings.openai.OPENAI_AVAILABLE', True):
+            with patch('claude_indexer.embeddings.openai.openai.OpenAI') as mock_openai:
+                # Mock the API response - each call processes up to 500 texts
+                mock_client = MagicMock()
+                
+                def create_mock_response(*args, **kwargs):
+                    # Check the input size to return appropriate response
+                    input_texts = kwargs.get('input', args[1] if len(args) > 1 else [])
+                    batch_size = len(input_texts)
+                    
+                    mock_response = MagicMock()
+                    mock_response.data = [MagicMock() for _ in range(batch_size)]
+                    for data in mock_response.data:
+                        data.embedding = list(np.random.rand(1536))
+                    mock_response.usage.total_tokens = batch_size * 10
+                    return mock_response
+                
+                mock_client.embeddings.create.side_effect = create_mock_response
+                mock_openai.return_value = mock_client
+                
+                embedder = OpenAIEmbedder(api_key="sk-test123")
+                texts = [f"text {i}" for i in range(1200)]  # More than batch size (500)
+                results = embedder.embed_batch(texts)
+                
+                assert len(results) == 1200
+                # Should have called API multiple times: ceil(1200/500) = 3 times
+                assert mock_client.embeddings.create.call_count == 3
     
     def test_rate_limiting(self):
         """Test rate limiting functionality."""
