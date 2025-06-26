@@ -135,6 +135,7 @@ Add to `~/.claude/claude_desktop_config.json`:
 ### Step 3: Index Your Project
 ```bash
 # Basic indexing (auto-loads to Qdrant)
+# First run: Full mode (auto-detected), subsequent runs: Incremental mode (auto-detected)
 claude-indexer -p /path/to/your/project -c my-project
 
 # With verbose output to see detailed progress
@@ -157,11 +158,8 @@ Direct Qdrant integration with zero manual steps:
 # Index new project (auto-loads to Qdrant)
 claude-indexer -p /path/to/project -c project-name
 
-# Incremental updates (15x faster)
-claude-indexer -p /path/to/project -c project-name --incremental
-
-# Full reprocess (default behavior without --incremental)
-claude-indexer -p /path/to/project -c project-name
+# Auto-detection: First run = Full mode, subsequent runs = Incremental mode (15x faster)
+# No flags needed - automatically uses optimal mode based on state file existence
 
 # Clear collection (preserves manually added memories)
 claude-indexer -p /path/to/project -c project-name --clear
@@ -291,7 +289,7 @@ claude-indexer service status
 
 ## 🎯 When to Use Each Mode
 
-- **Basic Indexing**: New projects, major refactoring, scheduled updates (just `claude-indexer -p X -c Y`)
+- **Basic Indexing**: Auto-detects Full/Incremental mode - no flags needed (just `claude-indexer -p X -c Y`)
 - **File Watching**: Active development sessions, real-time feedback (`claude-indexer watch start`)
 - **Background Service**: Multiple projects, continuous development (`claude-indexer service start`)
 - **Git Hooks**: Team workflows, automated CI/CD integration (`claude-indexer hooks install`)
@@ -323,7 +321,7 @@ claude-indexer service status
 ## ✨ Features
 
 - **Simplified Architecture**: Direct Qdrant integration only (v2.0 removed MCP backend)
-- **Incremental updates**: 15x faster processing of changed files only
+- **Automatic incremental updates**: 15x faster processing of changed files (auto-detected)
 - **Real-time file watching**: Automatic indexing on code changes
 - **Multi-project service**: Background watching for multiple projects
 - **Git hooks integration**: Pre-commit automatic indexing
@@ -387,7 +385,7 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive architecture, setup instructions, a
 ✅ **218 entities** + **201 relations** indexed from 17-file project  
 ✅ **100% success rate** on file processing  
 ✅ **Sub-second semantic search** across indexed codebases  
-✅ **15x performance improvement** with incremental updates  
+✅ **15x performance improvement** with automatic incremental updates  
 ✅ **Enterprise-grade accuracy** with Tree-sitter + Jedi analysis  
 ✅ **True Automation** - Zero manual copy-paste steps eliminated  
 ✅ **Direct Qdrant Integration** - Instant knowledge graph loading  

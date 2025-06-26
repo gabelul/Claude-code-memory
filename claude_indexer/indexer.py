@@ -145,10 +145,14 @@ class CoreIndexer:
         """Default state file for backward compatibility with tests."""
         return self._get_state_file("default")
     
-    def index_project(self, collection_name: str, include_tests: bool = False,
-                     incremental: bool = False) -> IndexingResult:
-        """Index an entire project."""
+    def index_project(self, collection_name: str, include_tests: bool = False) -> IndexingResult:
+        """Index an entire project with automatic incremental detection."""
         start_time = time.time()
+        
+        # Auto-detect incremental mode based on state file existence (like watcher pattern)
+        state_file = self._get_state_file(collection_name)
+        incremental = state_file.exists()
+        
         result = IndexingResult(success=True, operation="incremental" if incremental else "full")
         
         try:

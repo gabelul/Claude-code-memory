@@ -161,7 +161,6 @@ class TestIndexCommands:
                 '--project', 'test_project',
                 '--collection', 'test-collection',
                 '--include-tests',
-                '--incremental',
                 '--clear',
                 '--verbose'
             ])

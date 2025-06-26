@@ -174,7 +174,6 @@ class IndexingEventHandler(FileSystemEventHandler):
             return run_indexing(
                 project_path=str(self.project_path),
                 collection_name=self.collection_name,
-                incremental=True,
                 quiet=True,
                 verbose=False
             )
@@ -278,7 +277,6 @@ class AsyncIndexingEventHandler:
                 return run_indexing(
                     project_path=str(self.project_path),
                     collection_name=self.collection_name,
-                    incremental=True,
                     quiet=True,
                     verbose=False
                 )
@@ -416,8 +414,7 @@ class Watcher:
                     print(f"🔄 No state file found for {self.collection_name}, running full initial indexing")
                 
                 return indexer.index_project(
-                    collection_name=self.collection_name,
-                    incremental=should_be_incremental  # Use incremental if state file exists
+                    collection_name=self.collection_name
                 )
             
             result = await loop.run_in_executor(None, check_and_run_indexing)
@@ -612,10 +609,9 @@ class AsyncWatcherHandler:
                     project_path=self.repo_path
                 )
                 
-                # Run incremental indexing for the project
+                # Run automatic indexing for the project (auto-detects incremental)
                 result = indexer.index_project(
                     collection_name=getattr(self.config, 'collection_name', 'default'),
-                    incremental=True,
                     include_tests=False
                 )
                 

@@ -74,13 +74,12 @@ else:
     @project_options
     @common_options
     @click.option('--include-tests', is_flag=True, help='Include test files in indexing')
-    @click.option('--incremental', is_flag=True, help='Only process changed files')
     @click.option('--clear', is_flag=True, help='Clear code-indexed memories before indexing (preserves manual memories)')
     @click.option('--clear-all', is_flag=True, help='Clear ALL memories before indexing (including manual ones)')
     @click.option('--depth', type=click.Choice(['basic', 'full']), default='full',
                   help='Analysis depth')
     def index(project, collection, verbose, quiet, config, include_tests, 
-            incremental, clear, clear_all, depth):
+            clear, clear_all, depth):
         """Index an entire project."""
         
         if quiet and verbose:
@@ -147,19 +146,21 @@ else:
                 # Exit after clearing - don't auto-index
                 return
         
-            # Run indexing only if not clearing
+            # Auto-detect incremental mode and run indexing only if not clearing
+            state_file = indexer._get_state_file(collection)
+            incremental = state_file.exists()
+            
             if not quiet:
                 click.echo(f"🔄 Indexing project: {project_path}")
                 click.echo(f"📦 Collection: {collection}")
                 if incremental:
-                    click.echo("⚡ Mode: Incremental")
+                    click.echo("⚡ Mode: Incremental (auto-detected)")
                 else:
-                    click.echo("🔄 Mode: Full")
+                    click.echo("🔄 Mode: Full (auto-detected)")
             
             result = indexer.index_project(
                 collection_name=collection,
-                include_tests=include_tests,
-                incremental=incremental
+                include_tests=include_tests
             )
         
         

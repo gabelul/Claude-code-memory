@@ -59,7 +59,7 @@ class GitHooksManager:
             
             if success and not quiet:
                 print(f"✅ Installed pre-commit hook for collection '{self.collection_name}'")
-                print(f"   Hook will run: {indexer_path} --project \"{self.project_path}\" --collection \"{self.collection_name}\" --incremental --quiet")
+                print(f"   Hook will run: {indexer_path} --project \"{self.project_path}\" --collection \"{self.collection_name}\" --quiet")
             
             return success
             
@@ -85,8 +85,8 @@ class GitHooksManager:
 
 echo "🔄 Running Claude Code indexing..."
 
-# Run incremental indexing
-{indexer_path} --project "{self.project_path}" --collection "{self.collection_name}" --incremental --quiet
+# Run automatic indexing (auto-detects incremental mode)
+{indexer_path} --project "{self.project_path}" --collection "{self.collection_name}" --quiet
 
 # Check if indexing succeeded
 if [ $? -eq 0 ]; then

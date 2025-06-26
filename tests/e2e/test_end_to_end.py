@@ -203,7 +203,7 @@ def search_test_function():
     return "searchable"
 ''')
         
-        result2 = indexer.index_project("test_e2e_workflow", incremental=True)
+        result2 = indexer.index_project("test_e2e_workflow")
         assert result2.success
         
         # Step 4: Search for new content
@@ -233,7 +233,7 @@ def search_test_function():
         initial_count = qdrant_store.count("test_incremental_e2e")
         
         # First incremental run (no changes)
-        result2 = indexer.index_project("test_incremental_e2e", incremental=True)
+        result2 = indexer.index_project("test_incremental_e2e")
         assert result2.success
         assert qdrant_store.count("test_incremental_e2e") == initial_count  # Should be same
         
@@ -242,7 +242,7 @@ def search_test_function():
         new_file.write_text('def incremental_func(): return "incremental"')
         
         # Second incremental run (with changes)
-        result3 = indexer.index_project("test_incremental_e2e", incremental=True)
+        result3 = indexer.index_project("test_incremental_e2e")
         assert result3.success
         assert qdrant_store.count("test_incremental_e2e") > initial_count  # Should increase
         
@@ -292,7 +292,7 @@ def search_test_function():
         
         # Should be able to recover and continue
         call_count = 0  # Reset for successful run
-        result2 = indexer.index_project("test_error_recovery", incremental=True)
+        result2 = indexer.index_project("test_error_recovery")
         assert result2.success
     
     def test_large_project_workflow(self, tmp_path, dummy_embedder, qdrant_store):
@@ -556,7 +556,7 @@ class TestPerformanceAndScalability:
         
         # Incremental index
         start_time = time.time()
-        result2 = indexer.index_project("test_incremental_perf", incremental=True)
+        result2 = indexer.index_project("test_incremental_perf")
         incremental_time = time.time() - start_time
         
         assert result1.success

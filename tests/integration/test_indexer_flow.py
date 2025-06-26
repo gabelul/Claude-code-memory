@@ -84,8 +84,8 @@ class TestIndexerFlow:
         modified_content = original_content + '\n\ndef subtract(x, y):\n    """Subtract two numbers."""\n    return x - y\n'
         modified_file.write_text(modified_content)
         
-        # Incremental index
-        result2 = indexer.index_project("test_incremental", incremental=True)
+        # Second index (should auto-detect incremental mode)
+        result2 = indexer.index_project("test_incremental")
         final_count = qdrant_store.count("test_incremental")
         
         # Verify incremental indexing worked

@@ -55,8 +55,8 @@ class TestDeleteEventHandling:
         # Delete foo.py
         (temp_repo / "foo.py").unlink()
         
-        # Re-index incrementally (should detect deletion)
-        result2 = indexer.index_project(collection_name, incremental=True)
+        # Re-index (should auto-detect incremental mode and handle deletion)
+        result2 = indexer.index_project(collection_name)
         assert result2.success
         
         # Verify cleanup occurred
@@ -125,7 +125,7 @@ def extra_function_{i}():
             extra_file.unlink()
         
         # Re-index with cleanup
-        result2 = indexer.index_project(collection_name, incremental=True)
+        result2 = indexer.index_project(collection_name)
         assert result2.success
         
         final_count = qdrant_store.count(collection_name)
@@ -194,7 +194,7 @@ class SubClass_{i}:
         shutil.rmtree(subdir)
         
         # Re-index with cleanup
-        result2 = indexer.index_project("test_delete_dir", incremental=True)
+        result2 = indexer.index_project("test_delete_dir")
         assert result2.success
         
         final_count = qdrant_store.count("test_delete_dir")
@@ -243,7 +243,7 @@ class SubClass_{i}:
         (temp_repo / "bar.py").unlink()
         
         # Re-index with cleanup
-        result2 = indexer.index_project("test_delete_partial", incremental=True)
+        result2 = indexer.index_project("test_delete_partial")
         assert result2.success
         
         # Verify that foo.py entities are still present
@@ -307,12 +307,12 @@ def temp_func():
         # Delete the file
         temp_file.unlink()
         
-        # First incremental index (should clean up)
-        result2 = indexer.index_project("test_delete_persistence", incremental=True)
+        # First index (should clean up)
+        result2 = indexer.index_project("test_delete_persistence")
         assert result2.success
         
-        # Second incremental index (should remember deletion)
-        result3 = indexer.index_project("test_delete_persistence", incremental=True)
+        # Second index (should remember deletion)
+        result3 = indexer.index_project("test_delete_persistence")
         assert result3.success
         
         # Verify temp function is still gone after multiple runs
@@ -369,7 +369,7 @@ def error_trigger_function():
         error_file.unlink()
         
         # Re-index (cleanup should work despite previous errors)
-        result2 = indexer.index_project("test_delete_errors", incremental=True)
+        result2 = indexer.index_project("test_delete_errors")
         # Should succeed since error file is gone
         
         final_count = qdrant_store.count("test_delete_errors")
@@ -406,8 +406,8 @@ class TestDeleteEventEdgeCases:
         temp_file.write_text("def never_indexed(): pass")
         temp_file.unlink()
         
-        # Incremental indexing should handle missing file gracefully
-        result2 = indexer.index_project("test_delete_nonexistent", incremental=True)
+        # Indexing should handle missing file gracefully
+        result2 = indexer.index_project("test_delete_nonexistent")
         assert result2.success
     
     def test_delete_during_indexing_race_condition(self, temp_repo, dummy_embedder, qdrant_store):
@@ -439,5 +439,5 @@ class TestDeleteEventEdgeCases:
         race_file.unlink()
         
         # Try to index again - should handle gracefully
-        result2 = indexer.index_project("test_delete_race", incremental=True)
+        result2 = indexer.index_project("test_delete_race")
         assert result2.success  # Should not crash

@@ -12,8 +12,8 @@ from .logging import setup_logging
 
 
 def run_indexing(project_path: str, collection_name: str, 
-                incremental: bool = False, quiet: bool = False, 
-                verbose: bool = False, include_tests: bool = False,
+                quiet: bool = False, verbose: bool = False, 
+                include_tests: bool = False,
                 config_file: Optional[str] = None) -> bool:
     """Run indexing with the specified parameters.
     
@@ -56,16 +56,18 @@ def run_indexing(project_path: str, collection_name: str,
         # Create indexer
         indexer = CoreIndexer(config, embedder, vector_store, project)
         
-        # Run indexing
+        # Auto-detect incremental mode and run indexing
+        state_file = indexer._get_state_file(collection_name)
+        incremental = state_file.exists()
+        
         if not quiet and verbose:
             print(f"🔄 Indexing project: {project}")
             print(f"📦 Collection: {collection_name}")
-            print(f"⚡ Mode: {'Incremental' if incremental else 'Full'}")
+            print(f"⚡ Mode: {'Incremental' if incremental else 'Full'} (auto-detected)")
         
         result = indexer.index_project(
             collection_name=collection_name,
-            include_tests=include_tests,
-            incremental=incremental
+            include_tests=include_tests
         )
         
         # Report results

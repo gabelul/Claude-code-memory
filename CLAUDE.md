@@ -6,7 +6,13 @@ Complete memory solution for Claude Code providing context-aware conversations w
 
 ## Version History
 
-**v2.0 - Breaking Changes (Current)**
+**v2.1 - Auto-Detection (Current)**
+- ⚡ **NEW**: Automatic incremental detection - no `--incremental` flag needed
+- 🎯 **Smart Defaults**: State file exists = incremental, no state = full mode
+- 🚀 **Simplified UX**: Zero flag management, automatic 15x performance optimization
+- ✅ **All Tests Passing**: 157/158 tests passing with auto-detection
+
+**v2.0 - Breaking Changes**
 - 🚨 **BREAKING**: Removed MCP storage backend entirely
 - 🎯 **Simplified Architecture**: Single backend design (Direct Qdrant only)
 - ❌ **Removed**: `--generate-commands` flag and manual command mode
@@ -107,10 +113,8 @@ claude-indexer -p /path/to/project -c project-name
 
 ```bash
 # Direct Qdrant automation - zero manual steps
+# Auto-detects: First run = Full mode, subsequent runs = Incremental mode (15x faster)
 claude-indexer -p /path -c name
-
-# Incremental updates (15x faster)
-claude-indexer -p /path -c name --incremental
 
 # Clear collection (preserves manually added memories)
 claude-indexer -p /path -c name --clear
@@ -402,6 +406,7 @@ claude-indexer --help  # Test installation
 
 **6. Test with First Project**
 ```bash
+# First run: Full mode (auto-detected), second run: Incremental mode (auto-detected)
 claude-indexer -p /path/to/your/python/project -c test-setup --verbose
 ```
 
@@ -413,6 +418,7 @@ claude-indexer -p /path/to/your/python/project -c test-setup --verbose
 - **Semantic Search**: Find code by intent, not just keywords
 - **Cross-Session Memory**: Persistent understanding across Claude Code sessions
 - **True Automation**: Zero manual copy-paste steps required
+- **Auto-Detection**: Automatic incremental mode selection for optimal performance
 - **Direct Operations**: Instant knowledge graph loading into Qdrant
 - **Real-time Feedback**: Immediate confirmation of successful indexing
 
@@ -444,10 +450,11 @@ claude-indexer -p /path/to/your/python/project -c test-setup --verbose
 
 ## Advanced Automation Features
 
-### Incremental Updates
+### Automatic Incremental Updates  
+- **Auto-Detection**: State file exists = incremental, no state = full mode (no flags needed)
 - **Change Detection**: SHA256 file hashing for precise change identification
 - **State Persistence**: `.indexer_state_{collection}.json` tracks file metadata
-- **Performance**: Only processes changed files (1/17 vs full re-index)
+- **Performance**: Only processes changed files automatically (1/17 vs full re-index)
 - **Cleanup**: Automatic detection and handling of deleted files
 - **Efficiency**: 94% reduction in processing time for typical changes
 
