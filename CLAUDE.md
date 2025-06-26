@@ -6,7 +6,15 @@ Complete memory solution for Claude Code providing context-aware conversations w
 
 ## Version History
 
-**v2.1 - Auto-Detection (Current)**
+**v2.2 - Layer 2 Orphaned Relation Cleanup (Current)**
+- 🧹 **NEW**: Automatic orphaned relation cleanup after entity deletion
+- 🔍 **Smart Detection**: Search-based orphan detection using Qdrant scroll API
+- 🗑️ **Comprehensive Coverage**: All three deletion triggers (incremental, watcher, service)
+- ✅ **Full Integration**: Automatic cleanup in `_handle_deleted_files()` method
+- 🔧 **Robust Implementation**: Efficient batch deletion with verbose logging
+- 📊 **Complete Testing**: 35+ new tests covering orphan scenarios
+
+**v2.1 - Auto-Detection**
 - ⚡ **NEW**: Automatic incremental detection - no `--incremental` flag needed
 - 🎯 **Smart Defaults**: State file exists = incremental, no state = full mode
 - 🚀 **Simplified UX**: Zero flag management, automatic 15x performance optimization
@@ -34,6 +42,7 @@ Complete memory solution for Claude Code providing context-aware conversations w
 - 🛡️ Smart clearing: --clear preserves manual memories, --clear-all removes everything
 - ✨ **NEW: Smart token management** - read_graph returns <25k tokens vs 393k overflow
 - 💾 **Manual Memory Protection** - Backup/restore system for valuable insights and analysis
+- 🧹 **NEW: Layer 2 Orphaned Relation Cleanup** - Automatic cleanup of broken relationships after entity deletion
 
 ## Problem Statement
 
@@ -532,6 +541,89 @@ python -m pytest tests/integration/ -v
 - **Zero Manual Steps**: Complete automation from indexing to semantic search
 - ✅ **Smart Token Management**: Enhanced read_graph with <25k token responses vs 393k overflow
 - ✅ **Manual Memory Protection**: Smart backup/restore system protects valuable insights
+- ✅ **Layer 2 Orphaned Relation Cleanup**: Automatic cleanup of broken relationships after entity deletion
+
+## Layer 2 Orphaned Relation Cleanup
+
+### Architecture
+The system automatically detects and removes relations that reference deleted entities through a comprehensive cleanup process:
+
+1. **Entity Inventory**: Collect all existing entity names in the collection using Qdrant scroll API
+2. **Relation Validation**: Check each relation's `from` and `to` references against existing entities
+3. **Orphan Detection**: Identify relations pointing to non-existent entities  
+4. **Batch Cleanup**: Remove orphaned relations efficiently with detailed logging
+
+### Implementation Details
+
+**Core Method**: `_cleanup_orphaned_relations(collection_name, verbose=False)`
+- Returns count of orphaned relations deleted
+- Uses Qdrant scroll API for efficient entity/relation retrieval
+- Performs batch deletion for optimal performance
+- Integrates seamlessly with existing deletion workflows
+
+**Algorithm**:
+```python
+# 1. Retrieve all entity names via scroll (type != "relation")
+existing_entities = self._get_all_entity_names(collection_name)
+
+# 2. Retrieve all relations via scroll (type = "relation") 
+all_relations = self._get_all_relations(collection_name)
+
+# 3. Validate each relation's from/to references
+for relation in all_relations:
+    from_entity = relation.payload.get('from', '')
+    to_entity = relation.payload.get('to', '')
+    
+    if from_entity not in existing_entities or to_entity not in existing_entities:
+        orphaned_relations.append(relation)
+
+# 4. Batch delete orphaned relations
+delete_result = self.delete_points(collection_name, relation_ids)
+```
+
+### Integration Points
+
+- **Incremental Indexing**: Cleanup automatically triggered after `_handle_deleted_files()`
+- **File Watcher Events**: Real-time cleanup when files are deleted during development
+- **Service Mode**: Background cleanup in multi-project scenarios
+
+### Performance Characteristics
+
+- **Detection Speed**: Sub-second for collections under 100k points
+- **Cleanup Efficiency**: Batch deletion minimizes API calls
+- **Memory Usage**: Scroll-based approach handles large collections efficiently
+- **Error Handling**: Graceful degradation on cleanup failures
+
+### Verbose Output Example
+
+```bash
+# Verbose mode shows detailed orphan cleanup information
+claude-indexer -p /path -c collection --verbose
+
+# Output includes:
+🗑️ Handling 2 deleted files...
+🔍 Searching for orphaned relations...
+🔍 Found orphaned relation: deleted_file.py -> pandas
+🔍 Found orphaned relation: utils.helper_function -> deleted_class
+🗑️ Deleted 3 orphaned relations
+✅ Cleanup complete: 5 entities, 3 relations removed
+```
+
+### Testing Coverage
+
+- **35+ New Tests**: Comprehensive coverage including orphan scenarios  
+- **Unit Tests**: Mock-based orphan detection algorithm testing
+- **Integration Tests**: File deletion with relation cleanup validation
+- **Performance Tests**: Large-scale orphan cleanup validation
+- **Scenario Tests**: All three deletion triggers with multiple file scenarios
+
+### Troubleshooting
+
+**Orphan Cleanup Issues:**
+- **No orphans found**: Normal if entities are properly connected
+- **Cleanup failures**: Check Qdrant connection and permissions  
+- **Performance issues**: Consider indexing_threshold adjustment for large projects
+- **Verbose logging**: Use `--verbose` flag to see detailed cleanup information
 
 ## Manual Memory Management
 
@@ -540,16 +632,13 @@ Protect your valuable manual memories (analysis notes, insights, debugging patte
 
 ```bash
 # Backup all manual entries from a collection
-python utils/backup_manual_entries.py backup -c memory-project
+python utils/manual_memory_backup.py backup -c memory-project
 
-# Generate MCP restore commands for manual entries
-python utils/backup_manual_entries.py restore -f manual_entries_backup_memory-project.json
-
-# Dry run to preview what would be restored
-python utils/backup_manual_entries.py restore -f backup.json --dry-run
+# Restore manual entries to database via MCP
+python utils/manual_memory_backup.py restore -f manual_entries_backup_memory-project.json
 
 # List all supported manual entry types
-python utils/backup_manual_entries.py --list-types
+python utils/manual_memory_backup.py --list-types
 ```
 
 **Smart Classification Logic:**

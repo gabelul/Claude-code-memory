@@ -207,10 +207,18 @@ class QdrantStore(ManagedVectorStore):
         start_time = time.time()
         
         try:
-            self.client.delete(
+            print(f"🗑️ Qdrant delete_points called:")
+            print(f"   Collection: {collection_name}")
+            print(f"   Point IDs: {point_ids}")
+            print(f"   Point ID types: {[type(pid) for pid in point_ids]}")
+            
+            delete_response = self.client.delete(
                 collection_name=collection_name,
                 points_selector=point_ids
             )
+            
+            print(f"   Delete response: {delete_response}")
+            print(f"   Delete response type: {type(delete_response)}")
             
             return StorageResult(
                 success=True,
@@ -220,6 +228,7 @@ class QdrantStore(ManagedVectorStore):
             )
             
         except Exception as e:
+            print(f"❌ Exception in delete_points: {e}")
             return StorageResult(
                 success=False,
                 operation="delete",
@@ -239,6 +248,11 @@ class QdrantStore(ManagedVectorStore):
             query_filter = None
             if filter_conditions:
                 query_filter = self._build_filter(filter_conditions)
+                print(f"🔍 search_similar debug:")
+                print(f"   Collection: {collection_name}")
+                print(f"   Filter conditions: {filter_conditions}")
+                print(f"   Query filter: {query_filter}")
+                print(f"   Limit: {limit}, Score threshold: {score_threshold}")
             
             # Perform search
             search_results = self.client.search(
@@ -248,6 +262,12 @@ class QdrantStore(ManagedVectorStore):
                 score_threshold=score_threshold,
                 query_filter=query_filter
             )
+            
+            if filter_conditions:
+                print(f"   Raw search results count: {len(search_results)}")
+                for i, result in enumerate(search_results):
+                    print(f"   Result {i}: ID={result.id}, score={result.score}")
+                    print(f"      Payload: {result.payload}")
             
             # Convert results
             results = []
@@ -267,6 +287,7 @@ class QdrantStore(ManagedVectorStore):
             )
             
         except Exception as e:
+            print(f"❌ search_similar exception: {e}")
             return StorageResult(
                 success=False,
                 operation="search",
@@ -354,6 +375,56 @@ class QdrantStore(ManagedVectorStore):
         except Exception:
             return []
     
+    def _scroll_collection(
+        self, 
+        collection_name: str,
+        scroll_filter: Optional[Any] = None,
+        limit: int = 1000,
+        with_vectors: bool = False,
+        handle_pagination: bool = True
+    ) -> List[Any]:
+        """
+        Unified scroll method for retrieving points from a collection.
+        
+        Args:
+            collection_name: Name of the collection to scroll
+            scroll_filter: Optional filter to apply during scrolling
+            limit: Maximum number of points per page (default: 1000)
+            with_vectors: Whether to include vectors in results (default: False)
+            handle_pagination: If True, retrieves all pages; if False, only first page
+            
+        Returns:
+            List of points matching the criteria
+        """
+        try:
+            all_points = []
+            offset = None
+            
+            while True:
+                scroll_result = self.client.scroll(
+                    collection_name=collection_name,
+                    scroll_filter=scroll_filter,
+                    limit=limit,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=with_vectors
+                )
+                
+                points, next_offset = scroll_result
+                all_points.extend(points)
+                
+                # Handle pagination if requested and more results exist
+                if handle_pagination and next_offset is not None:
+                    offset = next_offset
+                else:
+                    break
+                    
+            return all_points
+            
+        except Exception as e:
+            # Log error and return empty list
+            return []
+    
     def clear_collection(self, collection_name: str, preserve_manual: bool = True) -> StorageResult:
         """Clear collection data. By default, preserves manually-added memories.
         
@@ -381,12 +452,13 @@ class QdrantStore(ManagedVectorStore):
                 count_before = self.client.count(collection_name=collection_name).count
                 
                 # Get all points to identify auto-generated content
-                # Use scroll to get all points, filter manually, then delete by IDs
-                all_points = self.client.scroll(
+                # Use helper to get all points with pagination
+                all_points = self._scroll_collection(
                     collection_name=collection_name,
-                    limit=10000,  # Get all points
-                    with_payload=True
-                )[0]
+                    limit=10000,  # Large page size for efficiency
+                    with_vectors=False,
+                    handle_pagination=True
+                )
                 
                 # Find points that are auto-generated (code-indexed entities or relations)
                 auto_generated_ids = []
@@ -534,10 +606,11 @@ class QdrantStore(ManagedVectorStore):
             if not self.collection_exists(collection_name):
                 return entity_names
             
-            # Use scroll to get all entities (type != "relation")
+            # Use helper to get all entities with pagination
             from qdrant_client import models
             
-            scroll_result = self.client.scroll(
+            # Get all entities (type != "relation")
+            points = self._scroll_collection(
                 collection_name=collection_name,
                 scroll_filter=models.Filter(
                     must_not=[
@@ -548,11 +621,11 @@ class QdrantStore(ManagedVectorStore):
                     ]
                 ),
                 limit=1000,
-                with_payload=True,
-                with_vectors=False
+                with_vectors=False,
+                handle_pagination=True
             )
             
-            for point in scroll_result[0]:
+            for point in points:
                 name = point.payload.get('name', '')
                 if name:
                     entity_names.add(name)
@@ -576,10 +649,11 @@ class QdrantStore(ManagedVectorStore):
             if not self.collection_exists(collection_name):
                 return relations
             
-            # Use scroll to get all relations (type = "relation")  
+            # Use helper to get all relations with pagination  
             from qdrant_client import models
             
-            scroll_result = self.client.scroll(
+            # Get all relations (type = "relation")
+            relations = self._scroll_collection(
                 collection_name=collection_name,
                 scroll_filter=models.Filter(
                     must=[
@@ -590,11 +664,9 @@ class QdrantStore(ManagedVectorStore):
                     ]
                 ),
                 limit=1000,
-                with_payload=True,
-                with_vectors=False
+                with_vectors=False,
+                handle_pagination=True
             )
-            
-            relations.extend(scroll_result[0])
             
         except Exception as e:
             # Log error but continue - empty list means no relations found
@@ -602,8 +674,96 @@ class QdrantStore(ManagedVectorStore):
         
         return relations
     
+    def find_entities_for_file(self, collection_name: str, file_path: str) -> List[Dict[str, Any]]:
+        """Find all entities associated with a file path using OR logic.
+        
+        Searches for:
+        - Entities with file_path matching the given path
+        - File entities where name equals the given path
+        
+        Returns:
+            List of matching entities with id, name, type, and full payload
+        """
+        try:
+            from qdrant_client import models
+            
+            # Use helper to get all matching entities with pagination
+            points = self._scroll_collection(
+                collection_name=collection_name,
+                scroll_filter=models.Filter(
+                    should=[
+                        # Find entities with file_path matching
+                        models.FieldCondition(
+                            key="file_path",
+                            match=models.MatchValue(value=file_path)
+                        ),
+                        # Find File entities where name = file_path
+                        models.FieldCondition(
+                            key="name", 
+                            match=models.MatchValue(value=file_path)
+                        ),
+                    ]
+                ),
+                limit=1000,
+                with_vectors=False,
+                handle_pagination=True
+            )
+            
+            results = []
+            for point in points:
+                results.append({
+                    "id": point.id,
+                    "name": point.payload.get('name', 'Unknown'),
+                    "type": point.payload.get('entityType', point.payload.get('type', 'unknown')),
+                    "payload": point.payload
+                })
+            
+            return results
+            
+        except Exception as e:
+            # Fallback to search_similar if scroll is not available
+            return self._find_entities_for_file_fallback(collection_name, file_path)
+    
+    def _find_entities_for_file_fallback(self, collection_name: str, file_path: str) -> List[Dict[str, Any]]:
+        """Fallback implementation using search_similar."""
+        dummy_vector = [0.1] * 1536
+        results = []
+        
+        # Search for entities with file_path matching
+        filter_path = {"file_path": file_path}
+        search_result = self.search_similar(
+            collection_name=collection_name,
+            query_vector=dummy_vector,
+            limit=1000,
+            score_threshold=0.0,
+            filter_conditions=filter_path
+        )
+        if search_result.success:
+            results.extend(search_result.results)
+        
+        # Search for File entities where name = file_path
+        filter_name = {"name": file_path}
+        search_result = self.search_similar(
+            collection_name=collection_name,
+            query_vector=dummy_vector,
+            limit=1000,
+            score_threshold=0.0,
+            filter_conditions=filter_name
+        )
+        if search_result.success:
+            # Only add if not already in results (deduplication)
+            existing_ids = {r["id"] for r in results}
+            for result in search_result.results:
+                if result["id"] not in existing_ids:
+                    results.append(result)
+        
+        return results
+    
     def _cleanup_orphaned_relations(self, collection_name: str, verbose: bool = False) -> int:
         """Clean up relations that reference non-existent entities.
+        
+        Uses a single atomic query to get a consistent snapshot of the database,
+        avoiding race conditions between entity and relation queries.
         
         Args:
             collection_name: Name of the collection to clean
@@ -613,38 +773,87 @@ class QdrantStore(ManagedVectorStore):
             Number of orphaned relations deleted
         """
         if verbose:
-            print("🔍 Searching for orphaned relations...")
+            print("🔍 Scanning collection for orphaned relations...")
         
         try:
-            # Step 1: Get all entity names currently in collection
-            existing_entities = self._get_all_entity_names(collection_name)
-            
-            if not existing_entities:
+            # Check if collection exists
+            if not self.collection_exists(collection_name):
                 if verbose:
-                    print("   No entities found in collection")
+                    print("   Collection doesn't exist - nothing to clean")
                 return 0
             
-            # Step 2: Find all relations
-            all_relations = self._get_all_relations(collection_name)
+            # Get ALL data in a single atomic query to ensure consistency
+            all_points = self._scroll_collection(
+                collection_name=collection_name,
+                limit=10000,  # Large batch size for efficiency
+                with_vectors=False,
+                handle_pagination=True
+            )
             
-            if not all_relations:
+            # Process in-memory to ensure consistency
+            entity_names = set()
+            relations = []
+            
+            for point in all_points:
+                if point.payload.get('type') == 'relation':
+                    relations.append(point)
+                else:
+                    name = point.payload.get('name', '')
+                    if name:
+                        entity_names.add(name)
+            
+            if verbose:
+                if not entity_names:
+                    print("   ⚠️  No entities found in collection - ALL relations are orphaned!")
+                else:
+                    print(f"   📊 Found {len(entity_names)} entities in collection")
+                    # Show a sample of entity names for debugging
+                    sample_entities = list(entity_names)[:5]
+                    print(f"   📝 Sample entities: {', '.join(sample_entities)}")
+                    if len(entity_names) > 5:
+                        print(f"      ... and {len(entity_names) - 5} more")
+            
+            if not relations:
                 if verbose:
-                    print("   No relations found in collection")
+                    print("   ✅ No relations found in collection - nothing to clean")
                 return 0
             
-            # Step 3: Check each relation for orphaned references
+            if verbose:
+                print(f"   🔗 Found {len(relations)} relations to validate")
+            
+            # Check each relation for orphaned references with consistent snapshot
             orphaned_relations = []
-            for relation in all_relations:
+            valid_relations = 0
+            
+            for relation in relations:
                 from_entity = relation.payload.get('from', '')
                 to_entity = relation.payload.get('to', '')
+                relation_type = relation.payload.get('relationType', 'unknown')
                 
                 # Check if either end of the relation references a non-existent entity
-                if from_entity not in existing_entities or to_entity not in existing_entities:
+                from_missing = from_entity not in entity_names
+                to_missing = to_entity not in entity_names
+                
+                if from_missing or to_missing:
                     orphaned_relations.append(relation)
                     if verbose:
-                        print(f"🔍 Found orphaned relation: {from_entity} -> {to_entity}")
+                        missing_info = []
+                        if from_missing:
+                            missing_info.append(f"'{from_entity}' (missing)")
+                        else:
+                            missing_info.append(f"'{from_entity}'")
+                        if to_missing:
+                            missing_info.append(f"'{to_entity}' (missing)")
+                        else:
+                            missing_info.append(f"'{to_entity}'")
+                        print(f"   🗑️  ORPHAN: {missing_info[0]} --{relation_type}--> {missing_info[1]}")
+                else:
+                    valid_relations += 1
             
-            # Step 4: Batch delete orphaned relations
+            if verbose:
+                print(f"   ✅ {valid_relations} valid relations, {len(orphaned_relations)} orphaned relations found")
+            
+            # Batch delete orphaned relations if found
             if orphaned_relations:
                 relation_ids = [r.id for r in orphaned_relations]
                 delete_result = self.delete_points(collection_name, relation_ids)
@@ -654,8 +863,7 @@ class QdrantStore(ManagedVectorStore):
                         print(f"🗑️  Deleted {len(orphaned_relations)} orphaned relations")
                     return len(orphaned_relations)
                 else:
-                    if verbose:
-                        print(f"❌ Failed to delete orphaned relations: {delete_result.errors}")
+                    print(f"❌ Failed to delete orphaned relations: {delete_result.errors}")
                     return 0
             else:
                 if verbose:
@@ -663,6 +871,5 @@ class QdrantStore(ManagedVectorStore):
                 return 0
                 
         except Exception as e:
-            if verbose:
-                print(f"❌ Error during orphaned relation cleanup: {e}")
+            print(f"❌ Error during orphaned relation cleanup: {e}")
             return 0

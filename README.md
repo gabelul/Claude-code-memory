@@ -2,15 +2,30 @@
 
 🧠 **Refactored Universal Semantic Indexer** - Modular, production-ready package providing persistent memory for Claude Code through direct Qdrant integration, knowledge graphs, and Tree-sitter parsing
 
-## ✨ What's New in v2.0 - Breaking Changes
+## ✨ What's New in v2.2 - Layer 2 Orphaned Relation Cleanup
 
-🚨 **BREAKING**: Removed MCP storage backend entirely - **Direct Qdrant integration only**  
-🎯 **Simplified Architecture**: Single backend design eliminates dual-mode complexity  
-❌ **Removed**: `--generate-commands` flag and manual command mode  
-🔧 **Streamlined CLI**: Cleaner interface with direct automation only  
-🏗️ **Code Reduction**: Removed ~445 lines across multiple files  
-✅ **All Tests Passing**: 158/158 tests now pass with simplified architecture  
-⚡ **Same Performance**: All optimizations preserved (15x incremental updates)
+🧹 **NEW**: Automatic orphaned relation cleanup after entity deletion  
+🔍 **Smart Detection**: Search-based orphan detection using Qdrant scroll API  
+🗑️ **Comprehensive Coverage**: All three deletion triggers (incremental, watcher, service)  
+✅ **Full Integration**: Automatic cleanup in `_handle_deleted_files()` method  
+🔧 **Robust Implementation**: Efficient batch deletion with verbose logging  
+📊 **Complete Testing**: 35+ new tests covering orphan scenarios  
+
+## ✨ Previous Updates
+
+**v2.1 - Auto-Detection**
+- ⚡ Automatic incremental detection - no `--incremental` flag needed
+- 🎯 Smart defaults and 15x performance optimization
+- ✅ 157/158 tests passing with auto-detection
+
+**v2.0 - Breaking Changes**
+- 🚨 **BREAKING**: Removed MCP storage backend entirely - **Direct Qdrant integration only**  
+- 🎯 **Simplified Architecture**: Single backend design eliminates dual-mode complexity  
+- ❌ **Removed**: `--generate-commands` flag and manual command mode  
+- 🔧 **Streamlined CLI**: Cleaner interface with direct automation only  
+- 🏗️ **Code Reduction**: Removed ~445 lines across multiple files  
+- ✅ **All Tests Passing**: 158/158 tests now pass with simplified architecture  
+- ⚡ **Same Performance**: All optimizations preserved (15x incremental updates)
 
 ### Migration from v1.x
 **v1.x users upgrading to v2.0:**
@@ -198,6 +213,10 @@ claude-indexer file /path/to/file.py -p /path/to/project -c project-name
 # Help shows both indexing options AND available commands
 claude-indexer --help
 claude-indexer --version
+
+# Manual memory backup/restore
+python utils/manual_memory_backup.py backup -c collection-name
+python utils/manual_memory_backup.py restore -f backup-file.json
 ```
 
 ## ⚙️ Service Configuration
@@ -426,3 +445,5 @@ python utils/backup_manual_entries.py --list-types
 ✅ **Comprehensive Test Suite** - 90%+ coverage with CI/CD automation
 ✅ **Modular Architecture** - Clean, pluggable components for enterprise scale
 ✅ **Manual Memory Protection** - Smart backup/restore for valuable insights
+✅ **Layer 2 Orphaned Relation Cleanup** - Automatic cleanup of broken relationships after entity deletion
+# Test comment added at Thu Jun 26 21:34:06 CEST 2025

@@ -283,3 +283,49 @@ class CachingVectorStore(VectorStore):
             return self.backend.clear_collection(collection_name, preserve_manual=preserve_manual)
         else:
             raise AttributeError(f"Backend {type(self.backend)} does not support clear_collection")
+    
+    def find_entities_for_file(self, collection_name: str, file_path: str):
+        """Delegate find entities for file to backend"""
+        if hasattr(self.backend, 'find_entities_for_file'):
+            return self.backend.find_entities_for_file(collection_name, file_path)
+        else:
+            # Fallback implementation using search_similar
+            dummy_vector = [0.1] * 1536
+            results = []
+            
+            # Search for entities with file_path matching
+            filter_path = {"file_path": file_path}
+            search_result = self.search_similar(
+                collection_name=collection_name,
+                query_vector=dummy_vector,
+                limit=1000,
+                score_threshold=0.0,
+                filter_conditions=filter_path
+            )
+            if search_result.success:
+                results.extend(search_result.results)
+            
+            # Search for File entities where name = file_path
+            filter_name = {"name": file_path}
+            search_result = self.search_similar(
+                collection_name=collection_name,
+                query_vector=dummy_vector,
+                limit=1000,
+                score_threshold=0.0,
+                filter_conditions=filter_name
+            )
+            if search_result.success:
+                # Only add if not already in results (deduplication)
+                existing_ids = {r["id"] for r in results}
+                for result in search_result.results:
+                    if result["id"] not in existing_ids:
+                        results.append(result)
+            
+            return results
+    
+    def _cleanup_orphaned_relations(self, collection_name: str, verbose: bool = False):
+        """Delegate orphaned relation cleanup to backend"""
+        if hasattr(self.backend, '_cleanup_orphaned_relations'):
+            return self.backend._cleanup_orphaned_relations(collection_name, verbose)
+        else:
+            raise AttributeError(f"Backend {type(self.backend)} does not support _cleanup_orphaned_relations")

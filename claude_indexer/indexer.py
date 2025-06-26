@@ -163,12 +163,17 @@ class CoreIndexer:
                 # Handle deleted files
                 if deleted_files:
                     self._handle_deleted_files(collection_name, deleted_files, verbose)
+                    # State cleanup happens automatically in _update_state when no files_to_process
                     result.warnings.append(f"Handled {len(deleted_files)} deleted files")
             else:
                 files_to_process = self._find_all_files(include_tests)
                 deleted_files = []
             
             if not files_to_process:
+                # Even if no files to process, update state to remove deleted files
+                if incremental and deleted_files:
+                    # Use incremental mode to preserve existing files while removing deleted ones
+                    self._update_state([], collection_name, verbose, full_rebuild=False, deleted_files=deleted_files)
                 result.warnings.append("No files to process")
                 result.processing_time = time.time() - start_time
                 return result
@@ -186,14 +191,25 @@ class CoreIndexer:
                 total_batches = (len(files_to_process) + batch_size - 1) // batch_size
                 self.logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} files)")
                 
-                batch_entities, batch_relations, batch_errors = self._process_file_batch(batch)
+                batch_entities, batch_relations, batch_errors = self._process_file_batch(batch, verbose)
                 
                 all_entities.extend(batch_entities)
                 all_relations.extend(batch_relations)
                 result.errors.extend(batch_errors)
                 
+                # Track failed files properly
+                failed_files_in_batch = [str(f) for f in batch if str(f) in batch_errors]
+                result.failed_files.extend(failed_files_in_batch)
+                
+                # Print specific file errors for debugging
+                for error_msg in batch_errors:
+                    for file_path in batch:
+                        if str(file_path) in error_msg:
+                            print(f"❌ Error processing file: {file_path} - {error_msg}")
+                            break
+                
                 # Update metrics
-                result.files_processed += len([f for f in batch if f not in batch_errors])
+                result.files_processed += len([f for f in batch if str(f) not in batch_errors])
                 result.files_failed += len(batch_errors)
             
             # Store vectors using direct Qdrant automation
@@ -207,9 +223,14 @@ class CoreIndexer:
                     result.entities_created = len(all_entities)
                     result.relations_created = len(all_relations)
             
-            # Update state file
-            if result.success:
-                self._save_state(files_to_process, collection_name)
+            # Update state file - merge successfully processed files with existing state
+            successfully_processed = [f for f in files_to_process if str(f) not in result.failed_files]
+            if successfully_processed:
+                self._update_state(successfully_processed, collection_name, verbose, deleted_files=deleted_files if incremental else None)
+                # Store processed files in result for test verification
+                result.processed_files = [str(f) for f in successfully_processed]
+            elif verbose:
+                print(f"⚠️  No files to save state for (all {len(files_to_process)} files failed)")
             
             # Transfer cost data to result
             if hasattr(self, '_session_cost_data'):
@@ -382,7 +403,7 @@ class CoreIndexer:
         
         return changed_files, deleted_files
     
-    def _process_file_batch(self, files: List[Path]) -> Tuple[List[Entity], List[Relation], List[str]]:
+    def _process_file_batch(self, files: List[Path], verbose: bool = False) -> Tuple[List[Entity], List[Relation], List[str]]:
         """Process a batch of files."""
         all_entities = []
         all_relations = []
@@ -400,12 +421,16 @@ class CoreIndexer:
                     all_relations.extend(result.relations)
                     self.logger.debug(f"  Found {len(result.entities)} entities, {len(result.relations)} relations")
                 else:
-                    errors.append(str(file_path))
-                    self.logger.warning(f"  Failed to parse {relative_path}")
+                    error_msg = f"Failed to parse {relative_path}"
+                    errors.append(error_msg)
+                    self.logger.warning(f"  {error_msg}")
+                    print(f"❌ Parse error in {file_path}: Parse failure")
                     
             except Exception as e:
-                errors.append(str(file_path))
-                self.logger.error(f"  Error processing {file_path}: {e}")
+                error_msg = f"Error processing {file_path}: {e}"
+                errors.append(error_msg)
+                self.logger.error(f"  {error_msg}")
+                print(f"❌ Processing error in {file_path}: {e}")
         
         return all_entities, all_relations, errors
     
@@ -553,16 +578,92 @@ class CoreIndexer:
             pass
         return {}
     
-    def _save_state(self, files: List[Path], collection_name: str):
-        """Save current indexing state."""
+    def _update_state(self, new_files: List[Path], collection_name: str, verbose: bool = False, full_rebuild: bool = False, deleted_files: List[str] = None):
+        """Update state file by merging new files with existing state, or do full rebuild."""
         try:
-            state = self._get_current_state(files)
+            if full_rebuild:
+                # Full rebuild: use only the new files as complete state
+                final_state = self._get_current_state(new_files)
+                operation_desc = "rebuilt"
+                file_count_desc = f"{len(new_files)} files tracked"
+            else:
+                # Incremental update: merge new files with existing state
+                existing_state = self._load_state(collection_name)
+                new_state = self._get_current_state(new_files)
+                final_state = existing_state.copy()
+                final_state.update(new_state)
+                operation_desc = "updated"
+                file_count_desc = f"{len(new_files)} new files added, {len(final_state)} total files tracked"
+            
+            # Remove deleted files from final state
+            if deleted_files:
+                files_removed = 0
+                for deleted_file in deleted_files:
+                    if deleted_file in final_state:
+                        del final_state[deleted_file]
+                        files_removed += 1
+                        if verbose:
+                            print(f"   Removed {deleted_file} from state")
+                
+                if files_removed > 0:
+                    # Update description to reflect deletions
+                    if operation_desc == "updated":
+                        file_count_desc = f"{len(new_files)} new files added, {files_removed} files removed, {len(final_state)} total files tracked"
+                    else:  # rebuilt
+                        file_count_desc = f"{len(new_files)} files tracked, {files_removed} deleted files removed"
+            
+            # Save state atomically
             state_file = self._get_state_file(collection_name)
+            state_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            temp_file = state_file.with_suffix('.tmp')
             import json
-            with open(state_file, 'w') as f:
-                json.dump(state, f, indent=2)
+            with open(temp_file, 'w') as f:
+                json.dump(final_state, f, indent=2)
+            
+            # Atomic rename
+            temp_file.rename(state_file)
+            
+            # Verify saved state
+            with open(state_file) as f:
+                saved_state = json.load(f)
+            
+            if full_rebuild:
+                if len(saved_state) != len(new_files):
+                    raise ValueError(f"State validation failed: expected {len(new_files)} files, got {len(saved_state)}")
+            # Note: For incremental updates, we cannot validate the final count
+            # because it depends on both additions and deletions
+                
+            if verbose:
+                print(f"✅ State {operation_desc}: {file_count_desc}")
+                
         except Exception as e:
-            print(f"Failed to save state: {e}")
+            error_msg = f"❌ Failed to {'rebuild' if full_rebuild else 'update'} state: {e}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
+            # For incremental updates, fallback to full rebuild if update fails
+            if not full_rebuild:
+                print("🔄 Falling back to full state rebuild...")
+                self._update_state(self._find_all_files(include_tests=False), collection_name, verbose, full_rebuild=True, deleted_files=None)
+    
+    def _rebuild_full_state(self, collection_name: str, verbose: bool = False):
+        """Rebuild full state file from all current files."""
+        try:
+            if verbose:
+                print("🔄 Rebuilding complete state from all project files...")
+            
+            # Get all current files
+            all_files = self._find_all_files(include_tests=False)
+            
+            # Use unified _update_state method with full_rebuild=True
+            self._update_state(all_files, collection_name, verbose, full_rebuild=True, deleted_files=None)
+                
+        except Exception as e:
+            error_msg = f"❌ Failed to rebuild state: {e}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
     
     def _handle_deleted_files(self, collection_name: str, deleted_files: List[str], verbose: bool = False):
         """Handle deleted files by removing their entities and orphaned relations."""
@@ -573,75 +674,71 @@ class CoreIndexer:
         
         try:
             for deleted_file in deleted_files:
+                print(f"🗑️ Handling deleted file: {deleted_file}")
+                
+                # State file always stores relative paths, construct the full path
+                # Note: deleted_file is always relative from state file (see _get_current_state)
+                full_path = str((self.project_path / deleted_file).resolve())
+                
                 if verbose:
-                    print(f"   Removing entities from deleted file: {deleted_file}")
+                    print(f"   📁 Resolved to: {full_path}")
                 
-                # Convert relative path to absolute path for matching
-                if not deleted_file.startswith('/'):
-                    # This is a relative path from the state file
-                    # Use resolve() to handle symlinks (e.g., /var -> /private/var on macOS)
-                    full_path = str((self.project_path / deleted_file).resolve())
-                else:
-                    # Also resolve absolute paths to handle symlinks
-                    full_path = str(Path(deleted_file).resolve())
-                
-                # Use a proper dummy vector for search
-                dummy_vector = [0.1] * 1536  # Small non-zero values
-                
-                # First search: Find entities with file_path matching
-                filter_conditions_path = {"file_path": full_path}
-                search_result = self.vector_store.search_similar(
-                    collection_name=collection_name,
-                    query_vector=dummy_vector,
-                    limit=1000,  # Get all matches for this file
-                    score_threshold=0.0,  # Include all results
-                    filter_conditions=filter_conditions_path
-                )
+                # Use the vector store's find_entities_for_file method
+                print(f"   🔍 Finding ALL entities for file: {full_path}")
                 
                 point_ids = []
-                if search_result.success and search_result.results:
-                    point_ids.extend([result["id"] for result in search_result.results])
-                
-                # Second search: Find File entities where name = full_path
-                # This catches File entities that use path as their name
-                filter_conditions_name = {"name": full_path}
-                search_result_name = self.vector_store.search_similar(
-                    collection_name=collection_name,
-                    query_vector=dummy_vector,
-                    limit=1000,
-                    score_threshold=0.0,
-                    filter_conditions=filter_conditions_name
-                )
-                
-                if search_result_name.success and search_result_name.results:
-                    point_ids.extend([result["id"] for result in search_result_name.results])
+                try:
+                    # Use the elegant single-query method
+                    found_entities = self.vector_store.find_entities_for_file(collection_name, full_path)
+                    
+                    if found_entities:
+                        print(f"   ✅ Found {len(found_entities)} entities for file")
+                        for entity in found_entities:
+                            entity_name = entity.get('name', 'Unknown')
+                            entity_type = entity.get('type', 'unknown')
+                            entity_id = entity.get('id')
+                            print(f"      🆔 ID: {entity_id}, name: '{entity_name}', type: {entity_type}")
+                        
+                        # Extract point IDs for deletion
+                        point_ids = [entity['id'] for entity in found_entities]
+                    else:
+                        print(f"   ⚠️ No entities found for {deleted_file}")
+                        
+                except Exception as e:
+                    print(f"   ❌ Error finding entities: {e}")
+                    point_ids = []
                 
                 # Remove duplicates and delete all found points
                 point_ids = list(set(point_ids))
+                print(f"   🎯 Total unique point IDs to delete: {len(point_ids)}")
                 if point_ids:
+                    print(f"      🆔 Point IDs: {point_ids}")
                     
                     # Delete the points
+                    print(f"   🗑️ Attempting to delete {len(point_ids)} points...")
                     delete_result = self.vector_store.delete_points(collection_name, point_ids)
                     
                     if delete_result.success:
                         entities_deleted = len(point_ids)
                         total_entities_deleted += entities_deleted
-                        if verbose:
-                            print(f"   Removed {entities_deleted} entities from {deleted_file}")
+                        print(f"   ✅ Successfully removed {entities_deleted} entities from {deleted_file}")
                     else:
-                        if verbose:
-                            print(f"   Warning: Failed to remove entities from {deleted_file}: {delete_result.errors}")
+                        print(f"   ❌ Failed to remove entities from {deleted_file}: {delete_result.errors}")
                 else:
-                    if verbose:
-                        print(f"   No entities found for {deleted_file}")
+                    print(f"   ⚠️ No entities found for {deleted_file} - nothing to delete")
             
             # NEW: Clean up orphaned relations after entity deletion
             if total_entities_deleted > 0:
+                if verbose:
+                    print(f"🔍 Starting orphan cleanup after deleting {total_entities_deleted} entities from {len(deleted_files)} files:")
+                    for df in deleted_files:
+                        print(f"   📁 {df}")
+                
                 orphaned_deleted = self.vector_store._cleanup_orphaned_relations(collection_name, verbose)
                 if verbose and orphaned_deleted > 0:
-                    print(f"✅ Cleanup complete: {total_entities_deleted} entities, {orphaned_deleted} relations removed")
+                    print(f"✅ Cleanup complete: {total_entities_deleted} entities, {orphaned_deleted} orphaned relations removed")
                 elif verbose:
-                    print(f"✅ Cleanup complete: {total_entities_deleted} entities removed")
+                    print(f"✅ Cleanup complete: {total_entities_deleted} entities removed, no orphaned relations found")
                         
         except Exception as e:
             print(f"Error handling deleted files: {e}")
