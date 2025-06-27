@@ -111,8 +111,8 @@ def run_indexing_with_specific_files(project_path: str, collection_name: str,
             "enable_caching": True
         })
         
-        if not quiet:
-            logger.info("⚡ Using Qdrant + OpenAI (direct mode)")
+        if not quiet and verbose:
+            logger.debug("⚡ Using Qdrant + OpenAI (direct mode)")
         
         # Create indexer
         indexer = CoreIndexer(config, embedder, vector_store, project)

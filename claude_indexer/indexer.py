@@ -361,9 +361,9 @@ class CoreIndexer:
             if any(pattern in str(file_path) for pattern in ignore_patterns):
                 continue
             
-            # Skip test files unless included
-            if not include_tests and self._is_test_file(file_path):
-                continue
+            # Test file exclusion disabled
+            # if not include_tests and self._is_test_file(file_path):
+            #     continue
             
             # Check file size
             if file_path.stat().st_size > self.config.max_file_size:
@@ -778,13 +778,5 @@ class CoreIndexer:
 
     
     def _is_test_file(self, file_path: Path) -> bool:
-        """Check if a file is a test file."""
-        name = file_path.name.lower()
-        path_str = str(file_path).lower()
-        
-        return (
-            name.startswith('test_') or
-            name.endswith('_test.py') or
-            '/test/' in path_str or
-            '/tests/' in path_str
-        )
+        """Check if a file is a test file - DISABLED."""
+        return False

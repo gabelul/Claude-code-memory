@@ -156,6 +156,7 @@ class IndexingEventHandler(FileSystemEventHandler):
             if success:
                 self.processed_files.add(str(path))
                 logger.info(f"✅ Indexed: {relative_path}")
+                logger.info("-----------------------------------------")
             else:
                 logger.error(f"❌ Failed to index: {relative_path}")
         
@@ -357,7 +358,7 @@ class Watcher:
         # File filtering from config
         self.include_patterns = getattr(config, 'include_patterns', ['*.py', '*.md'])
         self.exclude_patterns = getattr(config, 'exclude_patterns', [
-            '*.pyc', '__pycache__', '.git', '.venv', 'node_modules', '*test*', '*temp*'
+            '*.pyc', '__pycache__', '.git', '.venv', 'node_modules'
         ])
         
         # Observer and async handler

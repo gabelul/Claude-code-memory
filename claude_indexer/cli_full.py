@@ -116,7 +116,7 @@ else:
                 "enable_caching": True
             })
             
-            if not quiet:
+            if not quiet and verbose:
                 click.echo("⚡ Using Qdrant + OpenAI (direct mode)")
             
             # Create indexer
@@ -157,7 +157,7 @@ else:
             state_file = indexer._get_state_file(collection)
             incremental = state_file.exists()
             
-            if not quiet:
+            if not quiet and verbose:
                 click.echo(f"🔄 Indexing project: {project_path}")
                 click.echo(f"📦 Collection: {collection}")
                 if incremental:
