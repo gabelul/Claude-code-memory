@@ -210,17 +210,10 @@ class QdrantStore(ManagedVectorStore):
         start_time = time.time()
         
         try:
-            logger.debug(f"🗑️ Qdrant delete_points called:")
-            logger.debug(f"   Collection: {collection_name}")
-            logger.debug(f"   Point count: {len(point_ids)}")
-            
             delete_response = self.client.delete(
                 collection_name=collection_name,
                 points_selector=point_ids
             )
-            
-            logger.debug(f"   Delete response: {delete_response}")
-            logger.debug(f"   Delete response type: {type(delete_response)}")
             
             return StorageResult(
                 success=True,
@@ -833,24 +826,12 @@ class QdrantStore(ManagedVectorStore):
                     if name:
                         entity_names.add(name)
             
-            if verbose:
-                if not entity_names:
-                    logger.debug("   ⚠️  No entities found in collection - ALL relations are orphaned!")
-                else:
-                    logger.debug(f"   📊 Found {len(entity_names)} entities in collection")
-                    # Show a sample of entity names for debugging
-                    sample_entities = list(entity_names)[:5]
-                    logger.debug(f"   📝 Sample entities: {', '.join(sample_entities)}")
-                    if len(entity_names) > 5:
-                        logger.debug(f"      ... and {len(entity_names) - 5} more")
             
             if not relations:
                 if verbose:
                     logger.debug("   ✅ No relations found in collection - nothing to clean")
                 return 0
             
-            if verbose:
-                logger.debug(f"   🔗 Found {len(relations)} relations to validate")
             
             # Check each relation for orphaned references with consistent snapshot
             orphaned_relations = []
@@ -867,22 +848,11 @@ class QdrantStore(ManagedVectorStore):
                 
                 if from_missing or to_missing:
                     orphaned_relations.append(relation)
-                    if verbose:
-                        missing_info = []
-                        if from_missing:
-                            missing_info.append(f"'{from_entity}' (missing)")
-                        else:
-                            missing_info.append(f"'{from_entity}'")
-                        if to_missing:
-                            missing_info.append(f"'{to_entity}' (missing)")
-                        else:
-                            missing_info.append(f"'{to_entity}'")
-                        logger.debug(f"   🗑️  ORPHAN: {missing_info[0]} --{relation_type}--> {missing_info[1]}")
                 else:
                     valid_relations += 1
             
             if verbose:
-                logger.debug(f"   ✅ {valid_relations} valid relations, {len(orphaned_relations)} orphaned relations found")
+                logger.debug(f"   🧹 Orphan cleanup: {len(relations)} relations checked, {len(orphaned_relations)} orphans found")
             
             # Batch delete orphaned relations if found
             if orphaned_relations:

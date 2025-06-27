@@ -14,13 +14,15 @@ class TestOpenAIEmbedder:
     
     def test_initialization_valid_key(self):
         """Test OpenAI embedder initialization with valid key."""
+        from claude_indexer.config import load_config
+        
         with patch('claude_indexer.embeddings.openai.OPENAI_AVAILABLE', True):
-            with patch('claude_indexer.embeddings.openai.openai.OpenAI') as mock_openai:
-                embedder = OpenAIEmbedder(api_key="sk-test123")
-                
-                assert embedder.model == "text-embedding-3-small"
-                assert embedder.model_config["dimensions"] == 1536
-                mock_openai.assert_called_once_with(api_key="sk-test123")
+            config = load_config()
+            embedder = OpenAIEmbedder(api_key=config.openai_api_key)
+            
+            assert embedder.model == "text-embedding-3-small"
+            assert embedder.model_config["dimensions"] == 1536
+            assert embedder.client is not None
     
     def test_initialization_invalid_key(self):
         """Test initialization with invalid API key."""

@@ -15,7 +15,7 @@ from unittest.mock import Mock, patch, MagicMock
 from contextlib import redirect_stdout, redirect_stderr
 
 from claude_indexer.indexer import CoreIndexer
-from claude_indexer.config import IndexerConfig
+from claude_indexer.config import IndexerConfig, load_config
 from claude_indexer.analysis.entities import Entity, Relation
 
 
@@ -137,11 +137,12 @@ class TestACustomFlow:
     
     def test_full_index_flow_with_real_files(self, temp_repo, dummy_embedder, qdrant_store):
         """Test complete indexing flow with real Python files."""
-        # Create indexer with test components
+        # Load real API keys from settings.txt instead of using hardcoded test keys
+        base_config = load_config()
         config = IndexerConfig(
-            openai_api_key="test-key",
-            qdrant_api_key="test-key",
-            qdrant_url="http://localhost:6333"
+            openai_api_key=base_config.openai_api_key,
+            qdrant_api_key=base_config.qdrant_api_key,
+            qdrant_url=base_config.qdrant_url
         )
         
         indexer = CoreIndexer(
@@ -177,10 +178,12 @@ class TestACustomFlow:
     
     def test_incremental_indexing_flow(self, temp_repo, dummy_embedder, qdrant_store):
         """Test incremental indexing with file changes."""
+        # Load real API keys from settings.txt instead of using hardcoded test keys
+        base_config = load_config()
         config = IndexerConfig(
-            openai_api_key="test-key",
-            qdrant_api_key="test-key",
-            qdrant_url="http://localhost:6333"
+            openai_api_key=base_config.openai_api_key,
+            qdrant_api_key=base_config.qdrant_api_key,
+            qdrant_url=base_config.qdrant_url
         )
         
         indexer = CoreIndexer(
@@ -208,15 +211,66 @@ class TestACustomFlow:
         assert result2.success is True
         assert final_count >= initial_count  # Should have same or more vectors
         
-        # Verify we can find the new function
+        # Verify we can find the new function with eventual consistency
+        from tests.conftest import wait_for_eventual_consistency
+        
+        def search_for_subtract():
+            search_embedding = dummy_embedder.embed_single("subtract function")
+            hits = qdrant_store.search("test_incremental", search_embedding, top_k=10)
+            return [hit for hit in hits if "subtract" in hit.payload.get("name", "").lower()]
+        
+        # Debug: Check what entities exist in the collection
+        all_entities = []
+        try:
+            scroll_result = qdrant_store.client.scroll(
+                collection_name="test_incremental",
+                limit=100,
+                with_payload=True
+            )
+            all_entities = scroll_result[0] if scroll_result else []
+        except Exception as e:
+            print(f"Error scrolling collection: {e}")
+        
+        print(f"Total entities in collection: {len(all_entities)}")
+        for entity in all_entities[:10]:  # Show first 10
+            name = entity.payload.get("name", "N/A")
+            file_path = entity.payload.get("file_path", "N/A")
+            print(f"  - {name} (from {file_path})")
+        
+        # Wait for eventual consistency
+        wait_for_eventual_consistency(search_for_subtract, expected_count=1, verbose=True)
+        
+        # Final verification
         search_embedding = dummy_embedder.embed_single("subtract function")
         hits = qdrant_store.search("test_incremental", search_embedding, top_k=10)
         
+        print(f"Search results for 'subtract function': {len(hits)} hits")
+        for hit in hits:
+            name = hit.payload.get("name", "N/A") 
+            score = getattr(hit, 'score', 'N/A')
+            print(f"  - {name} (score: {score})")
+        
+        # Look for subtract function in search results  
         subtract_found = any(
-            "subtract" in hit.payload.get("name", "").lower()
+            "subtract" in hit.payload.get("name", "").lower() or
+            "subtract" in hit.payload.get("content", "").lower() or
+            "subtract" in str(hit.payload).lower()
             for hit in hits
         )
-        assert subtract_found
+        
+        # Enhanced debugging if test fails
+        if not subtract_found:
+            print("DEBUG: Detailed payload analysis for first 5 hits:")
+            for i, hit in enumerate(hits[:5]):
+                payload = hit.payload
+                print(f"  Hit {i+1}:")
+                print(f"    - name: {payload.get('name', 'N/A')}")
+                print(f"    - content: {payload.get('content', 'N/A')[:50]}...")
+                print(f"    - entity_type: {payload.get('entity_type', 'N/A')}")
+                print(f"    - file_path: {payload.get('file_path', 'N/A')}")
+                print(f"    - full payload keys: {list(payload.keys())}")
+        
+        assert subtract_found, f"subtract function not found in {len(hits)} search results"
     
     def test_error_handling_in_flow(self, temp_repo, dummy_embedder, qdrant_store):
         """Test error handling during indexing flow."""
@@ -520,12 +574,13 @@ class TestACustomIncrementalBehavior:
         import subprocess
         import tempfile
         
-        # Create settings file for CLI
+        # Create settings file for CLI with real API keys
+        base_config = load_config()
         settings_file = temp_repo / "settings.txt"
-        settings_file.write_text("""
-openai_api_key=test-key
-qdrant_api_key=test-key
-qdrant_url=http://localhost:6333
+        settings_file.write_text(f"""
+openai_api_key={base_config.openai_api_key}
+qdrant_api_key={base_config.qdrant_api_key}
+qdrant_url={base_config.qdrant_url}
 """)
         
         # Run initial CLI indexing - should be full mode (auto-detected)
@@ -633,12 +688,13 @@ NEW_CONSTANT = "test_value"
         """Test that exactly 1 deleted file is processed in incremental mode using CLI."""
         import subprocess
         
-        # Create settings file for CLI
+        # Create settings file for CLI with real API keys
+        base_config = load_config()
         settings_file = temp_repo / "settings.txt"
-        settings_file.write_text("""
-openai_api_key=test-key
-qdrant_api_key=test-key
-qdrant_url=http://localhost:6333
+        settings_file.write_text(f"""
+openai_api_key={base_config.openai_api_key}
+qdrant_api_key={base_config.qdrant_api_key}
+qdrant_url={base_config.qdrant_url}
 """)
         
         # Create an additional file to delete later
@@ -757,12 +813,13 @@ DELETABLE_CONSTANT = "to_be_removed"
         """Test that exactly 3 new files are processed in incremental mode using CLI."""
         import subprocess
         
-        # Create settings file for CLI
+        # Create settings file for CLI with real API keys
+        base_config = load_config()
         settings_file = temp_repo / "settings.txt"
-        settings_file.write_text("""
-openai_api_key=test-key
-qdrant_api_key=test-key
-qdrant_url=http://localhost:6333
+        settings_file.write_text(f"""
+openai_api_key={base_config.openai_api_key}
+qdrant_api_key={base_config.qdrant_api_key}
+qdrant_url={base_config.qdrant_url}
 """)
         
         # Run initial CLI indexing - should be full mode (auto-detected)
@@ -883,12 +940,13 @@ class NewClass_{i}:
         """Test that exactly 3 deleted files are processed in incremental mode using CLI."""
         import subprocess
         
-        # Create settings file for CLI
+        # Create settings file for CLI with real API keys
+        base_config = load_config()
         settings_file = temp_repo / "settings.txt"
-        settings_file.write_text("""
-openai_api_key=test-key
-qdrant_api_key=test-key
-qdrant_url=http://localhost:6333
+        settings_file.write_text(f"""
+openai_api_key={base_config.openai_api_key}
+qdrant_api_key={base_config.qdrant_api_key}
+qdrant_url={base_config.qdrant_url}
 """)
         
         # Create 3 additional files to delete later

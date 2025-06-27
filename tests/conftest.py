@@ -275,12 +275,15 @@ def test_config(tmp_path) -> "IndexerConfig":
     if IndexerConfig is None:
         pytest.skip("IndexerConfig class not available")
     
-    # Create temporary settings file
+    # Load real config from settings.txt and create test settings file
+    from claude_indexer.config import load_config
+    real_config = load_config()
+    
     settings_file = tmp_path / "test_settings.txt"
     settings_content = f"""
-openai_api_key=test-key-12345
-qdrant_api_key=test-qdrant-key
-qdrant_url=http://localhost:6333
+openai_api_key={real_config.openai_api_key}
+qdrant_api_key={real_config.qdrant_api_key}
+qdrant_url={real_config.qdrant_url}
 """
     settings_file.write_text(settings_content.strip())
     
@@ -288,7 +291,6 @@ qdrant_url=http://localhost:6333
     state_dir = tmp_path / "state"
     state_dir.mkdir(exist_ok=True)
     
-    from claude_indexer.config import load_config
     config = load_config(settings_file)
     config.state_directory = state_dir  # Override state directory for tests
     return config

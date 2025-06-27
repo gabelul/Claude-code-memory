@@ -1,12 +1,14 @@
 # Claude Code Memory Solution
 
-## Current Version: v2.2 - Layer 2 Orphaned Relation Cleanup
+## Current Version: v2.3 - Dual Provider Architecture
 
 Complete memory solution for Claude Code providing context-aware conversations with semantic search across Python codebases.
 
+- 🎯 Dual embedding providers (OpenAI + Voyage AI) with 85% cost reduction
+- 💬 Chat history summarization with GPT-4.1-mini (78% cost savings)
 - 🧹 Automatic orphaned relation cleanup after entity deletion
 - 📊 158/158 tests passing, production-ready
-- ⚡ 15x faster incremental mode (auto-detected)
+- ⚡ 15x faster incremental mode with targeted file processing
 - ✨ Smart token management (<25k tokens vs 393k overflow)
 
 → **Use §m to search project memory for:** version history, breaking changes, detailed changelogs
@@ -30,6 +32,24 @@ claude-indexer -p /path/to/project -c project-name
 ```
 
 ## Core Usage
+
+### Embedding Provider Configuration
+
+**Voyage AI (Recommended - 85% cost reduction):**
+```bash
+# Add to settings.txt
+VOYAGE_API_KEY=your_voyage_key
+EMBEDDING_PROVIDER=voyage
+EMBEDDING_MODEL=voyage-3-lite  # or voyage-3
+```
+
+**OpenAI (Default):**
+```bash
+# Add to settings.txt  
+OPENAI_API_KEY=your_openai_key
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=text-embedding-3-small
+```
 
 ### Direct Qdrant Integration
 
@@ -80,6 +100,18 @@ claude-indexer search "authentication function" -p /path -c name
 
 # Filter by entity type
 claude-indexer search "database connection" -p /path -c name --type entity
+```
+
+#### Chat History Processing
+```bash
+# Index Claude Code chat history with GPT-4.1-mini summarization
+claude-indexer chat-index -p /path -c name --chat-file conversation.md
+
+# Search across chat history and code together
+claude-indexer chat-search "debugging patterns" -p /path -c name
+
+# Process with cost-optimized GPT-4.1-mini (78% cost reduction)
+claude-indexer chat-index -p /path -c name --model gpt-4.1-mini
 ```
 
 ## Memory Integration
@@ -159,8 +191,10 @@ claude mcp add project-memory -e OPENAI_API_KEY="YOUR_KEY" -e QDRANT_API_KEY="YO
 ## Key Features
 
 - 🏗️ Modular `claude_indexer` package architecture
+- 🎯 Dual embedding providers (OpenAI + Voyage AI) with cost optimization
+- 💬 Chat history summarization with GPT-4.1-mini integration
 - 📊 Knowledge graph with entities & relations
-- ⚡ Tree-sitter + Jedi parsing (36x faster)
+- ⚡ Tree-sitter + Jedi parsing (36x faster) + targeted file processing
 - 🔄 Direct Qdrant integration (zero manual steps)
 - 📁 Project-specific collections for isolation
 - 🛡️ Smart clearing: --clear vs --clear-all
@@ -208,6 +242,25 @@ claude mcp add project-memory -e OPENAI_API_KEY="YOUR_KEY" -e QDRANT_API_KEY="YO
 **No Entities Created:**
 - Verify target directory contains Python files
 - Use `--verbose` flag for detailed error messages
+
+## Logs and Debug Information
+
+**Application Logs Location:**
+- Service logs: `~/.claude-indexer/service.log`
+- Watcher logs: `~/.claude-indexer/watcher.log`
+- Background service logs: `~/.claude-indexer/logs/`
+
+**Debug Commands:**
+```bash
+# Enable verbose logging for troubleshooting
+claude-indexer -p /path -c name --verbose
+
+# Check service status with detailed logs
+claude-indexer service status --verbose
+
+# Monitor real-time logs during operation
+tail -f ~/.claude-indexer/service.log
+```
 
 ## Advanced Details → Use §m to search project memory for:
 

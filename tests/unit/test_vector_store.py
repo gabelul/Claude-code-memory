@@ -21,13 +21,16 @@ class TestQdrantStore:
                 mock_client.get_collections.return_value = MagicMock()
                 mock_client_class.return_value = mock_client
                 
-                store = QdrantStore(url="http://localhost:6333", api_key="test-key")
+                # Load real API key from settings.txt
+                from claude_indexer.config import load_config
+                real_config = load_config()
+                store = QdrantStore(url="http://localhost:6333", api_key=real_config.qdrant_api_key)
                 
                 assert store.url == "http://localhost:6333"
-                assert store.api_key == "test-key"
+                assert store.api_key == real_config.qdrant_api_key
                 mock_client_class.assert_called_once_with(
                     url="http://localhost:6333",
-                    api_key="test-key", 
+                    api_key=real_config.qdrant_api_key, 
                     timeout=60.0
                 )
     
@@ -394,7 +397,10 @@ class TestQdrantStore:
                 mock_client.get_telemetry.return_value = mock_telemetry
                 mock_client_class.return_value = mock_client
                 
-                store = QdrantStore(url="http://test:6333", api_key="test-key")
+                # Load real API key from settings.txt
+                from claude_indexer.config import load_config
+                real_config = load_config()
+                store = QdrantStore(url="http://test:6333", api_key=real_config.qdrant_api_key)
                 info = store.get_client_info()
                 
                 assert info["url"] == "http://test:6333"

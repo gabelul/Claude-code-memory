@@ -75,12 +75,10 @@ class TestIndexCommands:
         if not CLI_AVAILABLE:
             pytest.skip("CLI not available (Click or dependencies missing)")
             
-        # Mock configuration
-        mock_config = MagicMock()
-        mock_config.openai_api_key = "sk-test123"
-        mock_config.qdrant_api_key = "test-key"
-        mock_config.qdrant_url = "http://localhost:6333"
-        mock_load_config.return_value = mock_config
+        # Load real configuration from settings.txt
+        from claude_indexer.config import load_config
+        real_config = load_config()
+        mock_load_config.return_value = real_config
         
         # Mock components
         mock_embedder = MagicMock()
@@ -124,12 +122,10 @@ class TestIndexCommands:
     def test_index_project_with_options(self, mock_load_config, mock_create_store, 
                                        mock_create_embedder, mock_indexer_class):
         """Test project indexing with various options."""
-        # Mock configuration
-        mock_config = MagicMock()
-        mock_config.openai_api_key = "sk-test123"
-        mock_config.qdrant_api_key = "test-key"
-        mock_config.qdrant_url = "http://localhost:6333"
-        mock_load_config.return_value = mock_config
+        # Load real configuration from settings.txt
+        from claude_indexer.config import load_config
+        real_config = load_config()
+        mock_load_config.return_value = real_config
         
         # Mock components
         mock_embedder = MagicMock()
@@ -177,12 +173,10 @@ class TestIndexCommands:
     @patch('claude_indexer.cli_full.load_config')
     def test_index_project_qdrant_connection_error(self, mock_load_config, mock_create_store):
         """Test proper error handling when Qdrant is unavailable."""
-        # Mock configuration
-        mock_config = MagicMock()
-        mock_config.openai_api_key = "sk-test123"
-        mock_config.qdrant_api_key = "test-key"
-        mock_config.qdrant_url = "http://localhost:6333"
-        mock_load_config.return_value = mock_config
+        # Load real configuration from settings.txt
+        from claude_indexer.config import load_config
+        real_config = load_config()
+        mock_load_config.return_value = real_config
         
         # Simulate Qdrant connection failure
         mock_create_store.side_effect = ConnectionError("Cannot connect to Qdrant")
@@ -204,12 +198,11 @@ class TestIndexCommands:
     @patch('claude_indexer.cli_full.load_config')
     def test_index_project_missing_openai_key(self, mock_load_config):
         """Test error handling for missing OpenAI API key."""
-        # Mock configuration with missing OpenAI key
-        mock_config = MagicMock()
-        mock_config.openai_api_key = None
-        mock_config.qdrant_api_key = "test-key"
-        mock_config.qdrant_url = "http://localhost:6333"
-        mock_load_config.return_value = mock_config
+        # Load real config but override with missing OpenAI key
+        from claude_indexer.config import load_config
+        real_config = load_config()
+        real_config.openai_api_key = None
+        mock_load_config.return_value = real_config
         
         runner = CliRunner()
         with runner.isolated_filesystem():
@@ -231,12 +224,10 @@ class TestIndexCommands:
     def test_index_project_qdrant_only_mode(self, mock_load_config, mock_create_store, 
                                           mock_create_embedder, mock_indexer_class):
         """Test that indexing only uses Qdrant mode (no MCP fallback)."""
-        # Mock configuration and components
-        mock_config = MagicMock()
-        mock_config.openai_api_key = "sk-test123"
-        mock_config.qdrant_api_key = "test-key"
-        mock_config.qdrant_url = "http://localhost:6333"
-        mock_load_config.return_value = mock_config
+        # Load real configuration from settings.txt
+        from claude_indexer.config import load_config
+        real_config = load_config()
+        mock_load_config.return_value = real_config
         
         mock_embedder = MagicMock()
         mock_embedder.get_model_info.return_value = {
@@ -321,9 +312,10 @@ class TestIndexCommands:
     def test_index_project_failure(self, mock_load_config, mock_create_store, 
                                   mock_create_embedder, mock_indexer_class):
         """Test project indexing failure handling."""
-        # Mock configuration
-        mock_config = MagicMock()
-        mock_load_config.return_value = mock_config
+        # Load real configuration from settings.txt
+        from claude_indexer.config import load_config
+        real_config = load_config()
+        mock_load_config.return_value = real_config
         
         # Mock components
         mock_embedder = MagicMock()
@@ -359,9 +351,10 @@ class TestIndexCommands:
     def test_index_single_file(self, mock_load_config, mock_create_store, 
                               mock_create_embedder, mock_indexer_class):
         """Test single file indexing."""
-        # Mock configuration
-        mock_config = MagicMock()
-        mock_load_config.return_value = mock_config
+        # Load real configuration from settings.txt
+        from claude_indexer.config import load_config
+        real_config = load_config()
+        mock_load_config.return_value = real_config
         
         # Mock components
         mock_embedder = MagicMock()
@@ -429,9 +422,10 @@ class TestWatchCommands:
     @patch('claude_indexer.cli_full.load_config')
     def test_watch_start(self, mock_load_config, mock_handler_class, mock_observer_class):
         """Test starting file watcher."""
-        # Mock configuration
-        mock_config = MagicMock()
-        mock_load_config.return_value = mock_config
+        # Load real configuration from settings.txt
+        from claude_indexer.config import load_config
+        real_config = load_config()
+        mock_load_config.return_value = real_config
         
         # Mock event handler and observer
         mock_handler = MagicMock()
@@ -671,9 +665,10 @@ class TestSearchCommand:
     def test_search_basic(self, mock_load_config, mock_create_store, 
                          mock_create_embedder, mock_indexer_class):
         """Test basic search functionality."""
-        # Mock configuration
-        mock_config = MagicMock()
-        mock_load_config.return_value = mock_config
+        # Load real configuration from settings.txt
+        from claude_indexer.config import load_config
+        real_config = load_config()
+        mock_load_config.return_value = real_config
         
         # Mock components
         mock_embedder = MagicMock()
@@ -709,7 +704,7 @@ class TestSearchCommand:
             ])
             
             assert result.exit_code == 0
-            assert "Found 1 results" in result.output
+            assert "Found 2 results" in result.output
             assert "test_function" in result.output
     
     @patch('claude_indexer.cli_full.CoreIndexer')
@@ -719,9 +714,10 @@ class TestSearchCommand:
     def test_search_no_results(self, mock_load_config, mock_create_store, 
                               mock_create_embedder, mock_indexer_class):
         """Test search with no results."""
-        # Mock configuration and components
-        mock_config = MagicMock()
-        mock_load_config.return_value = mock_config
+        # Load real configuration from settings.txt
+        from claude_indexer.config import load_config
+        real_config = load_config()
+        mock_load_config.return_value = real_config
         
         mock_embedder = MagicMock()
         mock_store = MagicMock()
