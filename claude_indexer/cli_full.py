@@ -1,6 +1,8 @@
 """Click-based CLI interface for the Claude Code indexer."""
 
 import sys
+import os
+import subprocess
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -636,6 +638,85 @@ else:
         
         except Exception as e:
             click.echo(f"❌ Error: {e}", err=True)
+            sys.exit(1)
+
+
+    @cli.command('add-mcp')
+    @click.option('--collection', '-c', required=True, help='Collection name for MCP server')
+    @common_options
+    def add_mcp(collection, verbose, quiet, config):
+        """Add MCP server configuration for a collection."""
+        
+        try:
+            # Validate collection name
+            if not collection.replace('-', '').replace('_', '').isalnum():
+                click.echo("❌ Collection name should only contain letters, numbers, hyphens, and underscores", err=True)
+                sys.exit(1)
+            
+            if not quiet:
+                click.echo(f"🔧 Setting up MCP server for collection: {collection}")
+            
+            # Load configuration
+            config_obj = load_config(Path(config) if config else None)
+            
+            # Determine MCP server path (relative to current script location)
+            script_dir = Path(__file__).parent.parent.absolute()  # Go up to project root
+            mcp_server_path = script_dir / "mcp-qdrant-memory" / "dist" / "index.js"
+            
+            if not mcp_server_path.exists():
+                click.echo(f"❌ MCP server not found at: {mcp_server_path}", err=True)
+                click.echo("Run the installation steps first:", err=True)
+                click.echo("git clone https://github.com/delorenj/mcp-qdrant-memory.git", err=True)
+                click.echo("cd mcp-qdrant-memory && npm install && npm run build", err=True)
+                sys.exit(1)
+            
+            server_name = f"{collection}-memory"
+            
+            # Build command to add MCP server
+            cmd = [
+                "claude", "mcp", "add", server_name,
+                "-e", f"OPENAI_API_KEY={config_obj.openai_api_key}",
+                "-e", f"QDRANT_API_KEY={config_obj.qdrant_api_key}",
+                "-e", f"QDRANT_URL={config_obj.qdrant_url}",
+                "-e", f"QDRANT_COLLECTION_NAME={collection}",
+                "--",
+                "node", str(mcp_server_path)
+            ]
+            
+            if verbose:
+                click.echo(f"🚀 Adding MCP server: {server_name}")
+                click.echo(f"📊 Collection name: {collection}")
+                click.echo(f"🔗 Server path: {mcp_server_path}")
+            
+            # Execute the command
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                if not quiet:
+                    click.echo("✅ MCP server added successfully!")
+                    click.echo(f"🎯 Server name: {server_name}")
+                    click.echo(f"📁 Collection: {collection}")
+                    click.echo()
+                    click.echo("Next steps:")
+                    click.echo("1. Restart Claude Code")
+                    click.echo(f"2. Index your project: claude-indexer --project /path/to/project --collection {collection}")
+                    click.echo(f"3. Test search: mcp__{server_name.replace('-', '_')}__search_similar('your query')")
+            else:
+                click.echo("❌ Failed to add MCP server", err=True)
+                if verbose:
+                    click.echo(f"STDOUT: {result.stdout}", err=True)
+                    click.echo(f"STDERR: {result.stderr}", err=True)
+                sys.exit(1)
+                
+        except FileNotFoundError:
+            click.echo("❌ 'claude' command not found", err=True)
+            click.echo("Make sure Claude Code is installed and in your PATH", err=True)
+            sys.exit(1)
+        except Exception as e:
+            click.echo(f"❌ Error: {e}", err=True)
+            if verbose:
+                import traceback
+                traceback.print_exc()
             sys.exit(1)
 
 

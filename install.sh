@@ -85,7 +85,7 @@ fi
 
 # Run the indexer with all passed arguments
 # Smart command detection and routing
-if [[ "\$1" =~ ^(hooks|watch|service|search|file)$ ]]; then
+if [[ "\$1" =~ ^(hooks|watch|service|search|file|add-mcp|chat)$ ]]; then
     # Advanced commands - pass through directly
     exec "\$PYTHON_BIN" -m claude_indexer "\$@"
 elif [[ "\$1" == "index" ]]; then
@@ -144,6 +144,12 @@ if [[ -x "$WRAPPER_PATH" ]]; then
     echo ""
     echo "  # Search collections"
     echo "  claude-indexer search \"query\" --project . --collection my-project"
+    echo ""
+    echo "  # Add MCP server"
+    echo "  claude-indexer add-mcp my-project"
+    echo ""
+    echo "  # Chat processing"
+    echo "  claude-indexer chat index --project . --collection my-project"
     echo ""
     echo -e "${GREEN}You can now use 'claude-indexer' from any directory!${NC}"
 else

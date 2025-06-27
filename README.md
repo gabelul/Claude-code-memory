@@ -68,18 +68,25 @@ docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_storage:/qdrant/storage:z 
 
 ### Configure Claude Code
 
-**Option 1: Automated Script (Easiest)**
+**Option 1: Built-in CLI Command (Recommended)**
 ```bash
-# Quick setup using your settings.txt
-python add_mcp_project.py your-project-name
+# Add MCP server using integrated command - reads API keys from settings.txt
+claude-indexer add-mcp -c your-project-name
 ```
 
-**Option 2: Command Line**
+**Option 2: Legacy Script (deprecated)**
+```bash
+# Legacy method - use CLI command instead
+# python add_mcp_project.py your-project-name  # REMOVED
+# Use: claude-indexer add-mcp -c your-project-name
+```
+
+**Option 3: Manual Command Line**
 ```bash
 claude mcp add your-project-memory -e OPENAI_API_KEY="YOUR_OPENAI_KEY" -e QDRANT_API_KEY="YOUR_QDRANT_KEY" -e QDRANT_URL="http://localhost:6333" -e QDRANT_COLLECTION_NAME="your-project-name" -- node "/path/to/memory/mcp-qdrant-memory/dist/index.js"
 ```
 
-**Option 3: Manual JSON Configuration**
+**Option 4: Manual JSON Configuration**
 Add to `~/.claude/claude_desktop_config.json`:
 ```json
 {
@@ -119,10 +126,10 @@ claude-indexer --version
 
 ### Step 1: Add MCP Collection
 
-**Option 1: Automated Script (Easiest)**
+**Option 1: Built-in CLI Command (Recommended)**
 ```bash
-# Quick setup using your settings.txt
-python add_mcp_project.py my-project
+# Add MCP server using integrated command
+claude-indexer add-mcp -c my-project
 ```
 
 **Option 2: Command Line**

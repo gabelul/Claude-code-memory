@@ -102,6 +102,15 @@ claude-indexer search "authentication function" -p /path -c name
 claude-indexer search "database connection" -p /path -c name --type entity
 ```
 
+#### MCP Server Setup
+```bash
+# Add MCP server configuration for a collection
+claude-indexer add-mcp -c project-name
+
+# For general memory collection
+claude-indexer add-mcp -c general
+```
+
 #### Chat History Processing
 ```bash
 # Index Claude Code chat history with GPT-4.1-mini summarization
@@ -151,20 +160,29 @@ claude-indexer chat-index -p /path -c name --model gpt-4.1-mini
 
 ## MCP Server Setup
 
-**Option 1: Automated Script (Easiest)**
+**Option 1: Built-in CLI Command (Recommended)**
 ```bash
-# Quick setup using your settings.txt - reads API keys automatically
-python add_mcp_project.py project-name
-python add_mcp_project.py general  # for general memory
+# Add MCP server using integrated command - reads API keys from settings.txt
+claude-indexer add-mcp -c project-name
+claude-indexer add-mcp -c general  # for general memory
+
+# Uses your existing settings.txt configuration automatically
 ```
 
-**Option 2: Command Line**
+**Option 2: Legacy Standalone Script (deprecated)**
 ```bash
-# Add project-specific memory
+# Legacy method - use CLI command instead
+# python add_mcp_project.py project-name  # REMOVED
+# Use: claude-indexer add-mcp -c project-name
+```
+
+**Option 3: Manual Command Line**
+```bash
+# Add project-specific memory manually
 claude mcp add project-memory -e OPENAI_API_KEY="YOUR_KEY" -e QDRANT_API_KEY="YOUR_KEY" -e QDRANT_URL="http://localhost:6333" -e QDRANT_COLLECTION_NAME="project-name" -- node "/path/to/memory/mcp-qdrant-memory/dist/index.js"
 ```
 
-**Option 3: Manual JSON Configuration (`~/.claude/claude_desktop_config.json`)**
+**Option 4: Manual JSON Configuration (`~/.claude/claude_desktop_config.json`)**
 → See full JSON example in project memory (search: "MCP JSON configuration")
 
 ## Architecture Overview
