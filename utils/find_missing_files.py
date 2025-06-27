@@ -128,8 +128,13 @@ def get_state_files(collection_name: str) -> Set[str]:
                 with open(state_file) as f:
                     state_data = json.load(f)
                 
-                # Count file entries (exclude metadata keys that start with '_')
-                file_entries = {k: v for k, v in state_data.items() if not k.startswith('_')}
+                # Handle both state file formats
+                if 'files' in state_data:
+                    # New format with 'files' key
+                    file_entries = state_data['files']
+                else:
+                    # Old format with files as direct keys (exclude metadata keys that start with '_')
+                    file_entries = {k: v for k, v in state_data.items() if not k.startswith('_')}
                 tracked_files.update(file_entries.keys())
                 print(f"Loaded {len(file_entries)} files from {state_file.name}")
                 
@@ -143,7 +148,11 @@ def get_state_files(collection_name: str) -> Set[str]:
         try:
             with open(project_state_file) as f:
                 state_data = json.load(f)
-            file_entries = {k: v for k, v in state_data.items() if not k.startswith('_')}
+            # Handle both state file formats for project state file too
+            if 'files' in state_data:
+                file_entries = state_data['files']
+            else:
+                file_entries = {k: v for k, v in state_data.items() if not k.startswith('_')}
             tracked_files.update(file_entries.keys())
             print(f"Loaded {len(file_entries)} additional files from project state file")
         except Exception as e:

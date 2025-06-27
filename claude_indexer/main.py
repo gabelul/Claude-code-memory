@@ -54,6 +54,9 @@ def run_indexing_with_shared_deletion(project_path: str, collection_name: str,
         # Use consolidated deletion function
         indexer._handle_deleted_files(collection_name, relative_path, verbose)
         
+        # Update state file to remove deleted file entry
+        indexer._update_state([], collection_name, verbose, full_rebuild=False, deleted_files=[relative_path])
+        
         return True
         
     except Exception as e:
