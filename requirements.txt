@@ -1,7 +1,8 @@
-tree-sitter==0.24.0
-tree-sitter-python==0.23.6
-jedi==0.19.2
-requests==2.32.4
-qdrant-client==1.12.1
-openai==1.58.1
-watchdog==3.0.0
+tree-sitter
+tree-sitter-python
+jedi
+requests
+qdrant-client
+openai
+voyageai
+watchdog

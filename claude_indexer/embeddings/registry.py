@@ -3,6 +3,7 @@
 from typing import Dict, Any, Optional, Type
 from .base import Embedder, CachingEmbedder, RetryableEmbedder
 from .openai import OpenAIEmbedder, OPENAI_AVAILABLE
+from .voyage import VoyageEmbedder, VOYAGE_AVAILABLE
 
 
 class EmbedderRegistry:
@@ -16,6 +17,8 @@ class EmbedderRegistry:
         """Register default embedder implementations."""
         if OPENAI_AVAILABLE:
             self.register("openai", OpenAIEmbedder)
+        if VOYAGE_AVAILABLE:
+            self.register("voyage", VoyageEmbedder)
         
     
     def register(self, name: str, embedder_class: Type[Embedder]):
@@ -95,6 +98,19 @@ def create_openai_embedder(api_key: str, model: str = "text-embedding-3-small",
     """Create OpenAI embedder with default configuration."""
     config = {
         "provider": "openai",
+        "api_key": api_key,
+        "model": model,
+        "enable_caching": enable_caching,
+        **kwargs
+    }
+    return create_embedder_from_config(config)
+
+
+def create_voyage_embedder(api_key: str, model: str = "voyage-3-lite",
+                          enable_caching: bool = True, **kwargs) -> Embedder:
+    """Create Voyage AI embedder with default configuration."""
+    config = {
+        "provider": "voyage",
         "api_key": api_key,
         "model": model,
         "enable_caching": enable_caching,

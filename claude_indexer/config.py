@@ -11,6 +11,7 @@ class IndexerConfig(BaseModel):
     
     # API Keys
     openai_api_key: str = Field(default="")
+    voyage_api_key: str = Field(default="")
     qdrant_api_key: str = Field(default="default-key")
     
     # URLs and Endpoints
@@ -21,6 +22,8 @@ class IndexerConfig(BaseModel):
     
     # Component Types
     embedder_type: str = Field(default="openai")
+    embedding_provider: str = Field(default="openai")  # For compatibility
+    voyage_model: str = Field(default="voyage-3-lite")
     storage_type: str = Field(default="qdrant")
     
     # Indexing Behavior
@@ -52,8 +55,11 @@ class IndexerConfig(BaseModel):
         """Create config with environment variable overrides."""
         return cls(
             openai_api_key=os.environ.get('OPENAI_API_KEY', ''),
+            voyage_api_key=os.environ.get('VOYAGE_API_KEY', ''),
             qdrant_api_key=os.environ.get('QDRANT_API_KEY', 'default-key'),
             qdrant_url=os.environ.get('QDRANT_URL', 'http://localhost:6333'),
+            embedding_provider=os.environ.get('EMBEDDING_PROVIDER', 'openai'),
+            voyage_model=os.environ.get('VOYAGE_MODEL', 'voyage-3-lite'),
         )
 
 
@@ -115,8 +121,11 @@ def load_config(settings_file: Optional[Path] = None, **overrides) -> IndexerCon
     # Override with environment variables (higher priority than file)
     env_settings = {
         'openai_api_key': os.environ.get('OPENAI_API_KEY'),
+        'voyage_api_key': os.environ.get('VOYAGE_API_KEY'),
         'qdrant_api_key': os.environ.get('QDRANT_API_KEY'),
         'qdrant_url': os.environ.get('QDRANT_URL'),
+        'embedding_provider': os.environ.get('EMBEDDING_PROVIDER'),
+        'voyage_model': os.environ.get('VOYAGE_MODEL'),
     }
     
     # Only override with env vars that are actually set
@@ -153,10 +162,17 @@ def create_default_settings_file(path: Path) -> None:
     template = """# Claude Indexer Configuration
 # Lines starting with # are comments
 
+# Embedding Provider Configuration
+embedding_provider=openai  # Options: openai, voyage
+
 # API Configuration
 openai_api_key=your-openai-api-key-here
+voyage_api_key=your-voyage-api-key-here
 qdrant_api_key=your-qdrant-api-key
 qdrant_url=http://localhost:6333
+
+# Voyage Settings (only used if embedding_provider=voyage)
+voyage_model=voyage-3-lite  # Options: voyage-3, voyage-3-lite, voyage-code-3
 
 # Indexing Behavior  
 indexer_debug=false
