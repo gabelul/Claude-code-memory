@@ -142,12 +142,13 @@ class IndexingEventHandler(FileSystemEventHandler):
             logger.info(f"🔄 Auto-indexing ({event_type}): {relative_path}")
             
             # Import here to avoid circular imports
-            from ..main import run_indexing
+            from ..main import run_indexing_with_specific_files
             
-            # Run indexing directly
-            success = run_indexing(
+            # Run indexing for specific file only (performance optimization)
+            success = run_indexing_with_specific_files(
                 project_path=str(self.project_path),
                 collection_name=self.collection_name,
+                file_paths=[path],  # Only process the changed file
                 quiet=not self.verbose,
                 verbose=self.verbose
             )

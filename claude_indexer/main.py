@@ -62,15 +62,26 @@ def run_indexing_with_shared_deletion(project_path: str, collection_name: str,
         return False
 
 
-def run_indexing(project_path: str, collection_name: str, 
-                quiet: bool = False, verbose: bool = False, 
-                include_tests: bool = False,
-                config_file: Optional[str] = None) -> bool:
-    """Run indexing with the specified parameters.
+def run_indexing_with_specific_files(project_path: str, collection_name: str,
+                                    file_paths: list, quiet: bool = False, 
+                                    verbose: bool = False,
+                                    config_file: Optional[str] = None) -> bool:
+    """Run indexing with specific file paths, bypassing file discovery.
     
-    This function provides a programmatic interface for other modules.
+    This function accepts specific files to process, eliminating the expensive
+    file discovery step that scans the entire project.
+    
+    Args:
+        project_path: Path to the project root
+        collection_name: Name of the vector collection
+        file_paths: List of Path objects to process
+        quiet: Suppress non-error output
+        verbose: Enable verbose output
+        config_file: Optional configuration file path
+        
+    Returns:
+        bool: True if successful, False otherwise
     """
-    
     try:
         # Validate project path first
         project = Path(project_path).resolve()
@@ -106,7 +117,130 @@ def run_indexing(project_path: str, collection_name: str,
         # Create indexer
         indexer = CoreIndexer(config, embedder, vector_store, project)
         
-        # Auto-detect incremental mode and run indexing
+        # Convert file_paths to Path objects if needed
+        paths_to_process = []
+        for fp in file_paths:
+            if isinstance(fp, str):
+                paths_to_process.append(Path(fp))
+            else:
+                paths_to_process.append(fp)
+        
+        if not paths_to_process:
+            if not quiet:
+                logger.info("✅ No files to process")
+            return True
+        
+        if not quiet and verbose:
+            logger.info(f"🔄 Processing {len(paths_to_process)} specific files")
+            logger.info(f"📦 Collection: {collection_name}")
+        
+        # Process files directly using batch processing
+        entities, relations, errors = indexer._process_file_batch(paths_to_process, verbose)
+        
+        # Handle any processing errors
+        if errors:
+            if not quiet:
+                logger.error(f"❌ Processing errors occurred:")
+                for error in errors:
+                    logger.error(f"   {error}")
+        
+        # Store vectors if we have entities or relations
+        storage_success = True
+        if entities or relations:
+            storage_success = indexer._store_vectors(collection_name, entities, relations)
+            if not storage_success:
+                if not quiet:
+                    logger.error("❌ Failed to store vectors in Qdrant")
+                return False
+        
+        # Update state file with successfully processed files
+        successfully_processed = [f for f in paths_to_process if str(f) not in errors]
+        if successfully_processed:
+            # Auto-detect incremental mode for state management
+            state_file = indexer._get_state_file(collection_name)
+            incremental = state_file.exists()
+            
+            # Use incremental update to merge with existing state
+            indexer._update_state(successfully_processed, collection_name, verbose, 
+                                full_rebuild=False, deleted_files=None)
+            
+            # Clean up orphaned relations after processing
+            if incremental and successfully_processed:
+                if verbose:
+                    logger.info(f"🔍 Cleaning up orphaned relations after processing {len(successfully_processed)} files")
+                orphaned_deleted = vector_store._cleanup_orphaned_relations(collection_name, verbose)
+                if verbose and orphaned_deleted > 0:
+                    logger.info(f"✅ Cleanup complete: {orphaned_deleted} orphaned relations removed")
+                elif verbose:
+                    logger.info("✅ No orphaned relations found")
+        
+        # Report results
+        files_processed = len(successfully_processed)
+        files_failed = len(errors)
+        
+        if not quiet:
+            if verbose:
+                logger.info(f"✅ Processing completed")
+                logger.info(f"   Files processed: {files_processed}")
+                logger.info(f"   Files failed: {files_failed}")
+                logger.info(f"   Entities created: {len(entities)}")
+                logger.info(f"   Relations created: {len(relations)}")
+            else:
+                logger.info(f"✅ Processed {files_processed} files")
+                if files_failed > 0:
+                    logger.warning(f"⚠️  {files_failed} files failed")
+        
+        return storage_success and files_failed == 0
+        
+    except Exception as e:
+        if not quiet:
+            logger.error(f"❌ Error: {e}")
+        return False
+
+
+def run_indexing(project_path: str, collection_name: str, 
+                quiet: bool = False, verbose: bool = False, 
+                include_tests: bool = False,
+                config_file: Optional[str] = None) -> bool:
+    """Run indexing with the specified parameters.
+    
+    This function provides a programmatic interface for other modules.
+    It discovers files and delegates to run_indexing_with_specific_files.
+    """
+    
+    try:
+        # Validate project path first
+        project = Path(project_path).resolve()
+        if not project.exists():
+            print(f"❌ Project path does not exist: {project}")
+            return False
+        
+        # Setup logging with project-specific file logging
+        logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection_name, project_path=project)
+        
+        # Load configuration to create indexer for file discovery
+        config_path = Path(config_file) if config_file else None
+        config = load_config(config_path)
+        
+        # Create components for file discovery
+        embedder = create_embedder_from_config({
+            "provider": "openai",
+            "api_key": config.openai_api_key,
+            "model": "text-embedding-3-small",
+            "enable_caching": True
+        })
+        
+        vector_store = create_store_from_config({
+            "backend": "qdrant",
+            "url": config.qdrant_url,
+            "api_key": config.qdrant_api_key,
+            "enable_caching": True
+        })
+        
+        # Create indexer for file discovery
+        indexer = CoreIndexer(config, embedder, vector_store, project)
+        
+        # Auto-detect incremental mode
         state_file = indexer._get_state_file(collection_name)
         incremental = state_file.exists()
         
@@ -115,29 +249,31 @@ def run_indexing(project_path: str, collection_name: str,
             logger.info(f"📦 Collection: {collection_name}")
             logger.info(f"⚡ Mode: {'Incremental' if incremental else 'Full'} (auto-detected)")
         
-        result = indexer.index_project(
-            collection_name=collection_name,
-            include_tests=include_tests
-        )
-        
-        # Report results
-        if result.success:
-            if not quiet:
-                if verbose:
-                    logger.info(f"✅ Indexing completed in {result.processing_time:.1f}s")
-                    logger.info(f"   Files processed: {result.files_processed}")
-                    logger.info(f"   Entities created: {result.entities_created}")
-                    logger.info(f"   Relations created: {result.relations_created}")
-                else:
-                    logger.info(f"✅ Indexed {result.files_processed} files")
+        # Discover files to process
+        if incremental:
+            files_to_process, deleted_files = indexer._find_changed_files(include_tests, collection_name)
+            
+            # Handle deleted files first
+            if deleted_files:
+                indexer._handle_deleted_files(collection_name, deleted_files, verbose)
         else:
-            if not quiet:
-                logger.error("❌ Indexing failed")
-                for error in result.errors:
-                    logger.error(f"   {error}")
-            return False
+            files_to_process = indexer._find_all_files(include_tests)
+            deleted_files = []
         
-        return True
+        if not files_to_process:
+            if not quiet:
+                logger.info("✅ No files to process")
+            return True
+        
+        # Delegate to the specific files function
+        return run_indexing_with_specific_files(
+            project_path=project_path,
+            collection_name=collection_name,
+            file_paths=files_to_process,
+            quiet=quiet,
+            verbose=verbose,
+            config_file=config_file
+        )
         
     except Exception as e:
         if not quiet:
