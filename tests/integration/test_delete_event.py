@@ -364,12 +364,13 @@ def temp_func():
         )
         assert not temp_found_after, "Temp function should remain deleted after multiple indexing runs"
     
-    def test_deletion_with_indexing_errors(self, temp_repo, dummy_embedder, qdrant_store):
+    def test_deletion_with_indexing_errors(self, temp_repo, dummy_embedder, qdrant_store, tmp_path):
         """Test that deletion cleanup works even when there are indexing errors."""
         config = IndexerConfig(
             collection_name="test_delete_errors",
             embedder_type="dummy",
-            storage_type="qdrant"
+            storage_type="qdrant",
+            state_dir=str(tmp_path / "state")  # Use temporary state directory
         )
         
         # Create a mock embedder that fails for some content

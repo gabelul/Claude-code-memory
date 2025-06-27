@@ -445,6 +445,10 @@ class QdrantStore(ManagedVectorStore):
             return all_points
             
         except Exception as e:
+            # Check if collection doesn't exist
+            if "doesn't exist" in str(e) or "Not found" in str(e):
+                logger.warning(f"Collection '{collection_name}' doesn't exist - returning empty result")
+                return []
             # Log error and return empty list
             logger.error(f"Error in _scroll_collection for {collection_name}: {e}")
             return []

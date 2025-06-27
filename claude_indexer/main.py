@@ -30,10 +30,15 @@ def run_indexing_with_shared_deletion(project_path: str, collection_name: str,
         config = load_config(config_path)
         
         # Create components using direct Qdrant integration
+        # Get the appropriate API key based on provider
+        provider = config.embedding_provider
+        api_key = getattr(config, f'{provider}_api_key', None)
+        model = config.voyage_model if provider == "voyage" else "text-embedding-3-small"
+        
         embedder = create_embedder_from_config({
-            "provider": "openai",
-            "api_key": config.openai_api_key,
-            "model": "text-embedding-3-small",
+            "provider": provider,
+            "api_key": api_key,
+            "model": model,
             "enable_caching": True
         })
         
@@ -100,10 +105,15 @@ def run_indexing_with_specific_files(project_path: str, collection_name: str,
         config = load_config(config_path)
         
         # Create components using direct Qdrant integration
+        # Get the appropriate API key based on provider
+        provider = config.embedding_provider
+        api_key = getattr(config, f'{provider}_api_key', None)
+        model = config.voyage_model if provider == "voyage" else "text-embedding-3-small"
+        
         embedder = create_embedder_from_config({
-            "provider": "openai",
-            "api_key": config.openai_api_key,
-            "model": "text-embedding-3-small",
+            "provider": provider,
+            "api_key": api_key,
+            "model": model,
             "enable_caching": True
         })
         
@@ -226,10 +236,15 @@ def run_indexing(project_path: str, collection_name: str,
         config = load_config(config_path)
         
         # Create components for file discovery
+        # Get the appropriate API key based on provider
+        provider = config.embedding_provider
+        api_key = getattr(config, f'{provider}_api_key', None)
+        model = config.voyage_model if provider == "voyage" else "text-embedding-3-small"
+        
         embedder = create_embedder_from_config({
-            "provider": "openai",
-            "api_key": config.openai_api_key,
-            "model": "text-embedding-3-small",
+            "provider": provider,
+            "api_key": api_key,
+            "model": model,
             "enable_caching": True
         })
         
