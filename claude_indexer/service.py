@@ -6,6 +6,9 @@ import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from .watcher.handler import IndexingEventHandler
+from .logging import get_logger
+
+logger = get_logger()
 
 try:
     from watchdog.observers import Observer
@@ -58,11 +61,11 @@ class IndexingService:
                 with open(config_path, 'w') as f:
                     json.dump(default_config, f, indent=2)
                 
-                print(f"📝 Created default config at {config_path}")
+                logger.info(f"📝 Created default config at {config_path}")
                 return default_config
                 
         except Exception as e:
-            print(f"❌ Failed to load config: {e}")
+            logger.error(f"❌ Failed to load config: {e}")
             return {"projects": [], "settings": {}}
     
     def save_config(self, config: Dict[str, Any]) -> bool:
@@ -77,7 +80,7 @@ class IndexingService:
             return True
             
         except Exception as e:
-            print(f"❌ Failed to save config: {e}")
+            logger.error(f"❌ Failed to save config: {e}")
             return False
     
     def add_project(self, project_path: str, collection_name: str, 
@@ -88,7 +91,7 @@ class IndexingService:
         # Check if project already exists
         for project in config["projects"]:
             if project["path"] == project_path:
-                print(f"⚠️  Project {project_path} already in watch list")
+                logger.warning(f"⚠️  Project {project_path} already in watch list")
                 return False
         
         # Add new project
@@ -102,7 +105,7 @@ class IndexingService:
         config["projects"].append(project_config)
         
         if self.save_config(config):
-            print(f"✅ Added project: {project_path} -> {collection_name}")
+            logger.info(f"✅ Added project: {project_path} -> {collection_name}")
             
             # Start watching if service is running
             if self.running:
@@ -122,7 +125,7 @@ class IndexingService:
         
         if len(config["projects"]) < original_count:
             if self.save_config(config):
-                print(f"✅ Removed project: {project_path}")
+                logger.info(f"✅ Removed project: {project_path}")
                 
                 # Stop watching if service is running
                 if self.running and project_path in self.observers:
@@ -130,7 +133,7 @@ class IndexingService:
                 
                 return True
         else:
-            print(f"⚠️  Project {project_path} not found in watch list")
+            logger.warning(f"⚠️  Project {project_path} not found in watch list")
         
         return False
     
@@ -142,7 +145,7 @@ class IndexingService:
     def start(self) -> bool:
         """Start the background service."""
         if self.running:
-            print("ℹ️  Service is already running")
+            logger.info("ℹ️  Service is already running")
             return True
         
         try:
@@ -151,20 +154,20 @@ class IndexingService:
             global_settings = config.get("settings", {})
             
             if not projects:
-                print("ℹ️  No projects configured for watching")
+                logger.info("ℹ️  No projects configured for watching")
                 return False
             
-            print(f"🚀 Starting indexing service for {len(projects)} projects...")
+            logger.info(f"🚀 Starting indexing service for {len(projects)} projects...")
             
             # Start watchers for each project
             for project in projects:
                 if project.get("enabled", True):
                     success = self._start_project_watcher(project, global_settings)
                     if not success:
-                        print(f"⚠️  Failed to start watcher for {project['path']}")
+                        logger.warning(f"⚠️  Failed to start watcher for {project['path']}")
             
             self.running = True
-            print(f"✅ Service started with {len(self.observers)} active watchers")
+            logger.info(f"✅ Service started with {len(self.observers)} active watchers")
             
             # Keep service running
             try:
@@ -178,7 +181,7 @@ class IndexingService:
             return True
             
         except Exception as e:
-            print(f"❌ Failed to start service: {e}")
+            logger.error(f"❌ Failed to start service: {e}")
             return False
     
     def stop(self) -> bool:
@@ -187,27 +190,27 @@ class IndexingService:
             return True
         
         try:
-            print("🛑 Stopping indexing service...")
+            logger.info("🛑 Stopping indexing service...")
             
             # Stop all observers
             for project_path, observer in self.observers.items():
                 observer.stop()
                 observer.join(timeout=5)
-                print(f"   Stopped watcher for {project_path}")
+                logger.info(f"   Stopped watcher for {project_path}")
             
             self.observers.clear()
             self.running = False
             
-            print("✅ Service stopped")
+            logger.info("✅ Service stopped")
             return True
             
         except Exception as e:
-            print(f"❌ Failed to stop service: {e}")
+            logger.error(f"❌ Failed to stop service: {e}")
             return False
     
     def restart(self) -> bool:
         """Restart the service."""
-        print("🔄 Restarting service...")
+        logger.info("🔄 Restarting service...")
         if self.running:
             self.stop()
         return self.start()
@@ -241,7 +244,7 @@ class IndexingService:
         try:
             # Validate project path
             if not Path(project_path).exists():
-                print(f"❌ Project path does not exist: {project_path}")
+                logger.error(f"❌ Project path does not exist: {project_path}")
                 return False
             
             # Merge settings
@@ -262,12 +265,12 @@ class IndexingService:
             observer.start()
             
             self.observers[project_path] = observer
-            print(f"👁️  Watching: {project_path} -> {collection_name}")
+            logger.info(f"👁️  Watching: {project_path} -> {collection_name}")
             
             return True
             
         except Exception as e:
-            print(f"❌ Failed to start watcher for {project_path}: {e}")
+            logger.error(f"❌ Failed to start watcher for {project_path}: {e}")
             return False
     
     def _stop_project_watcher(self, project_path: str) -> bool:
@@ -281,16 +284,16 @@ class IndexingService:
             observer.join(timeout=5)
             del self.observers[project_path]
             
-            print(f"⏹️  Stopped watching: {project_path}")
+            logger.info(f"⏹️  Stopped watching: {project_path}")
             return True
             
         except Exception as e:
-            print(f"❌ Failed to stop watcher for {project_path}: {e}")
+            logger.error(f"❌ Failed to stop watcher for {project_path}: {e}")
             return False
     
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals."""
-        print(f"\n📡 Received signal {signum}, shutting down gracefully...")
+        logger.info(f"\n📡 Received signal {signum}, shutting down gracefully...")
         self.running = False
 
 
@@ -318,9 +321,9 @@ def create_default_service_config(config_path: str) -> Dict[str, Any]:
         with open(config_file, 'w') as f:
             json.dump(config, f, indent=2)
         
-        print(f"📝 Created default service config at {config_path}")
+        logger.info(f"📝 Created default service config at {config_path}")
         return config
         
     except Exception as e:
-        print(f"❌ Failed to create config: {e}")
+        logger.error(f"❌ Failed to create config: {e}")
         return config

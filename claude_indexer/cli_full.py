@@ -8,7 +8,7 @@ from .config import load_config, IndexerConfig
 from .indexer import CoreIndexer
 from .embeddings.registry import create_embedder_from_config
 from .storage.registry import create_store_from_config
-from .logging import setup_logging, clear_log_file
+from .logging import setup_logging, clear_log_file, get_logger
 
 # Only import these if they're available
 try:
@@ -28,7 +28,9 @@ except ImportError:
 def cli():
     """Claude Code Memory Indexer - Universal semantic indexing for codebases."""
     if not CLICK_AVAILABLE:
-        print("Click not available. Install with: pip install click")
+        from .logging import get_logger
+        logger = get_logger()
+        logger.error("Click not available. Install with: pip install click")
         sys.exit(1)
 
 # Skip Click decorators and complex CLI setup when Click is not available
@@ -295,11 +297,14 @@ else:
             from watchdog.observers import Observer
             from .service import IndexingService
             
-            # Validate project path
+            # Validate project path first
             project_path = Path(project).resolve()
             if not project_path.exists():
                 click.echo(f"Error: Project path does not exist: {project_path}", err=True)
                 sys.exit(1)
+            
+            # Setup logging with project path
+            logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection, project_path=project_path)
             
             # Load configuration
             config_obj = load_config(Path(config) if config else None)
@@ -335,8 +340,7 @@ else:
             )
             
             # Run initial incremental indexing before starting file watching
-            if not quiet:
-                click.echo("🔄 Running initial incremental indexing...")
+            logger.info("🔄 Running initial incremental indexing...")
             
             from claude_indexer.main import run_indexing
             try:
@@ -346,30 +350,26 @@ else:
                     quiet=quiet,
                     verbose=verbose
                 )
-                if not quiet:
-                    click.echo("✅ Initial indexing complete")
+                logger.info("✅ Initial indexing complete")
             except Exception as e:
-                if not quiet:
-                    click.echo(f"⚠️ Initial indexing failed: {e}")
-                    click.echo("📁 Continuing with file watching...")
+                logger.warning(f"⚠️ Initial indexing failed: {e}")
+                logger.info("📁 Continuing with file watching...")
             
             # Start observer
             observer = Observer()
             observer.schedule(event_handler, str(project_path), recursive=True)
             observer.start()
             
-            if not quiet:
-                click.echo(f"👁️  Watching: {project_path}")
-                click.echo(f"📦 Collection: {collection}")
-                click.echo(f"⏱️  Debounce: {effective_debounce}s")
-                click.echo("Press Ctrl+C to stop")
+            logger.info(f"👁️  Watching: {project_path}")
+            logger.info(f"📦 Collection: {collection}")
+            logger.info(f"⏱️  Debounce: {effective_debounce}s")
+            logger.info("Press Ctrl+C to stop")
             
             # Setup signal handling
             import signal
             def signal_handler(signum, frame):
                 observer.stop()
-                if not quiet:
-                    click.echo(f"\n🛑 Received signal {signum}, stopping file watcher...")
+                logger.info(f"\n🛑 Received signal {signum}, stopping file watcher...")
                 raise KeyboardInterrupt()
             
             signal.signal(signal.SIGINT, signal_handler)
@@ -383,11 +383,9 @@ else:
                 observer.stop()
                 observer.join(timeout=3)  # Add timeout
                 if observer.is_alive():
-                    if not quiet:
-                        click.echo("⚠️ Force stopping watcher")
+                    logger.warning("⚠️ Force stopping watcher")
             
-            if not quiet:
-                click.echo("✅ File watcher stopped")
+            logger.info("✅ File watcher stopped")
         
         except ImportError:
             click.echo("Error: Watchdog not available. Install with: pip install watchdog", err=True)

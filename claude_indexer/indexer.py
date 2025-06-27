@@ -195,7 +195,7 @@ class CoreIndexer:
                 for error_msg in batch_errors:
                     for file_path in batch:
                         if str(file_path) in error_msg:
-                            print(f"❌ Error processing file: {file_path} - {error_msg}")
+                            logger.error(f"❌ Error processing file: {file_path} - {error_msg}")
                             break
                 
                 # Update metrics
@@ -219,8 +219,18 @@ class CoreIndexer:
                 self._update_state(successfully_processed, collection_name, verbose, deleted_files=deleted_files if incremental else None)
                 # Store processed files in result for test verification
                 result.processed_files = [str(f) for f in successfully_processed]
+                
+                # Clean up orphaned relations after processing modified files
+                if incremental and successfully_processed:
+                    if verbose:
+                        logger.info(f"🔍 Cleaning up orphaned relations after processing {len(successfully_processed)} modified files")
+                    orphaned_deleted = self.vector_store._cleanup_orphaned_relations(collection_name, verbose)
+                    if verbose and orphaned_deleted > 0:
+                        logger.info(f"✅ Cleanup complete: {orphaned_deleted} orphaned relations removed")
+                    elif verbose:
+                        logger.info("✅ No orphaned relations found")
             elif verbose:
-                print(f"⚠️  No files to save state for (all {len(files_to_process)} files failed)")
+                logger.warning(f"⚠️  No files to save state for (all {len(files_to_process)} files failed)")
             
             # Transfer cost data to result
             if hasattr(self, '_session_cost_data'):
@@ -279,7 +289,7 @@ class CoreIndexer:
         try:
             # Check if collection exists before searching
             if not self.vector_store.collection_exists(collection_name):
-                print(f"Collection '{collection_name}' does not exist")
+                logger.warning(f"Collection '{collection_name}' does not exist")
                 return []
             
             # Generate query embedding
@@ -303,7 +313,7 @@ class CoreIndexer:
             return search_result.results if search_result.success else []
             
         except Exception as e:
-            print(f"Search failed: {e}")
+            logger.error(f"Search failed: {e}")
             return []
     
     def clear_collection(self, collection_name: str, preserve_manual: bool = True) -> bool:
@@ -325,7 +335,7 @@ class CoreIndexer:
             return result.success
             
         except Exception as e:
-            print(f"Failed to clear collection: {e}")
+            logger.error(f"Failed to clear collection: {e}")
             return False
     
     
@@ -427,13 +437,13 @@ class CoreIndexer:
                     error_msg = f"Failed to parse {relative_path}"
                     errors.append(error_msg)
                     self.logger.warning(f"  {error_msg}")
-                    print(f"❌ Parse error in {file_path}: Parse failure")
+                    logger.error(f"❌ Parse error in {file_path}: Parse failure")
                     
             except Exception as e:
                 error_msg = f"Error processing {file_path}: {e}"
                 errors.append(error_msg)
                 self.logger.error(f"  {error_msg}")
-                print(f"❌ Processing error in {file_path}: {e}")
+                logger.error(f"❌ Processing error in {file_path}: {e}")
         
         return all_entities, all_relations, errors
     
@@ -498,7 +508,7 @@ class CoreIndexer:
             return True
             
         except Exception as e:
-            print(f"Error in _store_vectors: {e}")
+            logger.error(f"Error in _store_vectors: {e}")
             return False
     
     def _entity_to_text(self, entity: Entity) -> str:
@@ -588,7 +598,7 @@ class CoreIndexer:
                         del final_state[deleted_file]
                         files_removed += 1
                         if verbose:
-                            print(f"   Removed {deleted_file} from state")
+                            logger.debug(f"   Removed {deleted_file} from state")
                 
                 if files_removed > 0:
                     # Update description to reflect deletions
@@ -619,23 +629,23 @@ class CoreIndexer:
             # because it depends on both additions and deletions
                 
             if verbose:
-                print(f"✅ State {operation_desc}: {file_count_desc}")
+                logger.info(f"✅ State {operation_desc}: {file_count_desc}")
                 
         except Exception as e:
             error_msg = f"❌ Failed to {'rebuild' if full_rebuild else 'update'} state: {e}"
-            print(error_msg)
+            logger.error(error_msg)
             import traceback
             traceback.print_exc()
             # For incremental updates, fallback to full rebuild if update fails
             if not full_rebuild:
-                print("🔄 Falling back to full state rebuild...")
+                logger.warning("🔄 Falling back to full state rebuild...")
                 self._update_state(self._find_all_files(include_tests=False), collection_name, verbose, full_rebuild=True, deleted_files=None)
     
     def _rebuild_full_state(self, collection_name: str, verbose: bool = False):
         """Rebuild full state file from all current files."""
         try:
             if verbose:
-                print("🔄 Rebuilding complete state from all project files...")
+                logger.info("🔄 Rebuilding complete state from all project files...")
             
             # Get all current files
             all_files = self._find_all_files(include_tests=False)
@@ -645,7 +655,7 @@ class CoreIndexer:
                 
         except Exception as e:
             error_msg = f"❌ Failed to rebuild state: {e}"
-            print(error_msg)
+            logger.error(error_msg)
             import traceback
             traceback.print_exc()
     
@@ -692,7 +702,7 @@ class CoreIndexer:
         
         try:
             for deleted_file in deleted_files:
-                print(f"🗑️ Handling deleted file: {deleted_file}")
+                logger.info(f"🗑️ Handling deleted file: {deleted_file}")
                 
                 # State file always stores relative paths, construct the full path
                 # Note: deleted_file is always relative from state file (see _get_current_state)
@@ -700,10 +710,10 @@ class CoreIndexer:
                 full_path = str(self.project_path / deleted_file)
                 
                 if verbose:
-                    print(f"   📁 Resolved to: {full_path}")
+                    logger.debug(f"   📁 Resolved to: {full_path}")
                 
                 # Use the vector store's find_entities_for_file method
-                print(f"   🔍 Finding ALL entities for file: {full_path}")
+                logger.debug(f"   🔍 Finding ALL entities for file: {full_path}")
                 
                 point_ids = []
                 try:
@@ -711,57 +721,57 @@ class CoreIndexer:
                     found_entities = self.vector_store.find_entities_for_file(collection_name, full_path)
                     
                     if found_entities:
-                        print(f"   ✅ Found {len(found_entities)} entities for file")
+                        logger.debug(f"   ✅ Found {len(found_entities)} entities for file")
                         for entity in found_entities:
                             entity_name = entity.get('name', 'Unknown')
                             entity_type = entity.get('type', 'unknown')
                             entity_id = entity.get('id')
-                            print(f"      🆔 ID: {entity_id}, name: '{entity_name}', type: {entity_type}")
+                            logger.debug(f"      🆔 ID: {entity_id}, name: '{entity_name}', type: {entity_type}")
                         
                         # Extract point IDs for deletion
                         point_ids = [entity['id'] for entity in found_entities]
                     else:
-                        print(f"   ⚠️ No entities found for {deleted_file}")
+                        logger.debug(f"   ⚠️ No entities found for {deleted_file}")
                         
                 except Exception as e:
-                    print(f"   ❌ Error finding entities: {e}")
+                    logger.error(f"   ❌ Error finding entities: {e}")
                     point_ids = []
                 
                 # Remove duplicates and delete all found points
                 point_ids = list(set(point_ids))
-                print(f"   🎯 Total unique point IDs to delete: {len(point_ids)}")
+                logger.info(f"   🎯 Total unique point IDs to delete: {len(point_ids)}")
                 if point_ids and verbose:
-                    print(f"      🆔 Point IDs: {point_ids}")
+                    logger.debug(f"      🆔 Point IDs: {point_ids}")
                     
                 if point_ids:
                     # Delete the points
-                    print(f"   🗑️ Attempting to delete {len(point_ids)} points...")
+                    logger.info(f"   🗑️ Attempting to delete {len(point_ids)} points...")
                     delete_result = self.vector_store.delete_points(collection_name, point_ids)
                     
                     if delete_result.success:
                         entities_deleted = len(point_ids)
                         total_entities_deleted += entities_deleted
-                        print(f"   ✅ Successfully removed {entities_deleted} entities from {deleted_file}")
+                        logger.info(f"   ✅ Successfully removed {entities_deleted} entities from {deleted_file}")
                     else:
-                        print(f"   ❌ Failed to remove entities from {deleted_file}: {delete_result.errors}")
+                        logger.error(f"   ❌ Failed to remove entities from {deleted_file}: {delete_result.errors}")
                 else:
-                    print(f"   ⚠️ No entities found for {deleted_file} - nothing to delete")
+                    logger.warning(f"   ⚠️ No entities found for {deleted_file} - nothing to delete")
             
             # NEW: Clean up orphaned relations after entity deletion
             if total_entities_deleted > 0:
                 if verbose:
-                    print(f"🔍 Starting orphan cleanup after deleting {total_entities_deleted} entities from {len(deleted_files)} files:")
+                    logger.info(f"🔍 Starting orphan cleanup after deleting {total_entities_deleted} entities from {len(deleted_files)} files:")
                     for df in deleted_files:
-                        print(f"   📁 {df}")
+                        logger.info(f"   📁 {df}")
                 
                 orphaned_deleted = self.vector_store._cleanup_orphaned_relations(collection_name, verbose)
                 if verbose and orphaned_deleted > 0:
-                    print(f"✅ Cleanup complete: {total_entities_deleted} entities, {orphaned_deleted} orphaned relations removed")
+                    logger.info(f"✅ Cleanup complete: {total_entities_deleted} entities, {orphaned_deleted} orphaned relations removed")
                 elif verbose:
-                    print(f"✅ Cleanup complete: {total_entities_deleted} entities removed, no orphaned relations found")
+                    logger.info(f"✅ Cleanup complete: {total_entities_deleted} entities removed, no orphaned relations found")
                         
         except Exception as e:
-            print(f"Error handling deleted files: {e}")
+            logger.error(f"Error handling deleted files: {e}")
     
     
     

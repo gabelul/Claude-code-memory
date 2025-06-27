@@ -2,6 +2,9 @@
 
 import sys
 from pathlib import Path
+from .logging import get_logger
+
+logger = get_logger()
 
 def cli():
     """Claude Code Memory Indexer - Universal semantic indexing for codebases."""
@@ -11,9 +14,9 @@ def cli():
         from . import cli_full
         return cli_full.cli()
     except ImportError as e:
-        print("❌ Missing dependencies for CLI functionality")
-        print("   Install with: pip install click watchdog")
-        print("   Or install all dependencies: pip install -r requirements.txt")
+        logger.error("❌ Missing dependencies for CLI functionality")
+        logger.error("   Install with: pip install click watchdog")
+        logger.error("   Or install all dependencies: pip install -r requirements.txt")
         sys.exit(1)
 
 # For direct module execution

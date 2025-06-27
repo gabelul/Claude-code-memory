@@ -141,9 +141,15 @@ class IndexerLogger:
 _logger: Optional[IndexerLogger] = None
 
 
-def get_default_log_file(collection_name: Optional[str] = None) -> Path:
-    """Get the default log file path, optionally per collection."""
-    log_dir = Path.home() / ".claude-indexer" / "logs"
+def get_default_log_file(collection_name: Optional[str] = None, project_path: Optional[Path] = None) -> Path:
+    """Get the default log file path, optionally per collection and project."""
+    if project_path:
+        # Use project directory for logs
+        log_dir = project_path / "logs"
+    else:
+        # Fallback to home directory
+        log_dir = Path.home() / ".claude-indexer" / "logs"
+    
     log_dir.mkdir(parents=True, exist_ok=True)
     
     if collection_name:
@@ -152,10 +158,10 @@ def get_default_log_file(collection_name: Optional[str] = None) -> Path:
         return log_dir / "claude-indexer.log"
 
 
-def clear_log_file(collection_name: Optional[str] = None) -> bool:
+def clear_log_file(collection_name: Optional[str] = None, project_path: Optional[Path] = None) -> bool:
     """Clear the log file for a collection."""
     try:
-        log_file = get_default_log_file(collection_name)
+        log_file = get_default_log_file(collection_name, project_path)
         if log_file.exists():
             log_file.unlink()
             return True
@@ -166,13 +172,13 @@ def clear_log_file(collection_name: Optional[str] = None) -> bool:
 
 def setup_logging(level: str = "INFO", quiet: bool = False, verbose: bool = False,
                  log_file: Optional[Path] = None, enable_file_logging: bool = True,
-                 collection_name: Optional[str] = None) -> IndexerLogger:
+                 collection_name: Optional[str] = None, project_path: Optional[Path] = None) -> IndexerLogger:
     """Setup global logging configuration."""
     global _logger
     
     # Use collection-specific log file if none specified and file logging is enabled
     if log_file is None and enable_file_logging:
-        log_file = get_default_log_file(collection_name)
+        log_file = get_default_log_file(collection_name, project_path)
     
     _logger = IndexerLogger(level, quiet, verbose, log_file)
     return _logger

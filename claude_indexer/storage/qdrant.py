@@ -4,6 +4,9 @@ import time
 import warnings
 from typing import List, Dict, Any, Optional, Union
 from .base import VectorStore, StorageResult, VectorPoint, ManagedVectorStore
+from ..logging import get_logger
+
+logger = get_logger()
 
 try:
     from qdrant_client import QdrantClient
@@ -207,17 +210,17 @@ class QdrantStore(ManagedVectorStore):
         start_time = time.time()
         
         try:
-            print(f"🗑️ Qdrant delete_points called:")
-            print(f"   Collection: {collection_name}")
-            print(f"   Point count: {len(point_ids)}")
+            logger.debug(f"🗑️ Qdrant delete_points called:")
+            logger.debug(f"   Collection: {collection_name}")
+            logger.debug(f"   Point count: {len(point_ids)}")
             
             delete_response = self.client.delete(
                 collection_name=collection_name,
                 points_selector=point_ids
             )
             
-            print(f"   Delete response: {delete_response}")
-            print(f"   Delete response type: {type(delete_response)}")
+            logger.debug(f"   Delete response: {delete_response}")
+            logger.debug(f"   Delete response type: {type(delete_response)}")
             
             return StorageResult(
                 success=True,
@@ -227,7 +230,7 @@ class QdrantStore(ManagedVectorStore):
             )
             
         except Exception as e:
-            print(f"❌ Exception in delete_points: {e}")
+            logger.error(f"❌ Exception in delete_points: {e}")
             return StorageResult(
                 success=False,
                 operation="delete",
@@ -247,11 +250,11 @@ class QdrantStore(ManagedVectorStore):
             query_filter = None
             if filter_conditions:
                 query_filter = self._build_filter(filter_conditions)
-                print(f"🔍 search_similar debug:")
-                print(f"   Collection: {collection_name}")
-                print(f"   Filter conditions: {filter_conditions}")
-                print(f"   Query filter: {query_filter}")
-                print(f"   Limit: {limit}, Score threshold: {score_threshold}")
+                logger.debug(f"🔍 search_similar debug:")
+                logger.debug(f"   Collection: {collection_name}")
+                logger.debug(f"   Filter conditions: {filter_conditions}")
+                logger.debug(f"   Query filter: {query_filter}")
+                logger.debug(f"   Limit: {limit}, Score threshold: {score_threshold}")
             
             # Perform search
             search_results = self.client.search(
@@ -263,10 +266,10 @@ class QdrantStore(ManagedVectorStore):
             )
             
             if filter_conditions:
-                print(f"   Raw search results count: {len(search_results)}")
+                logger.debug(f"   Raw search results count: {len(search_results)}")
                 for i, result in enumerate(search_results):
-                    print(f"   Result {i}: ID={result.id}, score={result.score}")
-                    print(f"      Payload: {result.payload}")
+                    logger.debug(f"   Result {i}: ID={result.id}, score={result.score}")
+                    logger.debug(f"      Payload: {result.payload}")
             
             # Convert results
             results = []
@@ -286,7 +289,7 @@ class QdrantStore(ManagedVectorStore):
             )
             
         except Exception as e:
-            print(f"❌ search_similar exception: {e}")
+            logger.debug(f"❌ search_similar exception: {e}")
             return StorageResult(
                 success=False,
                 operation="search",
@@ -363,7 +366,7 @@ class QdrantStore(ManagedVectorStore):
             return [SearchHit(result.id, result.score, result.payload) for result in search_results]
             
         except Exception as e:
-            print(f"Search failed: {e}")
+            logger.debug(f"Search failed: {e}")
             return []
     
     def list_collections(self) -> List[str]:
@@ -398,8 +401,22 @@ class QdrantStore(ManagedVectorStore):
         try:
             all_points = []
             offset = None
+            seen_offsets = set()  # Track seen offsets to prevent infinite loops
+            max_iterations = 1000  # Safety limit to prevent runaway loops
+            iteration = 0
+            
+            logger.debug(f"Starting scroll operation for collection {collection_name}, limit={limit}, handle_pagination={handle_pagination}")
             
             while True:
+                iteration += 1
+                
+                # Safety check: prevent infinite loops with iteration limit
+                if iteration > max_iterations:
+                    logger.warning(f"Scroll operation hit max iterations ({max_iterations}) for collection {collection_name}")
+                    break
+                
+                logger.debug(f"Scroll iteration {iteration}, offset={offset}")
+                
                 scroll_result = self.client.scroll(
                     collection_name=collection_name,
                     scroll_filter=scroll_filter,
@@ -412,16 +429,31 @@ class QdrantStore(ManagedVectorStore):
                 points, next_offset = scroll_result
                 all_points.extend(points)
                 
+                logger.debug(f"Retrieved {len(points)} points, next_offset={next_offset}, total_points={len(all_points)}")
+                
                 # Handle pagination if requested and more results exist
                 if handle_pagination and next_offset is not None:
+                    # CRITICAL FIX: Infinite loop protection - check if we've seen this offset before
+                    offset_key = str(next_offset)  # Convert to string for set membership
+                    if offset_key in seen_offsets:
+                        logger.warning(f"Detected offset loop in collection {collection_name} at iteration {iteration}. "
+                                     f"Offset {next_offset} already seen. Breaking pagination to prevent infinite loop.")
+                        break
+                    
+                    seen_offsets.add(offset_key)
                     offset = next_offset
+                    logger.debug(f"Advancing to next page with offset {next_offset}")
                 else:
+                    logger.debug(f"Pagination complete: handle_pagination={handle_pagination}, next_offset={next_offset}")
                     break
                     
+            logger.debug(f"Scroll operation completed for collection {collection_name}: "
+                        f"{len(all_points)} total points retrieved in {iteration} iterations")
             return all_points
             
         except Exception as e:
             # Log error and return empty list
+            logger.error(f"Error in _scroll_collection for {collection_name}: {e}")
             return []
     
     def clear_collection(self, collection_name: str, preserve_manual: bool = True) -> StorageResult:
@@ -772,13 +804,13 @@ class QdrantStore(ManagedVectorStore):
             Number of orphaned relations deleted
         """
         if verbose:
-            print("🔍 Scanning collection for orphaned relations...")
+            logger.debug("🔍 Scanning collection for orphaned relations...")
         
         try:
             # Check if collection exists
             if not self.collection_exists(collection_name):
                 if verbose:
-                    print("   Collection doesn't exist - nothing to clean")
+                    logger.debug("   Collection doesn't exist - nothing to clean")
                 return 0
             
             # Get ALL data in a single atomic query to ensure consistency
@@ -803,22 +835,22 @@ class QdrantStore(ManagedVectorStore):
             
             if verbose:
                 if not entity_names:
-                    print("   ⚠️  No entities found in collection - ALL relations are orphaned!")
+                    logger.debug("   ⚠️  No entities found in collection - ALL relations are orphaned!")
                 else:
-                    print(f"   📊 Found {len(entity_names)} entities in collection")
+                    logger.debug(f"   📊 Found {len(entity_names)} entities in collection")
                     # Show a sample of entity names for debugging
                     sample_entities = list(entity_names)[:5]
-                    print(f"   📝 Sample entities: {', '.join(sample_entities)}")
+                    logger.debug(f"   📝 Sample entities: {', '.join(sample_entities)}")
                     if len(entity_names) > 5:
-                        print(f"      ... and {len(entity_names) - 5} more")
+                        logger.debug(f"      ... and {len(entity_names) - 5} more")
             
             if not relations:
                 if verbose:
-                    print("   ✅ No relations found in collection - nothing to clean")
+                    logger.debug("   ✅ No relations found in collection - nothing to clean")
                 return 0
             
             if verbose:
-                print(f"   🔗 Found {len(relations)} relations to validate")
+                logger.debug(f"   🔗 Found {len(relations)} relations to validate")
             
             # Check each relation for orphaned references with consistent snapshot
             orphaned_relations = []
@@ -845,12 +877,12 @@ class QdrantStore(ManagedVectorStore):
                             missing_info.append(f"'{to_entity}' (missing)")
                         else:
                             missing_info.append(f"'{to_entity}'")
-                        print(f"   🗑️  ORPHAN: {missing_info[0]} --{relation_type}--> {missing_info[1]}")
+                        logger.debug(f"   🗑️  ORPHAN: {missing_info[0]} --{relation_type}--> {missing_info[1]}")
                 else:
                     valid_relations += 1
             
             if verbose:
-                print(f"   ✅ {valid_relations} valid relations, {len(orphaned_relations)} orphaned relations found")
+                logger.debug(f"   ✅ {valid_relations} valid relations, {len(orphaned_relations)} orphaned relations found")
             
             # Batch delete orphaned relations if found
             if orphaned_relations:
@@ -859,16 +891,16 @@ class QdrantStore(ManagedVectorStore):
                 
                 if delete_result.success:
                     if verbose:
-                        print(f"🗑️  Deleted {len(orphaned_relations)} orphaned relations")
+                        logger.debug(f"🗑️  Deleted {len(orphaned_relations)} orphaned relations")
                     return len(orphaned_relations)
                 else:
-                    print(f"❌ Failed to delete orphaned relations: {delete_result.errors}")
+                    logger.debug(f"❌ Failed to delete orphaned relations: {delete_result.errors}")
                     return 0
             else:
                 if verbose:
-                    print("   No orphaned relations found")
+                    logger.debug("   No orphaned relations found")
                 return 0
                 
         except Exception as e:
-            print(f"❌ Error during orphaned relation cleanup: {e}")
+            logger.debug(f"❌ Error during orphaned relation cleanup: {e}")
             return 0

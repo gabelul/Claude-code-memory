@@ -4,6 +4,9 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
+from .logging import get_logger
+
+logger = get_logger()
 
 
 class IndexerConfig(BaseModel):
@@ -96,7 +99,7 @@ def load_legacy_settings(settings_file: Path) -> Dict[str, Any]:
                     
                     settings[key] = value
     except Exception as e:
-        print(f"Warning: Failed to load settings.txt: {e}")
+        logger.warning(f"Failed to load settings.txt: {e}")
     
     return settings
 
@@ -140,7 +143,7 @@ def load_config(settings_file: Optional[Path] = None, **overrides) -> IndexerCon
     try:
         config = IndexerConfig(**config_dict)
     except Exception as e:
-        print(f"Warning: Configuration validation failed: {e}")
+        logger.warning(f"Configuration validation failed: {e}")
         # Fall back to defaults, then apply valid overrides
         config = IndexerConfig()
         
@@ -152,7 +155,7 @@ def load_config(settings_file: Optional[Path] = None, **overrides) -> IndexerCon
                     test_config = IndexerConfig(**{key: value})
                     setattr(config, key, value)
                 except:
-                    print(f"Warning: Ignoring invalid override {key}={value}")
+                    logger.warning(f"Ignoring invalid override {key}={value}")
     
     return config
 
@@ -192,6 +195,6 @@ max_concurrent_files=10
     try:
         with open(path, 'w') as f:
             f.write(template)
-        print(f"Created default settings file: {path}")
+        logger.info(f"Created default settings file: {path}")
     except Exception as e:
-        print(f"Failed to create settings file: {e}")
+        logger.error(f"Failed to create settings file: {e}")

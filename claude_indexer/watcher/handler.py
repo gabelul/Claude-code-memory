@@ -4,6 +4,7 @@ import asyncio
 from pathlib import Path
 from typing import Dict, Any, Optional, Set
 from .debounce import FileChangeCoalescer
+from ..logging import get_logger
 
 try:
     from watchdog.events import FileSystemEventHandler
@@ -94,7 +95,8 @@ class IndexingEventHandler(FileSystemEventHandler):
                     self.events_processed += 1
         
         except Exception as e:
-            print(f"❌ Error handling file event {file_path}: {e}")
+            logger = get_logger()
+            logger.error(f"❌ Error handling file event {file_path}: {e}")
     
     def _should_process_file(self, path: Path) -> bool:
         """Check if a file should be processed."""
@@ -136,25 +138,35 @@ class IndexingEventHandler(FileSystemEventHandler):
         """Process a file change or creation."""
         try:
             relative_path = path.relative_to(self.project_path)
-            print(f"🔄 Auto-indexing ({event_type}): {relative_path}")
+            logger = get_logger()
+            logger.info(f"🔄 Auto-indexing ({event_type}): {relative_path}")
             
-            # Create indexer and process file
-            success = self._run_incremental_indexing()
+            # Import here to avoid circular imports
+            from ..main import run_indexing
+            
+            # Run indexing directly
+            success = run_indexing(
+                project_path=str(self.project_path),
+                collection_name=self.collection_name,
+                quiet=not self.verbose,
+                verbose=self.verbose
+            )
             
             if success:
                 self.processed_files.add(str(path))
-                print(f"✅ Indexed: {relative_path}")
+                logger.info(f"✅ Indexed: {relative_path}")
             else:
-                print(f"❌ Failed to index: {relative_path}")
+                logger.error(f"❌ Failed to index: {relative_path}")
         
         except Exception as e:
-            print(f"❌ Error processing file change {path}: {e}")
+            logger.error(f"❌ Error processing file change {path}: {e}")
     
     def _process_file_deletion(self, path: Path):
         """Process a file deletion using shared deletion logic."""
         try:
             relative_path = path.relative_to(self.project_path)
-            print(f"🗑️  File deleted: {relative_path}")
+            logger = get_logger()
+            logger.info(f"🗑️  File deleted: {relative_path}")
             
             # Remove from processed files
             self.processed_files.discard(str(path))
@@ -171,30 +183,13 @@ class IndexingEventHandler(FileSystemEventHandler):
             )
             
             if success:
-                print(f"✅ Cleanup completed for deleted file: {relative_path}")
+                logger.info(f"✅ Cleanup completed for deleted file: {relative_path}")
             else:
-                print(f"❌ Cleanup may have failed for deleted file: {relative_path}")
+                logger.warning(f"❌ Cleanup may have failed for deleted file: {relative_path}")
             
         except Exception as e:
-            print(f"❌ Error processing file deletion {path}: {e}")
+            logger.error(f"❌ Error processing file deletion {path}: {e}")
     
-    def _run_incremental_indexing(self) -> bool:
-        """Run incremental indexing for the project."""
-        try:
-            # Import here to avoid circular imports
-            from ..main import run_indexing
-            
-            # Run indexing with verbose setting from CLI
-            return run_indexing(
-                project_path=str(self.project_path),
-                collection_name=self.collection_name,
-                quiet=not self.verbose,
-                verbose=self.verbose
-            )
-            
-        except Exception as e:
-            print(f"❌ Indexing failed: {e}")
-            return False
     
     def get_stats(self) -> Dict[str, Any]:
         """Get event handler statistics."""

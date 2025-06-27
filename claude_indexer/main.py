@@ -16,19 +16,18 @@ def run_indexing_with_shared_deletion(project_path: str, collection_name: str,
                                     verbose: bool = False, config_file: Optional[str] = None) -> bool:
     """Run deletion handling with shared deletion logic for a single file."""
     try:
-        # Setup logging with collection-specific file logging
-        logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection_name)
+        # Validate project path first
+        project = Path(project_path).resolve()
+        if not project.exists():
+            print(f"❌ Project path does not exist: {project}")
+            return False
+        
+        # Setup logging with project-specific file logging
+        logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection_name, project_path=project)
         
         # Load configuration
         config_path = Path(config_file) if config_file else None
         config = load_config(config_path)
-        
-        # Validate project path
-        project = Path(project_path).resolve()
-        if not project.exists():
-            if not quiet:
-                print(f"❌ Project path does not exist: {project}")
-            return False
         
         # Create components using direct Qdrant integration
         embedder = create_embedder_from_config({
@@ -59,7 +58,7 @@ def run_indexing_with_shared_deletion(project_path: str, collection_name: str,
         
     except Exception as e:
         if not quiet:
-            print(f"❌ Error in shared deletion: {e}")
+            logger.error(f"❌ Error in shared deletion: {e}")
         return False
 
 
@@ -73,19 +72,18 @@ def run_indexing(project_path: str, collection_name: str,
     """
     
     try:
-        # Setup logging with collection-specific file logging
-        logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection_name)
+        # Validate project path first
+        project = Path(project_path).resolve()
+        if not project.exists():
+            print(f"❌ Project path does not exist: {project}")
+            return False
+        
+        # Setup logging with project-specific file logging
+        logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection_name, project_path=project)
         
         # Load configuration
         config_path = Path(config_file) if config_file else None
         config = load_config(config_path)
-        
-        # Validate project path
-        project = Path(project_path).resolve()
-        if not project.exists():
-            if not quiet:
-                print(f"❌ Project path does not exist: {project}")
-            return False
         
         # Create components using direct Qdrant integration
         embedder = create_embedder_from_config({
@@ -103,7 +101,7 @@ def run_indexing(project_path: str, collection_name: str,
         })
         
         if not quiet:
-            print("⚡ Using Qdrant + OpenAI (direct mode)")
+            logger.info("⚡ Using Qdrant + OpenAI (direct mode)")
         
         # Create indexer
         indexer = CoreIndexer(config, embedder, vector_store, project)
@@ -113,9 +111,9 @@ def run_indexing(project_path: str, collection_name: str,
         incremental = state_file.exists()
         
         if not quiet and verbose:
-            print(f"🔄 Indexing project: {project}")
-            print(f"📦 Collection: {collection_name}")
-            print(f"⚡ Mode: {'Incremental' if incremental else 'Full'} (auto-detected)")
+            logger.info(f"🔄 Indexing project: {project}")
+            logger.info(f"📦 Collection: {collection_name}")
+            logger.info(f"⚡ Mode: {'Incremental' if incremental else 'Full'} (auto-detected)")
         
         result = indexer.index_project(
             collection_name=collection_name,
@@ -126,24 +124,24 @@ def run_indexing(project_path: str, collection_name: str,
         if result.success:
             if not quiet:
                 if verbose:
-                    print(f"✅ Indexing completed in {result.processing_time:.1f}s")
-                    print(f"   Files processed: {result.files_processed}")
-                    print(f"   Entities created: {result.entities_created}")
-                    print(f"   Relations created: {result.relations_created}")
+                    logger.info(f"✅ Indexing completed in {result.processing_time:.1f}s")
+                    logger.info(f"   Files processed: {result.files_processed}")
+                    logger.info(f"   Entities created: {result.entities_created}")
+                    logger.info(f"   Relations created: {result.relations_created}")
                 else:
-                    print(f"✅ Indexed {result.files_processed} files")
+                    logger.info(f"✅ Indexed {result.files_processed} files")
         else:
             if not quiet:
-                print("❌ Indexing failed")
+                logger.error("❌ Indexing failed")
                 for error in result.errors:
-                    print(f"   {error}")
+                    logger.error(f"   {error}")
             return False
         
         return True
         
     except Exception as e:
         if not quiet:
-            print(f"❌ Error: {e}")
+            logger.error(f"❌ Error: {e}")
         return False
 
 
@@ -153,7 +151,7 @@ def main():
         from .cli import cli
         cli()
     except ImportError:
-        # Fallback to basic help if Click is not available
+        # Fallback to basic help if Click is not available - keep prints for CLI fallback
         print("Claude Code Memory Indexer")
         print()
         print("Click not available. Install with: pip install click")
