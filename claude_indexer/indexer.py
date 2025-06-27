@@ -412,7 +412,20 @@ class CoreIndexer:
         for file_path in files:
             try:
                 relative_path = file_path.relative_to(self.project_path)
-                self.logger.debug(f"Processing file: {relative_path}")
+                
+                # Determine file status using existing changed files logic
+                current_state = self._get_current_state([file_path])
+                previous_state = self._load_state("memory-project")
+                
+                file_key = str(relative_path)
+                if file_key not in previous_state:
+                    file_status = "ADDED"
+                else:
+                    current_hash = current_state.get(file_key, {}).get("hash", "")
+                    previous_hash = previous_state.get(file_key, {}).get("hash", "")
+                    file_status = "MODIFIED" if current_hash != previous_hash else "UNCHANGED"
+                
+                self.logger.debug(f"Processing file [{file_status}]: {relative_path}")
                 
                 result = self.parser_registry.parse_file(file_path)
                 
@@ -678,7 +691,8 @@ class CoreIndexer:
                 
                 # State file always stores relative paths, construct the full path
                 # Note: deleted_file is always relative from state file (see _get_current_state)
-                full_path = str((self.project_path / deleted_file).resolve())
+                # Don't use .resolve() as it adds /private on macOS, but entities are stored without it
+                full_path = str(self.project_path / deleted_file)
                 
                 if verbose:
                     print(f"   📁 Resolved to: {full_path}")
@@ -711,7 +725,7 @@ class CoreIndexer:
                 # Remove duplicates and delete all found points
                 point_ids = list(set(point_ids))
                 print(f"   🎯 Total unique point IDs to delete: {len(point_ids)}")
-                if point_ids:
+                if point_ids and verbose:
                     print(f"      🆔 Point IDs: {point_ids}")
                     
                     # Delete the points

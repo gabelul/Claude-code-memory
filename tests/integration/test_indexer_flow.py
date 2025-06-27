@@ -132,7 +132,7 @@ def extract_processed_files_from_cli_output(output: str) -> list:
 
 
 @pytest.mark.integration
-class TestIndexerFlow:
+class TestACustomFlow:
     """Test complete indexing workflows."""
     
     def test_full_index_flow_with_real_files(self, temp_repo, dummy_embedder, qdrant_store):
@@ -361,8 +361,35 @@ class TestIndexerConfiguration:
         )
         
         with patch('claude_indexer.embeddings.registry.create_embedder_from_config') as mock_create:
+            from claude_indexer.embeddings.base import EmbeddingResult
+            
             mock_embedder = Mock()
-            mock_embedder.embed_single.return_value = np.random.rand(1536).astype(np.float32)
+            
+            # Mock embed_text method to return EmbeddingResult
+            def mock_embed_text(text):
+                return EmbeddingResult(
+                    text=text,
+                    embedding=np.random.rand(1536).astype(np.float32).tolist(),
+                    model="mock-model",
+                    token_count=len(text.split()),
+                    processing_time=0.001,
+                    cost_estimate=0.0001
+                )
+            
+            # Mock embed_batch method to return list of EmbeddingResult
+            def mock_embed_batch(texts):
+                return [mock_embed_text(text) for text in texts]
+            
+            mock_embedder.embed_text.side_effect = mock_embed_text
+            mock_embedder.embed_batch.side_effect = mock_embed_batch
+            
+            # Mock get_usage_stats to return proper dict structure
+            mock_embedder.get_usage_stats.return_value = {
+                'total_requests': 0,
+                'total_tokens': 0,
+                'total_cost': 0.0
+            }
+            
             mock_create.return_value = mock_embedder
             
             indexer = CoreIndexer(
@@ -376,7 +403,7 @@ class TestIndexerConfiguration:
             assert result.success is True
             
             # Verify embedder was used
-            assert mock_embedder.embed_single.called
+            assert mock_embedder.embed_text.called or mock_embedder.embed_batch.called
     
     def test_indexer_with_custom_filters(self, temp_repo, dummy_embedder, qdrant_store):
         """Test indexer with custom file filters."""
@@ -485,7 +512,7 @@ def function_{i}_{j}(param_{j}):
 
 
 @pytest.mark.integration
-class TestCustomIncrementalBehavior:
+class TestACustomIncrementalBehavior:
     """Custom tests for precise incremental indexing behavior verification."""
     
     def test_custom_single_new_file_processing(self, temp_repo, dummy_embedder, qdrant_store):

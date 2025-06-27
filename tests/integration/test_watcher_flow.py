@@ -28,8 +28,12 @@ class TestWatcherFlow:
     
     async def test_basic_file_watch_flow(self, temp_repo, dummy_embedder, qdrant_store):
         """Test basic file watching and re-indexing."""
+        import time
+        from tests.conftest import wait_for_collection_ready, verify_entity_searchable
+        
+        collection_name = f"test_watcher_{int(time.time() * 1000)}"
         config = IndexerConfig(
-            collection_name="test_watcher",
+            collection_name=collection_name,
             embedder_type="dummy",
             storage_type="qdrant",
             watch_debounce=0.1  # Short debounce for testing
@@ -46,11 +50,15 @@ class TestWatcherFlow:
         watch_task = asyncio.create_task(watcher.start())
         
         try:
-            # Wait for watcher to initialize
-            await asyncio.sleep(0.2)
+            # Wait for watcher to initialize and collection to be ready
+            await asyncio.sleep(0.3)
+            collection_ready = wait_for_collection_ready(
+                qdrant_store, collection_name, timeout=10.0, verbose=True
+            )
+            assert collection_ready, f"Collection {collection_name} not ready for operations"
             
             # Get initial count
-            initial_count = qdrant_store.count("test_watcher")
+            initial_count = qdrant_store.count(collection_name)
             
             # Modify a file
             modified_file = temp_repo / "foo.py"
@@ -58,22 +66,19 @@ class TestWatcherFlow:
             modified_content = original_content + '\n\ndef new_watched_function():\n    """Added by watcher test."""\n    return "watched"\n'
             modified_file.write_text(modified_content)
             
-            # Wait for watcher to process the change
-            await asyncio.sleep(0.5)
+            # Wait for watcher to process the change with eventual consistency
+            await asyncio.sleep(0.2)  # Initial processing time
+            
+            # Verify the new function is searchable
+            function_found = verify_entity_searchable(
+                qdrant_store, dummy_embedder, collection_name, 
+                "new_watched_function", timeout=15.0, verbose=True
+            )
+            assert function_found, "new_watched_function should be searchable after file modification"
             
             # Check that re-indexing occurred
-            final_count = qdrant_store.count("test_watcher")
-            assert final_count >= initial_count
-            
-            # Verify we can find the new function
-            search_embedding = dummy_embedder.embed_single("new_watched_function")
-            hits = qdrant_store.search("test_watcher", search_embedding, top_k=5)
-            
-            new_function_found = any(
-                "new_watched_function" in hit.payload.get("name", "")
-                for hit in hits
-            )
-            assert new_function_found
+            final_count = qdrant_store.count(collection_name)
+            assert final_count >= initial_count, f"Count should increase: {initial_count} -> {final_count}"
             
         finally:
             # Stop watcher
@@ -86,8 +91,12 @@ class TestWatcherFlow:
     
     async def test_multiple_file_changes(self, temp_repo, dummy_embedder, qdrant_store):
         """Test watching multiple file changes."""
+        import time
+        from tests.conftest import wait_for_collection_ready, verify_entity_searchable
+        
+        collection_name = f"test_multi_watch_{int(time.time() * 1000)}"
         config = IndexerConfig(
-            collection_name="test_multi_watch",
+            collection_name=collection_name,
             embedder_type="dummy",
             storage_type="qdrant",
             watch_debounce=0.1
@@ -103,7 +112,12 @@ class TestWatcherFlow:
         watch_task = asyncio.create_task(watcher.start())
         
         try:
-            await asyncio.sleep(0.2)
+            # Wait for collection to be ready
+            await asyncio.sleep(0.3)
+            collection_ready = wait_for_collection_ready(
+                qdrant_store, collection_name, timeout=10.0, verbose=True
+            )
+            assert collection_ready, f"Collection {collection_name} not ready"
             
             # Modify multiple files simultaneously
             files_to_modify = [
@@ -117,19 +131,16 @@ class TestWatcherFlow:
                 content += f'\n\ndef batch_function_{i}():\n    """Batch test function {i}."""\n    return {i}\n'
                 file_path.write_text(content)
             
-            # Wait for debounced processing
-            await asyncio.sleep(0.5)
+            # Wait for initial processing
+            await asyncio.sleep(0.2)
             
-            # Verify all changes were processed
+            # Verify all changes were processed with eventual consistency
             for i in range(len(files_to_modify)):
-                search_embedding = dummy_embedder.embed_single(f"batch_function_{i}")
-                hits = qdrant_store.search("test_multi_watch", search_embedding, top_k=5)
-                
-                function_found = any(
-                    f"batch_function_{i}" in hit.payload.get("name", "")
-                    for hit in hits
+                function_found = verify_entity_searchable(
+                    qdrant_store, dummy_embedder, collection_name,
+                    f"batch_function_{i}", timeout=15.0, verbose=True
                 )
-                assert function_found, f"batch_function_{i} not found in search results"
+                assert function_found, f"batch_function_{i} should be searchable after file modification"
         
         finally:
             await watcher.stop()
@@ -250,17 +261,26 @@ def temp_function():
             # Wait for deletion processing
             await asyncio.sleep(0.5)
             
-            # Verify the function is no longer findable or properly cleaned up
-            search_embedding = dummy_embedder.embed_single("temp_function")
-            hits = qdrant_store.search("test_deletions", search_embedding, top_k=5)
+            # Wait for eventual consistency and verify the function is properly cleaned up
+            from tests.conftest import wait_for_eventual_consistency
             
-            # After deletion, either no hits for temp_function or hits don't reference the deleted file
-            remaining_temp_hits = [
-                hit for hit in hits 
-                if "temp_function" in hit.payload.get("name", "") 
-                and "temporary.py" in hit.payload.get("file_path", "")
-            ]
-            assert len(remaining_temp_hits) == 0, "Deleted file references should be cleaned up"
+            def search_temp_function():
+                search_embedding = dummy_embedder.embed_single("temp_function")
+                hits = qdrant_store.search("test_deletions", search_embedding, top_k=5)
+                # Return hits that reference the deleted file
+                return [
+                    hit for hit in hits 
+                    if "temp_function" in hit.payload.get("name", "") 
+                    and "temporary.py" in hit.payload.get("file_path", "")
+                ]
+            
+            consistency_achieved = wait_for_eventual_consistency(
+                search_temp_function,
+                expected_count=0,
+                timeout=10.0,
+                verbose=True
+            )
+            assert consistency_achieved, "Eventual consistency timeout: deleted file references should be cleaned up"
         
         finally:
             await watcher.stop()

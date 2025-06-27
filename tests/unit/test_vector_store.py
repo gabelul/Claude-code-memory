@@ -567,21 +567,20 @@ class TestQdrantStore:
             
             # Mock relations - some orphaned, some valid
             mock_relation_points = [
-                MagicMock(id="rel1", payload={"from": "entity1", "to": "entity2"}),  # Valid
-                MagicMock(id="rel2", payload={"from": "entity1", "to": "deleted_entity"}),  # Orphaned
-                MagicMock(id="rel3", payload={"from": "deleted_entity2", "to": "entity3"}),  # Orphaned
-                MagicMock(id="rel4", payload={"from": "entity2", "to": "entity3"})  # Valid
+                MagicMock(id="rel1", payload={"type": "relation", "from": "entity1", "to": "entity2"}),  # Valid
+                MagicMock(id="rel2", payload={"type": "relation", "from": "entity1", "to": "deleted_entity"}),  # Orphaned
+                MagicMock(id="rel3", payload={"type": "relation", "from": "deleted_entity2", "to": "entity3"}),  # Orphaned
+                MagicMock(id="rel4", payload={"type": "relation", "from": "entity2", "to": "entity3"})  # Valid
             ]
             
-            # Configure scroll calls - first for entities, second for relations
-            mock_client.scroll.side_effect = [
-                (mock_entity_points, None),  # Entities
-                (mock_relation_points, None)  # Relations
-            ]
-            
-            # Mock collection exists and delete_points method
-            with patch.object(store, 'collection_exists', return_value=True), \
+            # Mock the _scroll_collection method directly
+            with patch.object(store, '_scroll_collection') as mock_scroll_collection, \
+                 patch.object(store, 'collection_exists', return_value=True), \
                  patch.object(store, 'delete_points') as mock_delete_points:
+                
+                # The new implementation gets all points in one call and processes them
+                all_points = mock_entity_points + mock_relation_points
+                mock_scroll_collection.return_value = all_points
                 
                 mock_delete_points.return_value = StorageResult(
                     success=True,
@@ -598,8 +597,8 @@ class TestQdrantStore:
                 # Verify delete was called with orphaned relation IDs
                 mock_delete_points.assert_called_once_with("test_collection", ["rel2", "rel3"])
                 
-                # Verify scroll was called correctly
-                assert mock_client.scroll.call_count == 2
+                # Verify scroll was called once (unified approach)
+                assert mock_scroll_collection.call_count == 1
 
     @patch('claude_indexer.storage.qdrant.QdrantClient')
     def test_cleanup_orphaned_relations_no_orphans(self, mock_client_class):

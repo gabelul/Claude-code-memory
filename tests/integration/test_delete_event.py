@@ -63,15 +63,42 @@ class TestDeleteEventHandling:
         final_count = qdrant_store.count(collection_name)
         assert final_count < initial_count, "Vector count should decrease after file deletion"
         
-        # Verify entities from deleted file are gone
-        search_embedding = dummy_embedder.embed_single("add function")
-        hits = qdrant_store.search(collection_name, search_embedding, top_k=10)
+        # Wait for eventual consistency and verify entities from deleted file are gone
+        from tests.conftest import wait_for_eventual_consistency
         
-        foo_entities_after = [
-            hit for hit in hits 
-            if "foo.py" in hit.payload.get("file_path", "")
-        ]
-        assert len(foo_entities_after) == 0, "Should not find entities from deleted foo.py"
+        def search_foo_entities():
+            # Try multiple search terms that should match foo.py entities
+            search_terms = ["Calculator", "add", "multiply", "foo.py"]
+            all_foo_hits = []
+            
+            for term in search_terms:
+                search_embedding = dummy_embedder.embed_single(term)
+                hits = qdrant_store.search(collection_name, search_embedding, top_k=20)
+                foo_hits = [
+                    hit for hit in hits 
+                    if (hit.payload.get("file_path", "").endswith("foo.py") and
+                        not hit.payload.get("file_path", "").endswith("test_foo.py"))
+                ]
+                all_foo_hits.extend(foo_hits)
+            
+            # Remove duplicates by ID
+            unique_foo_hits = []
+            seen_ids = set()
+            for hit in all_foo_hits:
+                hit_id = getattr(hit, 'id', None)
+                if hit_id not in seen_ids:
+                    unique_foo_hits.append(hit)
+                    seen_ids.add(hit_id)
+            
+            return unique_foo_hits
+        
+        consistency_achieved = wait_for_eventual_consistency(
+            search_foo_entities, 
+            expected_count=0, 
+            timeout=15.0,
+            verbose=True
+        )
+        assert consistency_achieved, "Eventual consistency timeout: foo.py entities should be deleted"
     
     def test_multiple_file_deletion(self, temp_repo, dummy_embedder, qdrant_store):
         """Test cleanup when multiple files are deleted."""
@@ -109,16 +136,14 @@ def extra_function_{i}():
         
         initial_count = qdrant_store.count(collection_name)
         
-        # Verify extra files are indexed
+        # Verify extra files are indexed with eventual consistency
+        from tests.conftest import verify_entity_searchable
         for i in range(3):
-            search_embedding = dummy_embedder.embed_single(f"extra_function_{i}")
-            hits = qdrant_store.search(collection_name, search_embedding, top_k=5)
-            
-            extra_found = any(
-                f"extra_function_{i}" in hit.payload.get("name", "")
-                for hit in hits
+            entity_found = verify_entity_searchable(
+                qdrant_store, dummy_embedder, collection_name,
+                f"extra_function_{i}", timeout=10.0, verbose=True
             )
-            assert extra_found, f"extra_function_{i} should be found initially"
+            assert entity_found, f"extra_function_{i} should be found initially after indexing"
         
         # Delete all extra files
         for extra_file in extra_files:
@@ -131,16 +156,25 @@ def extra_function_{i}():
         final_count = qdrant_store.count(collection_name)
         assert final_count < initial_count, "Count should decrease after multiple deletions"
         
-        # Verify all extra functions are gone
+        # Wait for eventual consistency and verify all extra functions are gone
+        from tests.conftest import wait_for_eventual_consistency
+        
         for i in range(3):
-            search_embedding = dummy_embedder.embed_single(f"extra_function_{i}")
-            hits = qdrant_store.search(collection_name, search_embedding, top_k=5)
+            def search_extra_function():
+                search_embedding = dummy_embedder.embed_single(f"extra_function_{i}")
+                hits = qdrant_store.search(collection_name, search_embedding, top_k=5)
+                return [
+                    hit for hit in hits
+                    if f"extra_function_{i}" in hit.payload.get("name", "")
+                ]
             
-            extra_found = any(
-                f"extra_function_{i}" in hit.payload.get("name", "")
-                for hit in hits
+            consistency_achieved = wait_for_eventual_consistency(
+                search_extra_function,
+                expected_count=0,
+                timeout=10.0,
+                verbose=True
             )
-            assert not extra_found, f"extra_function_{i} should be cleaned up after deletion"
+            assert consistency_achieved, f"Eventual consistency timeout: extra_function_{i} should be deleted"
     
     def test_directory_deletion_cleanup(self, temp_repo, dummy_embedder, qdrant_store):
         """Test cleanup when an entire directory is deleted."""
@@ -229,15 +263,13 @@ class SubClass_{i}:
         result1 = indexer.index_project("test_delete_partial")
         assert result1.success
         
-        # Verify existing files are indexed
-        search_embedding = dummy_embedder.embed_single("Calculator")
-        hits = qdrant_store.search("test_delete_partial", search_embedding, top_k=5)
-        
-        calc_found_before = any(
-            "Calculator" in hit.payload.get("name", "")
-            for hit in hits
+        # Verify existing files are indexed with eventual consistency
+        from tests.conftest import verify_entity_searchable
+        calc_found = verify_entity_searchable(
+            qdrant_store, dummy_embedder, "test_delete_partial",
+            "Calculator", timeout=10.0, verbose=True, expected_count=2
         )
-        assert calc_found_before, "Calculator class should be found before deletion"
+        assert calc_found, "Calculator class should be found before deletion"
         
         # Delete bar.py but keep foo.py
         (temp_repo / "bar.py").unlink()
@@ -256,15 +288,24 @@ class SubClass_{i}:
         )
         assert calc_found_after, "Calculator class should still be found after bar.py deletion"
         
-        # Verify bar.py entities are gone
-        search_embedding = dummy_embedder.embed_single("main")
-        hits = qdrant_store.search("test_delete_partial", search_embedding, top_k=10)
+        # Wait for eventual consistency and verify bar.py entities are gone
+        from tests.conftest import wait_for_eventual_consistency
         
-        bar_entities = [
-            hit for hit in hits 
-            if "bar.py" in hit.payload.get("file_path", "")
-        ]
-        assert len(bar_entities) == 0, "Should not find entities from deleted bar.py"
+        def search_bar_entities():
+            search_embedding = dummy_embedder.embed_single("main")
+            hits = qdrant_store.search("test_delete_partial", search_embedding, top_k=10)
+            return [
+                hit for hit in hits 
+                if "bar.py" in hit.payload.get("file_path", "")
+            ]
+        
+        consistency_achieved = wait_for_eventual_consistency(
+            search_bar_entities,
+            expected_count=0,
+            timeout=10.0,
+            verbose=True
+        )
+        assert consistency_achieved, "Eventual consistency timeout: bar.py entities should be deleted"
     
     def test_deletion_state_persistence(self, temp_repo, dummy_embedder, qdrant_store):
         """Test that deletion state is properly persisted between indexing runs."""
@@ -294,15 +335,13 @@ def temp_func():
         result1 = indexer.index_project("test_delete_persistence")
         assert result1.success
         
-        # Verify temp file is indexed
-        search_embedding = dummy_embedder.embed_single("temp_func")
-        hits = qdrant_store.search("test_delete_persistence", search_embedding, top_k=5)
-        
-        temp_found_before = any(
-            "temp_func" in hit.payload.get("name", "")
-            for hit in hits
+        # Verify temp file is indexed with eventual consistency
+        from tests.conftest import verify_entity_searchable
+        temp_found = verify_entity_searchable(
+            qdrant_store, dummy_embedder, "test_delete_persistence",
+            "temp_func", timeout=10.0, verbose=True
         )
-        assert temp_found_before, "Temp function should be found initially"
+        assert temp_found, "Temp function should be found initially"
         
         # Delete the file
         temp_file.unlink()
@@ -526,22 +565,24 @@ def helper_function():
             f"Expected relation count to decrease from {initial_relation_count} to {len(final_relations)}"
         )
         
-        # Verify entities from deleted file are gone
-        search_embedding = dummy_embedder.embed_single("helper_function")
-        hits = qdrant_store.search("test_orphan_cleanup", search_embedding, top_k=20)
+        # Wait for eventual consistency and verify entities from deleted file are gone
+        from tests.conftest import wait_for_eventual_consistency
         
-        helpers_entities = [
-            hit for hit in hits 
-            if hit.payload.get("file_path", "").endswith("helpers.py") and "utils/" not in hit.payload.get("file_path", "")
-        ]
+        def search_helpers_entities():
+            search_embedding = dummy_embedder.embed_single("helper_function")
+            hits = qdrant_store.search("test_orphan_cleanup", search_embedding, top_k=20)
+            return [
+                hit for hit in hits 
+                if hit.payload.get("file_path", "").endswith("helpers.py") and "utils/" not in hit.payload.get("file_path", "")
+            ]
         
-        # Debug information if assertion fails
-        if len(helpers_entities) > 0:
-            print(f"Found {len(helpers_entities)} entities from helpers.py:")
-            for entity in helpers_entities:
-                print(f"  - Entity: {entity.payload}")
-        
-        assert len(helpers_entities) == 0, f"Should not find entities from deleted helpers.py file, but found: {[e.payload for e in helpers_entities]}"
+        consistency_achieved = wait_for_eventual_consistency(
+            search_helpers_entities,
+            expected_count=0,
+            timeout=10.0,
+            verbose=True
+        )
+        assert consistency_achieved, "Eventual consistency timeout: helpers.py entities should be deleted"
         
         # Verify remaining entities from main_module.py and utils.py still exist
         main_search = dummy_embedder.embed_single("MainClass")

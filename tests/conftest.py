@@ -245,10 +245,6 @@ class DummyEmbedder:
             embedding = np.random.rand(self.dimension).astype(np.float32)
             embeddings.append(embedding)
         return embeddings
-    
-    def embed_single(self, text: str) -> np.ndarray:
-        """Embed a single text."""
-        return self.embed([text])[0]
 
 
 @pytest.fixture()
@@ -472,3 +468,188 @@ def assert_valid_embedding(embedding: np.ndarray, expected_dim: int = 1536):
 def count_python_files(path: Path) -> int:
     """Count Python files in a directory recursively."""
     return len(list(path.rglob("*.py")))
+
+
+def wait_for_eventual_consistency(
+    search_func,
+    expected_count: int = 0,
+    timeout: float = 15.0,
+    initial_delay: float = 0.5,
+    max_delay: float = 3.0,
+    backoff_multiplier: float = 1.2,
+    verbose: bool = False
+) -> bool:
+    """
+    Wait for Qdrant eventual consistency by retrying searches until entities are properly deleted.
+    
+    Args:
+        search_func: Function that returns search results (should return list/count)
+        expected_count: Expected number of results after consistency (default: 0 for deletions)
+        timeout: Maximum time to wait in seconds
+        initial_delay: Initial delay between retries
+        max_delay: Maximum delay between retries
+        backoff_multiplier: Multiplier for exponential backoff
+        verbose: Print debug information
+        
+    Returns:
+        True if eventual consistency achieved, False if timeout
+    """
+    import time
+    
+    start_time = time.time()
+    delay = initial_delay
+    attempt = 0
+    last_results = None
+    
+    # Start with a small initial delay to allow Qdrant to process the deletion
+    time.sleep(0.2)
+    
+    while time.time() - start_time < timeout:
+        attempt += 1
+        
+        try:
+            results = search_func()
+            
+            # Handle different return types
+            if hasattr(results, '__len__'):
+                actual_count = len(results)
+            elif isinstance(results, (int, float)):
+                actual_count = int(results)
+            else:
+                actual_count = 1 if results else 0
+                
+            if verbose:
+                print(f"Attempt {attempt}: Expected {expected_count}, got {actual_count}")
+                if hasattr(results, '__len__') and len(results) > 0 and verbose:
+                    # Show details of what's still being found
+                    for i, result in enumerate(results[:3]):  # Show first 3 results
+                        if hasattr(result, 'payload'):
+                            name = result.payload.get('name', 'Unknown')
+                            file_path = result.payload.get('file_path', 'Unknown')
+                            print(f"  Still found #{i+1}: {name} in {file_path}")
+                        else:
+                            print(f"  Still found #{i+1}: {result}")
+                
+            if actual_count == expected_count:
+                if verbose:
+                    print(f"Eventual consistency achieved after {time.time() - start_time:.2f}s")
+                return True
+                
+            # If count hasn't changed for several attempts, try a longer delay
+            if last_results is not None and actual_count == last_results:
+                delay = min(delay * 1.5, max_delay)
+            
+            last_results = actual_count
+                
+        except Exception as e:
+            if verbose:
+                print(f"Search attempt {attempt} failed: {e}")
+            # Continue retrying on search errors
+            
+        # Wait before next attempt with exponential backoff
+        time.sleep(delay)
+        delay = min(delay * backoff_multiplier, max_delay)
+    
+    if verbose:
+        print(f"Timeout reached after {timeout}s, last count: {last_results}")
+    return False
+
+
+def wait_for_collection_ready(
+    qdrant_store,
+    collection_name: str,
+    timeout: float = 15.0,
+    initial_delay: float = 0.2,
+    max_delay: float = 2.0,
+    verbose: bool = False
+) -> bool:
+    """
+    Wait for a Qdrant collection to exist and be ready for operations.
+    
+    Args:
+        qdrant_store: QdrantStore instance
+        collection_name: Name of collection to wait for
+        timeout: Maximum time to wait in seconds
+        initial_delay: Initial delay between checks
+        max_delay: Maximum delay between checks
+        verbose: Print debug information
+        
+    Returns:
+        True if collection is ready, False if timeout
+    """
+    import time
+    
+    start_time = time.time()
+    delay = initial_delay
+    attempt = 0
+    
+    if verbose:
+        print(f"Waiting for collection '{collection_name}' to be ready...")
+    
+    while time.time() - start_time < timeout:
+        attempt += 1
+        
+        try:
+            # Check if collection exists
+            if qdrant_store.collection_exists(collection_name):
+                # Try a simple count operation to verify it's ready
+                count = qdrant_store.count(collection_name)
+                if verbose:
+                    print(f"Collection '{collection_name}' ready with {count} points")
+                return True
+            elif verbose:
+                print(f"Attempt {attempt}: Collection '{collection_name}' not found")
+                
+        except Exception as e:
+            if verbose:
+                print(f"Attempt {attempt}: Collection check failed: {e}")
+        
+        time.sleep(delay)
+        delay = min(delay * 1.5, max_delay)
+    
+    if verbose:
+        print(f"Timeout: Collection '{collection_name}' not ready after {timeout}s")
+    return False
+
+
+def verify_entity_searchable(
+    qdrant_store,
+    dummy_embedder,
+    collection_name: str,
+    entity_name: str,
+    timeout: float = 10.0,
+    verbose: bool = False,
+    expected_count: int = 1
+) -> bool:
+    """
+    Verify that a specific entity is indexed and searchable.
+    
+    Args:
+        qdrant_store: QdrantStore instance
+        dummy_embedder: Embedder for search queries
+        collection_name: Collection to search in
+        entity_name: Name of entity to search for
+        timeout: Maximum time to wait
+        verbose: Print debug information
+        expected_count: Expected number of entities to find (default: 1)
+        
+    Returns:
+        True if entity is found, False if timeout
+    """
+    def search_for_entity():
+        search_embedding = dummy_embedder.embed_single(entity_name)
+        # Increase top_k to handle cases where target entity might not be in top 10
+        # due to DummyEmbedder's deterministic but not perfect scoring
+        hits = qdrant_store.search(collection_name, search_embedding, top_k=50)
+        matching_hits = [
+            hit for hit in hits 
+            if entity_name in hit.payload.get("name", "")
+        ]
+        return matching_hits
+    
+    return wait_for_eventual_consistency(
+        search_for_entity,
+        expected_count=expected_count,
+        timeout=timeout,
+        verbose=verbose
+    )
