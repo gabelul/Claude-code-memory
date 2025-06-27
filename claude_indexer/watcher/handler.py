@@ -19,7 +19,7 @@ class IndexingEventHandler(FileSystemEventHandler):
     """File system event handler with debouncing and batch processing."""
     
     def __init__(self, project_path: str, collection_name: str, 
-                 debounce_seconds: float = 2.0, settings: Optional[Dict[str, Any]] = None):
+                 debounce_seconds: float = 2.0, settings: Optional[Dict[str, Any]] = None, verbose: bool = False):
         
         if not WATCHDOG_AVAILABLE:
             raise ImportError("Watchdog not available. Install with: pip install watchdog")
@@ -30,6 +30,7 @@ class IndexingEventHandler(FileSystemEventHandler):
         self.collection_name = collection_name
         self.debounce_seconds = debounce_seconds
         self.settings = settings or {}
+        self.verbose = verbose
         
         # File filtering
         self.watch_patterns = self.settings.get("watch_patterns", ["*.py", "*.md"])
@@ -180,12 +181,12 @@ class IndexingEventHandler(FileSystemEventHandler):
             # Import here to avoid circular imports
             from ..main import run_indexing
             
-            # Run indexing with minimal output
+            # Run indexing with verbose setting from CLI
             return run_indexing(
                 project_path=str(self.project_path),
                 collection_name=self.collection_name,
-                quiet=True,
-                verbose=False
+                quiet=not self.verbose,
+                verbose=self.verbose
             )
             
         except Exception as e:

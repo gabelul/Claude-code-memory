@@ -746,8 +746,7 @@ class QdrantStatsCollector:
                     sorted_manual = sorted(manual_entity_breakdown.items(), key=lambda x: x[1], reverse=True)[:10]
                     
                     for entity_type, count in sorted_manual:
-                        if entity_type != 'documentation':  # Skip auto-generated documentation
-                            print(f"    {entity_type:<25} {count:>6,}")
+                        print(f"    {entity_type:<25} {count:>6,}")
                     print()
 
 

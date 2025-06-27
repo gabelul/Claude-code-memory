@@ -325,7 +325,8 @@ else:
                 project_path=str(project_path),
                 collection_name=collection,
                 debounce_seconds=effective_debounce,
-                settings=settings
+                settings=settings,
+                verbose=verbose
             )
             
             # Start observer

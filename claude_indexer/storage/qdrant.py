@@ -209,8 +209,7 @@ class QdrantStore(ManagedVectorStore):
         try:
             print(f"🗑️ Qdrant delete_points called:")
             print(f"   Collection: {collection_name}")
-            print(f"   Point IDs: {point_ids}")
-            print(f"   Point ID types: {[type(pid) for pid in point_ids]}")
+            print(f"   Point count: {len(point_ids)}")
             
             delete_response = self.client.delete(
                 collection_name=collection_name,

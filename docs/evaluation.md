@@ -10,7 +10,7 @@ Reliable retrieval is the backbone of Retrieval‑Augmented Generation (RAG): if
 
 ---
 
-## 2 · Build a Benchmark Dataset
+## 2 · Build a Benchmark Datasetee ca
 
 1. **Collect query–target pairs** from your issue tracker or code review history.  For each bug report or “how do I…?” question, list the functions/files that developers actually consulted to fix it.
 2. Store pairs in YAML or JSONL:

@@ -49,7 +49,7 @@ class OpenAIEmbedder(RetryableEmbedder):
         
         self.model = model
         self.model_config = self.MODELS[model]
-        self.client = openai.OpenAI(api_key=api_key)
+        self.client = openai.OpenAI(api_key=api_key, timeout=30.0)
         
         # Rate limiting
         self._requests_per_minute = 3000  # Conservative limit
