@@ -381,13 +381,16 @@ class TestCLIIntegrationScenarios:
         except ImportError:
             pytest.skip("Click not available for CLI testing")
         
-        # Create a test configuration file
+        # Create a test configuration file with real API keys
+        from claude_indexer.config import load_config
+        real_config = load_config()
+        
         config_file = tmp_path / "test_config.json"
         config_content = {
             "embedder_type": "openai",
             "storage_type": "qdrant",
-            "openai_api_key": "test-key",
-            "qdrant_url": "http://localhost:6333"
+            "openai_api_key": real_config.openai_api_key,
+            "qdrant_url": real_config.qdrant_url
         }
         config_file.write_text(json.dumps(config_content))
         

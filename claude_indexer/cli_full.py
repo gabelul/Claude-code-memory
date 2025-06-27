@@ -949,6 +949,80 @@ Code Patterns: {', '.join(summary.code_patterns)}
                 traceback.print_exc()
             sys.exit(1)
 
+
+    @chat.command()
+    @project_options  
+    @common_options
+    @click.option('--output', '-o', type=click.Path(), help='Output HTML file path (auto-generated if not specified)')
+    @click.option('--conversation-id', help='Specific conversation ID to generate report for (uses most recent if not specified)')
+    def html_report(project, collection, verbose, quiet, config, output, conversation_id):
+        """Generate HTML report with GPT analysis and full conversation display."""
+        try:
+            # Load configuration
+            config_obj = load_config(Path(config) if config else None)
+            
+            if not quiet:
+                click.echo("📄 Generating HTML chat report...")
+            
+            # Import chat modules
+            from .chat.html_report import ChatHtmlReporter
+            from .chat.parser import ChatParser
+            
+            project_path = Path(project).resolve()
+            if not project_path.exists():
+                click.echo(f"❌ Project directory not found: {project_path}", err=True)
+                sys.exit(1)
+            
+            # Initialize reporter and parser
+            reporter = ChatHtmlReporter(config_obj)
+            parser = ChatParser()
+            
+            # Determine conversation input
+            if conversation_id:
+                # Try to find specific conversation file
+                chat_files = parser.get_chat_files(project_path)
+                conversation_file = None
+                for file_path in chat_files:
+                    if conversation_id in file_path.stem:
+                        conversation_file = file_path
+                        break
+                
+                if not conversation_file:
+                    click.echo(f"❌ Conversation ID '{conversation_id}' not found", err=True)
+                    sys.exit(1)
+                    
+                conversation_input = conversation_file
+            else:
+                # Use most recent conversation
+                chat_files = parser.get_chat_files(project_path)
+                if not chat_files:
+                    click.echo(f"❌ No chat conversations found for project: {project_path}", err=True)
+                    sys.exit(1)
+                
+                conversation_input = chat_files[0]  # Most recent
+            
+            if verbose:
+                click.echo(f"📝 Processing conversation: {conversation_input}")
+            
+            # Generate output path if not specified
+            output_path = None
+            if output:
+                output_path = Path(output)
+            
+            # Generate HTML report
+            html_file = reporter.generate_report(conversation_input, output_path)
+            
+            if not quiet:
+                click.echo(f"✅ HTML report generated: {html_file}")
+                click.echo(f"🌐 Open in browser: file://{html_file.absolute()}")
+        
+        except Exception as e:
+            click.echo(f"❌ HTML report generation failed: {e}", err=True)
+            if verbose:
+                import traceback
+                traceback.print_exc()
+            sys.exit(1)
+
     # End of Click-available conditional block
 
 if __name__ == '__main__':

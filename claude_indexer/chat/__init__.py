@@ -2,6 +2,7 @@
 
 from .parser import ChatParser, ChatConversation, ChatMessage, ChatMetadata
 from .summarizer import ChatSummarizer, SummaryResult
+from .html_report import ChatHtmlReporter, generate_chat_html_report
 
 __all__ = [
     "ChatParser",
@@ -9,5 +10,7 @@ __all__ = [
     "ChatMessage",
     "ChatMetadata",
     "ChatSummarizer",
-    "SummaryResult"
+    "SummaryResult",
+    "ChatHtmlReporter",
+    "generate_chat_html_report"
 ]
