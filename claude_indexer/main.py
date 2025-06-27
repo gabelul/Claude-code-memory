@@ -11,6 +11,58 @@ from .storage.registry import create_store_from_config
 from .logging import setup_logging
 
 
+def run_indexing_with_shared_deletion(project_path: str, collection_name: str,
+                                    deleted_file_path: str, quiet: bool = False, 
+                                    verbose: bool = False, config_file: Optional[str] = None) -> bool:
+    """Run deletion handling with shared deletion logic for a single file."""
+    try:
+        # Setup logging with collection-specific file logging
+        logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection_name)
+        
+        # Load configuration
+        config_path = Path(config_file) if config_file else None
+        config = load_config(config_path)
+        
+        # Validate project path
+        project = Path(project_path).resolve()
+        if not project.exists():
+            if not quiet:
+                print(f"❌ Project path does not exist: {project}")
+            return False
+        
+        # Create components using direct Qdrant integration
+        embedder = create_embedder_from_config({
+            "provider": "openai",
+            "api_key": config.openai_api_key,
+            "model": "text-embedding-3-small",
+            "enable_caching": True
+        })
+        
+        vector_store = create_store_from_config({
+            "backend": "qdrant",
+            "url": config.qdrant_url,
+            "api_key": config.qdrant_api_key,
+            "enable_caching": True
+        })
+        
+        # Create indexer
+        indexer = CoreIndexer(config, embedder, vector_store, project)
+        
+        # Convert absolute path to relative path for state consistency
+        deleted_path = Path(deleted_file_path)
+        relative_path = str(deleted_path.relative_to(project))
+        
+        # Use consolidated deletion function
+        indexer._handle_deleted_files(collection_name, relative_path, verbose)
+        
+        return True
+        
+    except Exception as e:
+        if not quiet:
+            print(f"❌ Error in shared deletion: {e}")
+        return False
+
+
 def run_indexing(project_path: str, collection_name: str, 
                 quiet: bool = False, verbose: bool = False, 
                 include_tests: bool = False,
@@ -21,8 +73,8 @@ def run_indexing(project_path: str, collection_name: str,
     """
     
     try:
-        # Setup logging
-        logger = setup_logging(quiet=quiet, verbose=verbose)
+        # Setup logging with collection-specific file logging
+        logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection_name)
         
         # Load configuration
         config_path = Path(config_file) if config_file else None

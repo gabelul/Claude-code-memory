@@ -8,7 +8,7 @@ from .config import load_config, IndexerConfig
 from .indexer import CoreIndexer
 from .embeddings.registry import create_embedder_from_config
 from .storage.registry import create_store_from_config
-from .logging import setup_logging
+from .logging import setup_logging, clear_log_file
 
 # Only import these if they're available
 try:
@@ -87,8 +87,8 @@ else:
             sys.exit(1)
         
         try:
-            # Setup logging
-            logger = setup_logging(quiet=quiet, verbose=verbose)
+            # Setup logging with collection-specific file logging
+            logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection)
             
             # Load configuration
             config_obj = load_config(Path(config) if config else None)
@@ -132,6 +132,11 @@ else:
                         click.echo(f"🗑️ Clearing ALL memories in collection: {collection}")
                     else:
                         click.echo(f"🗑️ Clearing code-indexed memories in collection: {collection}")
+                
+                # Clear the log file for this collection
+                log_cleared = clear_log_file(collection)
+                if not quiet and log_cleared:
+                    click.echo(f"🗑️ Cleared log file for collection: {collection}")
                 
                 success = indexer.clear_collection(collection, preserve_manual=preserve_manual)
                 if not success:
@@ -328,6 +333,25 @@ else:
                 settings=settings,
                 verbose=verbose
             )
+            
+            # Run initial incremental indexing before starting file watching
+            if not quiet:
+                click.echo("🔄 Running initial incremental indexing...")
+            
+            from claude_indexer.main import run_indexing
+            try:
+                run_indexing(
+                    project_path=str(project_path),
+                    collection_name=collection,
+                    quiet=quiet,
+                    verbose=verbose
+                )
+                if not quiet:
+                    click.echo("✅ Initial indexing complete")
+            except Exception as e:
+                if not quiet:
+                    click.echo(f"⚠️ Initial indexing failed: {e}")
+                    click.echo("📁 Continuing with file watching...")
             
             # Start observer
             observer = Observer()
@@ -534,11 +558,11 @@ else:
     @project_options
     @click.argument('query')
     @click.option('--limit', type=int, default=10, help='Maximum results')
-    @click.option('--type', 'result_type', type=click.Choice(['entity', 'relation']), 
-                  help='Filter by result type')
+    @click.option('--type', 'result_type', type=click.Choice(['entity', 'relation', 'chat', 'all']), 
+                  help='Filter by result type (default: all)')
     @common_options
     def search(project, collection, query, limit, result_type, verbose, quiet, config):
-        """Search for similar entities and relations."""
+        """Search across code entities, relations, and chat conversations."""
         
         try:
             # Load configuration
@@ -561,7 +585,28 @@ else:
             project_path = Path(project).resolve()
             indexer = CoreIndexer(config_obj, embedder, vector_store, project_path)
             
-            results = indexer.search_similar(collection, query, limit, result_type)
+            # Handle unified search across different types
+            if result_type == 'all' or result_type is None:
+                # Search all types and combine results
+                all_results = []
+                
+                # Search code entities and relations
+                code_results = indexer.search_similar(collection, query, limit, None)
+                all_results.extend(code_results)
+                
+                # Search chat conversations specifically
+                chat_results = indexer.search_similar(collection, query, limit, 'chat_history')
+                all_results.extend(chat_results)
+                
+                # Sort by score and limit to requested amount
+                all_results.sort(key=lambda x: x.get('score', 0), reverse=True)
+                results = all_results[:limit]
+            elif result_type == 'chat':
+                # Search only chat conversations
+                results = indexer.search_similar(collection, query, limit, 'chat_history')
+            else:
+                # Search specific type (entity, relation)
+                results = indexer.search_similar(collection, query, limit, result_type)
             
             if results:
                 if not quiet:
@@ -593,6 +638,317 @@ else:
         
         except Exception as e:
             click.echo(f"❌ Error: {e}", err=True)
+            sys.exit(1)
+
+
+    @cli.group()
+    def chat():
+        """Chat history indexing and summarization commands."""
+        pass
+
+
+    @chat.command()
+    @project_options
+    @common_options
+    @click.option('--limit', '-l', type=int, default=None, help='Limit number of conversations to process')
+    @click.option('--inactive-hours', type=float, default=1.0, help='Consider conversations inactive after N hours')
+    def index(project, collection, verbose, quiet, config, limit, inactive_hours):
+        """Index Claude Code chat history files for a project."""
+        try:
+            # Load configuration
+            config_obj = load_config(Path(config) if config else None)
+            
+            # Create components
+            embedder = create_embedder_from_config(config_obj)
+            store = create_store_from_config(config_obj)
+            
+            # Import chat modules
+            from .chat.parser import ChatParser
+            from .chat.summarizer import ChatSummarizer
+            
+            if not quiet:
+                click.echo("⚡ Starting chat history indexing...")
+            
+            # Initialize chat parser and summarizer
+            parser = ChatParser()
+            summarizer = ChatSummarizer(config_obj)
+            
+            # Parse conversations
+            project_path = Path(project).resolve()
+            conversations = parser.parse_all_chats(project_path, limit=limit)
+            
+            if not conversations:
+                if not quiet:
+                    click.echo("📭 No chat conversations found")
+                return
+            
+            # Filter inactive conversations if requested
+            if inactive_hours > 0:
+                active_conversations = [
+                    conv for conv in conversations 
+                    if not conv.metadata.is_inactive(inactive_hours)
+                ]
+                if not quiet and len(active_conversations) != len(conversations):
+                    click.echo(f"🔍 Filtered to {len(active_conversations)} active conversations (inactive threshold: {inactive_hours}h)")
+                conversations = active_conversations
+            
+            if not conversations:
+                if not quiet:
+                    click.echo("📭 No active conversations found")
+                return
+            
+            if not quiet:
+                click.echo(f"📚 Processing {len(conversations)} conversations...")
+            
+            # Generate summaries
+            summaries = summarizer.batch_summarize(conversations)
+            
+            # Store summaries as entities
+            success_count = 0
+            error_count = 0
+            
+            for conversation, summary in zip(conversations, summaries):
+                try:
+                    # Create entity from summary
+                    from .analysis.entities import Entity, EntityType
+                    
+                    entity = Entity(
+                        name=conversation.summary_key,
+                        entity_type=EntityType.CHAT_HISTORY,
+                        observations=summary.to_observations(),
+                        file_path=str(conversation.file_path),
+                        line_number=1
+                    )
+                    
+                    # Generate embedding
+                    entity_text = " | ".join(summary.to_observations())
+                    embedding_result = embedder.embed_text(entity_text)
+                    
+                    if embedding_result.success:
+                        # Create vector point
+                        point = store.create_entity_point(entity, embedding_result.embedding, collection)
+                        
+                        # Store in vector database
+                        result = store.batch_upsert(collection, [point])
+                        
+                        if result.success:
+                            success_count += 1
+                            if verbose:
+                                click.echo(f"  ✅ Indexed: {conversation.metadata.session_id}")
+                        else:
+                            error_count += 1
+                            if verbose:
+                                click.echo(f"  ❌ Failed to store: {conversation.metadata.session_id}")
+                    else:
+                        error_count += 1
+                        if verbose:
+                            click.echo(f"  ❌ Failed to embed: {conversation.metadata.session_id}")
+                            
+                except Exception as e:
+                    error_count += 1
+                    if verbose:
+                        click.echo(f"  ❌ Error processing {conversation.metadata.session_id}: {e}")
+            
+            # Summary output
+            if not quiet:
+                if success_count > 0:
+                    click.echo(f"✅ Successfully indexed {success_count} chat conversations")
+                if error_count > 0:
+                    click.echo(f"❌ Failed to index {error_count} conversations")
+                    
+        except Exception as e:
+            click.echo(f"❌ Chat indexing failed: {e}", err=True)
+            if verbose:
+                import traceback
+                traceback.print_exc()
+            sys.exit(1)
+
+
+    @chat.command()
+    @project_options
+    @common_options
+    @click.option('--output-dir', type=click.Path(), help='Output directory for summary files')
+    @click.option('--format', type=click.Choice(['json', 'markdown', 'text']), default='markdown', help='Output format')
+    def summarize(project, collection, verbose, quiet, config, output_dir, format):
+        """Generate summary files from indexed chat conversations."""
+        try:
+            # Load configuration
+            config_obj = load_config(Path(config) if config else None)
+            
+            # Import chat modules
+            from .chat.parser import ChatParser
+            from .chat.summarizer import ChatSummarizer
+            
+            if not quiet:
+                click.echo("📝 Generating chat conversation summaries...")
+            
+            # Initialize components
+            parser = ChatParser()
+            summarizer = ChatSummarizer(config_obj)
+            
+            # Parse conversations
+            project_path = Path(project).resolve()
+            conversations = parser.parse_all_chats(project_path)
+            
+            if not conversations:
+                if not quiet:
+                    click.echo("📭 No chat conversations found")
+                return
+            
+            # Generate summaries
+            summaries = summarizer.batch_summarize(conversations)
+            
+            # Prepare output directory
+            if output_dir:
+                output_path = Path(output_dir)
+                output_path.mkdir(parents=True, exist_ok=True)
+            else:
+                output_path = project_path / "chat_summaries"
+                output_path.mkdir(exist_ok=True)
+            
+            # Write summary files
+            success_count = 0
+            for conversation, summary in zip(conversations, summaries):
+                try:
+                    session_id = conversation.metadata.session_id
+                    
+                    if format == 'json':
+                        import json
+                        filename = f"{session_id}_summary.json"
+                        content = {
+                            "session_id": session_id,
+                            "project_path": conversation.metadata.project_path,
+                            "summary": summary.summary,
+                            "key_insights": summary.key_insights,
+                            "topics": summary.topics,
+                            "category": summary.category,
+                            "code_patterns": summary.code_patterns,
+                            "debugging_info": summary.debugging_info,
+                            "message_count": conversation.metadata.message_count,
+                            "duration_minutes": conversation.metadata.duration_minutes
+                        }
+                        with open(output_path / filename, 'w') as f:
+                            json.dump(content, f, indent=2)
+                    
+                    elif format == 'markdown':
+                        filename = f"{session_id}_summary.md"
+                        content = f"""# Chat Summary: {session_id}
+
+**Project:** {conversation.metadata.project_path}
+**Duration:** {conversation.metadata.duration_minutes:.1f} minutes
+**Messages:** {conversation.metadata.message_count}
+**Category:** {summary.category or 'uncategorized'}
+
+## Summary
+{summary.summary}
+
+## Key Insights
+{chr(10).join(f"- {insight}" for insight in summary.key_insights)}
+
+## Topics
+{', '.join(summary.topics)}
+
+## Code Patterns
+{chr(10).join(f"- {pattern}" for pattern in summary.code_patterns)}
+
+## Debugging Information
+{chr(10).join(f"- **{k}:** {v}" for k, v in summary.debugging_info.items())}
+"""
+                        with open(output_path / filename, 'w') as f:
+                            f.write(content)
+                    
+                    else:  # text format
+                        filename = f"{session_id}_summary.txt"
+                        content = f"""Chat Summary: {session_id}
+Project: {conversation.metadata.project_path}
+Duration: {conversation.metadata.duration_minutes:.1f} minutes
+Messages: {conversation.metadata.message_count}
+Category: {summary.category or 'uncategorized'}
+
+Summary:
+{summary.summary}
+
+Key Insights:
+{chr(10).join(f"- {insight}" for insight in summary.key_insights)}
+
+Topics: {', '.join(summary.topics)}
+Code Patterns: {', '.join(summary.code_patterns)}
+"""
+                        with open(output_path / filename, 'w') as f:
+                            f.write(content)
+                    
+                    success_count += 1
+                    if verbose:
+                        click.echo(f"  ✅ Generated: {filename}")
+                        
+                except Exception as e:
+                    if verbose:
+                        click.echo(f"  ❌ Failed to generate summary for {conversation.metadata.session_id}: {e}")
+            
+            if not quiet:
+                click.echo(f"✅ Generated {success_count} summary files in {output_path}")
+                
+        except Exception as e:
+            click.echo(f"❌ Summary generation failed: {e}", err=True)
+            if verbose:
+                import traceback
+                traceback.print_exc()
+            sys.exit(1)
+
+
+    @chat.command()
+    @project_options
+    @common_options
+    @click.argument('query')
+    @click.option('--limit', '-l', type=int, default=10, help='Maximum number of results')
+    def search(project, collection, verbose, quiet, config, query, limit):
+        """Search indexed chat conversations by content."""
+        try:
+            # Load configuration and create components
+            config_obj = load_config(Path(config) if config else None)
+            embedder = create_embedder_from_config(config_obj)
+            store = create_store_from_config(config_obj)
+            
+            if not quiet:
+                click.echo(f"🔍 Searching chat conversations for: {query}")
+            
+            # Generate query embedding
+            embedding_result = embedder.embed_text(query)
+            if not embedding_result.success:
+                click.echo("❌ Failed to generate embedding for query", err=True)
+                sys.exit(1)
+            
+            # Search vector store with chat_history filter
+            search_result = store.search_similar(
+                collection_name=collection,
+                query_vector=embedding_result.embedding,
+                limit=limit,
+                filter_conditions={"type": "chat_history"}
+            )
+            
+            if search_result.success and search_result.results:
+                if not quiet:
+                    click.echo(f"📚 Found {len(search_result.results)} relevant conversations:")
+                    
+                for i, result in enumerate(search_result.results, 1):
+                    score = result.get('score', 0.0)
+                    name = result.get('name', 'Unknown')
+                    observations = result.get('observations', [])
+                    
+                    click.echo(f"\n{i}. **{name}** (similarity: {score:.3f})")
+                    for obs in observations[:3]:  # Show first 3 observations
+                        click.echo(f"   {obs}")
+                    if len(observations) > 3:
+                        click.echo(f"   ... and {len(observations) - 3} more")
+            else:
+                if not quiet:
+                    click.echo(f"🔍 No chat conversations found for: {query}")
+        
+        except Exception as e:
+            click.echo(f"❌ Search failed: {e}", err=True)
+            if verbose:
+                import traceback
+                traceback.print_exc()
             sys.exit(1)
 
     # End of Click-available conditional block

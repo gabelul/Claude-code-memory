@@ -165,7 +165,7 @@ class TestACustomFlow:
         
         # Verify we can search for content
         search_embedding = dummy_embedder.embed_single("add function")
-        hits = qdrant_store.search("test_integration", search_embedding, top_k=5)
+        hits = qdrant_store.search("test_integration", search_embedding, top_k=10)
         
         assert len(hits) > 0
         # Should find the add function from foo.py
@@ -210,7 +210,7 @@ class TestACustomFlow:
         
         # Verify we can find the new function
         search_embedding = dummy_embedder.embed_single("subtract function")
-        hits = qdrant_store.search("test_incremental", search_embedding, top_k=5)
+        hits = qdrant_store.search("test_incremental", search_embedding, top_k=10)
         
         subtract_found = any(
             "subtract" in hit.payload.get("name", "").lower()

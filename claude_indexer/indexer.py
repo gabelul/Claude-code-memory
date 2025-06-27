@@ -4,7 +4,7 @@ import time
 import hashlib
 import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 from dataclasses import dataclass
 
 from .config import IndexerConfig
@@ -122,19 +122,9 @@ class CoreIndexer:
                 logger.info(f"Migrated state file: {legacy_state} -> {new_state}")
             except FileNotFoundError:
                 # Another process already migrated it - this is expected
-                # Clean up temp file if it exists (edge case handling)
-                if temp_file and temp_file.exists():
-                    try:
-                        temp_file.unlink()
-                    except Exception:
-                        pass  # Ignore cleanup errors
+                self._cleanup_temp_file(temp_file)
             except Exception as e:
-                # Clean up temp file if it exists
-                if temp_file and temp_file.exists():
-                    try:
-                        temp_file.unlink()
-                    except Exception:
-                        pass  # Ignore cleanup errors
+                self._cleanup_temp_file(temp_file)
                 logger.warning(f"Migration failed, using legacy location: {e}")
                 return legacy_state  # Graceful fallback to legacy location
         
@@ -160,7 +150,7 @@ class CoreIndexer:
             if incremental:
                 files_to_process, deleted_files = self._find_changed_files(include_tests, collection_name)
                 
-                # Handle deleted files
+                # Handle deleted files using consolidated function
                 if deleted_files:
                     self._handle_deleted_files(collection_name, deleted_files, verbose)
                     # State cleanup happens automatically in _update_state when no files_to_process
@@ -461,20 +451,11 @@ class CoreIndexer:
                 entity_texts = [self._entity_to_text(entity) for entity in entities]
                 embedding_results = self.embedder.embed_batch(entity_texts)
                 
-                # Collect cost data from embedding results
-                for embedding_result in embedding_results:
-                    if hasattr(embedding_result, 'token_count') and embedding_result.token_count:
-                        total_tokens += embedding_result.token_count
-                    if hasattr(embedding_result, 'cost_estimate') and embedding_result.cost_estimate:
-                        total_cost += embedding_result.cost_estimate
-                
-                # Count successful requests (batch counts as requests based on actual API calls)
-                if hasattr(self.embedder, 'get_usage_stats'):
-                    # Get current stats to track requests made during this operation
-                    stats_before = getattr(self, '_last_usage_stats', {'total_requests': 0})
-                    current_stats = self.embedder.get_usage_stats()
-                    total_requests += max(0, current_stats.get('total_requests', 0) - stats_before.get('total_requests', 0))
-                    self._last_usage_stats = current_stats
+                # Process embedding results for entities
+                cost_data = self._collect_embedding_cost_data(embedding_results)
+                total_tokens += cost_data['tokens']
+                total_cost += cost_data['cost']
+                total_requests += cost_data['requests']
                 
                 for entity, embedding_result in zip(entities, embedding_results):
                     if embedding_result.success:
@@ -488,19 +469,11 @@ class CoreIndexer:
                 relation_texts = [self._relation_to_text(relation) for relation in relations]
                 embedding_results = self.embedder.embed_batch(relation_texts)
                 
-                # Collect cost data from embedding results
-                for embedding_result in embedding_results:
-                    if hasattr(embedding_result, 'token_count') and embedding_result.token_count:
-                        total_tokens += embedding_result.token_count
-                    if hasattr(embedding_result, 'cost_estimate') and embedding_result.cost_estimate:
-                        total_cost += embedding_result.cost_estimate
-                
-                # Update request count
-                if hasattr(self.embedder, 'get_usage_stats'):
-                    stats_before = getattr(self, '_last_usage_stats', {'total_requests': 0})
-                    current_stats = self.embedder.get_usage_stats()
-                    total_requests += max(0, current_stats.get('total_requests', 0) - stats_before.get('total_requests', 0))
-                    self._last_usage_stats = current_stats
+                # Process embedding results for relations
+                cost_data = self._collect_embedding_cost_data(embedding_results)
+                total_tokens += cost_data['tokens']
+                total_cost += cost_data['cost']
+                total_requests += cost_data['requests']
                 
                 for relation, embedding_result in zip(relations, embedding_results):
                     if embedding_result.success:
@@ -584,7 +557,6 @@ class CoreIndexer:
         try:
             state_file = self._get_state_file(collection_name)
             if state_file.exists():
-                import json
                 with open(state_file) as f:
                     return json.load(f)
         except Exception:
@@ -630,7 +602,6 @@ class CoreIndexer:
             state_file.parent.mkdir(parents=True, exist_ok=True)
             
             temp_file = state_file.with_suffix('.tmp')
-            import json
             with open(temp_file, 'w') as f:
                 json.dump(final_state, f, indent=2)
             
@@ -678,8 +649,42 @@ class CoreIndexer:
             import traceback
             traceback.print_exc()
     
-    def _handle_deleted_files(self, collection_name: str, deleted_files: List[str], verbose: bool = False):
+    def _collect_embedding_cost_data(self, embedding_results: List[Any]) -> Dict[str, Union[int, float]]:
+        """Collect cost data from embedding results."""
+        total_tokens = 0
+        total_cost = 0.0
+        total_requests = 0
+        
+        # Collect cost data from embedding results
+        for embedding_result in embedding_results:
+            if hasattr(embedding_result, 'token_count') and embedding_result.token_count:
+                total_tokens += embedding_result.token_count
+            if hasattr(embedding_result, 'cost_estimate') and embedding_result.cost_estimate:
+                total_cost += embedding_result.cost_estimate
+        
+        # Count successful requests
+        if hasattr(self.embedder, 'get_usage_stats'):
+            stats_before = getattr(self, '_last_usage_stats', {'total_requests': 0})
+            current_stats = self.embedder.get_usage_stats()
+            total_requests += max(0, current_stats.get('total_requests', 0) - stats_before.get('total_requests', 0))
+            self._last_usage_stats = current_stats
+        
+        return {'tokens': total_tokens, 'cost': total_cost, 'requests': total_requests}
+    
+    def _cleanup_temp_file(self, temp_file: Optional[Path]):
+        """Safely clean up temporary file with exception handling."""
+        if temp_file and temp_file.exists():
+            try:
+                temp_file.unlink()
+            except Exception:
+                pass  # Ignore cleanup errors
+    
+    def _handle_deleted_files(self, collection_name: str, deleted_files: Union[str, List[str]], verbose: bool = False):
         """Handle deleted files by removing their entities and orphaned relations."""
+        # Convert single path to list for unified handling
+        if isinstance(deleted_files, str):
+            deleted_files = [deleted_files]
+            
         if not deleted_files:
             return
         
@@ -728,6 +733,7 @@ class CoreIndexer:
                 if point_ids and verbose:
                     print(f"      🆔 Point IDs: {point_ids}")
                     
+                if point_ids:
                     # Delete the points
                     print(f"   🗑️ Attempting to delete {len(point_ids)} points...")
                     delete_result = self.vector_store.delete_points(collection_name, point_ids)

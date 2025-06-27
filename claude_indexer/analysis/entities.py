@@ -20,6 +20,7 @@ class EntityType(Enum):
     CONSTANT = "constant"
     DOCUMENTATION = "documentation"
     TEST = "test"
+    CHAT_HISTORY = "chat_history"  # Claude Code conversation summaries
 
 
 class RelationType(Enum):

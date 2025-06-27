@@ -124,6 +124,10 @@ class PythonParser(CodeParser):
             # Parse with Tree-sitter
             tree = self._parse_with_tree_sitter(file_path)
             if tree:
+                # Check for syntax errors in the parse tree
+                if self._has_syntax_errors(tree):
+                    result.errors.append(f"Syntax errors detected in {file_path.name}")
+                
                 ts_entities = self._extract_tree_sitter_entities(tree, file_path)
                 result.entities.extend(ts_entities)
             
@@ -169,6 +173,20 @@ class PythonParser(CodeParser):
             return self._parser.parse(source_code)
         except Exception as e:
             return None
+    
+    def _has_syntax_errors(self, tree: 'tree_sitter.Tree') -> bool:
+        """Check if the parse tree contains syntax errors."""
+        def check_node_for_errors(node):
+            # Tree-sitter marks syntax errors with 'ERROR' node type
+            if node.type == 'ERROR':
+                return True
+            # Recursively check children
+            for child in node.children:
+                if check_node_for_errors(child):
+                    return True
+            return False
+        
+        return check_node_for_errors(tree.root_node)
     
     def _extract_tree_sitter_entities(self, tree: 'tree_sitter.Tree', file_path: Path) -> List['Entity']:
         """Extract entities from Tree-sitter AST."""

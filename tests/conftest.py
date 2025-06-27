@@ -434,12 +434,15 @@ def cleanup_test_collections_on_failure():
             client = QdrantClient("localhost", port=6333)
         
         collections = client.get_collections().collections
-        # Only cleanup collections that look like temporary test collections (with timestamps or specific patterns)
+        # Only cleanup collections that look like temporary test collections
         temp_test_collections = [
             c.name for c in collections 
             if ('test' in c.name.lower() and 
                 (any(char.isdigit() for char in c.name) or  # has numbers (likely timestamps)
-                 c.name.startswith('test_') and len(c.name) > 20))  # long test names
+                 c.name.startswith('test_') or  # any test collection
+                 c.name.endswith('_test') or   # reverse pattern
+                 'integration' in c.name.lower() or  # integration tests
+                 'delete' in c.name.lower()))  # deletion tests
         ]
         
         for collection_name in temp_test_collections:

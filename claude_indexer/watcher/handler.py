@@ -84,7 +84,7 @@ class IndexingEventHandler(FileSystemEventHandler):
             
             # Use coalescer to debounce rapid changes
             if event_type == "deleted":
-                # Process deletions immediately
+                # Process deletions immediately using shared deletion logic
                 self._process_file_deletion(path)
                 self.events_processed += 1
             else:
@@ -151,7 +151,7 @@ class IndexingEventHandler(FileSystemEventHandler):
             print(f"❌ Error processing file change {path}: {e}")
     
     def _process_file_deletion(self, path: Path):
-        """Process a file deletion."""
+        """Process a file deletion using shared deletion logic."""
         try:
             relative_path = path.relative_to(self.project_path)
             print(f"🗑️  File deleted: {relative_path}")
@@ -159,13 +159,16 @@ class IndexingEventHandler(FileSystemEventHandler):
             # Remove from processed files
             self.processed_files.discard(str(path))
             
-            # Trigger incremental indexing to handle deletion and cleanup orphaned relations
-            # This uses the existing state-based deletion detection which will:
-            # 1. Detect the deleted file via SHA256 state comparison
-            # 2. Call _handle_deleted_files() which removes entities
-            # 3. Automatically clean up orphaned relations via _cleanup_orphaned_relations()
-            print(f"🔍 Running incremental indexing to clean up entities...")
-            success = self._run_incremental_indexing()
+            # Use shared deletion function that calls the same core logic as incremental
+            from ..main import run_indexing_with_shared_deletion
+            
+            success = run_indexing_with_shared_deletion(
+                project_path=str(self.project_path),
+                collection_name=self.collection_name,
+                deleted_file_path=str(path),
+                quiet=not self.verbose,
+                verbose=self.verbose
+            )
             
             if success:
                 print(f"✅ Cleanup completed for deleted file: {relative_path}")

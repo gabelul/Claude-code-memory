@@ -4,6 +4,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Optional
+import os
 
 try:
     import loguru
@@ -140,10 +141,39 @@ class IndexerLogger:
 _logger: Optional[IndexerLogger] = None
 
 
+def get_default_log_file(collection_name: Optional[str] = None) -> Path:
+    """Get the default log file path, optionally per collection."""
+    log_dir = Path.home() / ".claude-indexer" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    if collection_name:
+        return log_dir / f"{collection_name}.log"
+    else:
+        return log_dir / "claude-indexer.log"
+
+
+def clear_log_file(collection_name: Optional[str] = None) -> bool:
+    """Clear the log file for a collection."""
+    try:
+        log_file = get_default_log_file(collection_name)
+        if log_file.exists():
+            log_file.unlink()
+            return True
+        return True  # File doesn't exist, consider it cleared
+    except Exception:
+        return False
+
+
 def setup_logging(level: str = "INFO", quiet: bool = False, verbose: bool = False,
-                 log_file: Optional[Path] = None) -> IndexerLogger:
+                 log_file: Optional[Path] = None, enable_file_logging: bool = True,
+                 collection_name: Optional[str] = None) -> IndexerLogger:
     """Setup global logging configuration."""
     global _logger
+    
+    # Use collection-specific log file if none specified and file logging is enabled
+    if log_file is None and enable_file_logging:
+        log_file = get_default_log_file(collection_name)
+    
     _logger = IndexerLogger(level, quiet, verbose, log_file)
     return _logger
 
