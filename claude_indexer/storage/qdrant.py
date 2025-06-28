@@ -808,7 +808,7 @@ class QdrantStore(ManagedVectorStore):
                 results.append({
                     "id": point.id,
                     "name": point.payload.get('entity_name', point.payload.get('name', 'Unknown')),
-                    "type": point.payload.get('entity_type', point.payload.get('entityType', point.payload.get('type', 'unknown'))),
+                    "type": point.payload.get('entity_type') or point.payload.get('entityType', 'unknown'),
                     "payload": point.payload
                 })
             
