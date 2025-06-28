@@ -104,10 +104,14 @@ else:
                 sys.exit(1)
             
             # Create components using direct Qdrant integration
+            provider = config_obj.embedding_provider
+            api_key = getattr(config_obj, f'{provider}_api_key', None)
+            model = config_obj.voyage_model if provider == "voyage" else "text-embedding-3-small"
+            
             embedder = create_embedder_from_config({
-                "provider": "openai",
-                "api_key": config_obj.openai_api_key,
-                "model": "text-embedding-3-small",
+                "provider": provider,
+                "api_key": api_key,
+                "model": model,
                 "enable_caching": True
             })
             
@@ -119,7 +123,8 @@ else:
             })
             
             if not quiet and verbose:
-                click.echo("⚡ Using Qdrant + OpenAI (direct mode)")
+                provider_name = provider.title()
+                click.echo(f"⚡ Using Qdrant + {provider_name} (direct mode)")
             
             # Create indexer
             indexer = CoreIndexer(config_obj, embedder, vector_store, project_path)

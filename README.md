@@ -483,6 +483,9 @@ python utils/backup_manual_entries.py backup -c memory-project
 # Generate MCP restore commands for manual entries
 python utils/backup_manual_entries.py restore -f manual_entries_backup_memory-project.json
 
+# Execute restore automatically via MCP (no manual steps)
+python utils/backup_manual_entries.py restore -f manual_entries_backup_memory-project.json --execute
+
 # Dry run to see what would be restored
 python utils/backup_manual_entries.py restore -f backup.json --dry-run
 

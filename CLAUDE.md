@@ -265,6 +265,24 @@ claude mcp add project-memory -e OPENAI_API_KEY="YOUR_KEY" -e QDRANT_API_KEY="YO
 }
 ```
 
+## Manual Memory Backup & Restore
+
+Protect your valuable manual memories (analysis notes, insights, patterns):
+
+```bash
+# Backup all manual entries from a collection
+python utils/manual_memory_backup.py backup -c collection-name
+
+# Generate MCP restore commands for manual entries
+python utils/manual_memory_backup.py restore -f manual_entries_backup_collection-name.json
+
+# Execute restore automatically via MCP (no manual steps)
+python utils/manual_memory_backup.py restore -f manual_entries_backup_collection-name.json --execute
+
+# Dry run to see what would be restored
+python utils/manual_memory_backup.py restore -f backup.json --dry-run
+```
+
 ## Basic Troubleshooting
 
 **Qdrant Connection Failed:**
