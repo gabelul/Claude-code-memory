@@ -51,7 +51,7 @@ class EntityChunk:
     content: str
     metadata: Dict[str, Any] = field(default_factory=dict)
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate chunk after creation."""
         if not self.id or not self.entity_name or not self.content:
             raise ValueError("id, entity_name, and content cannot be empty")
@@ -108,7 +108,7 @@ class RelationChunk:
     context: Optional[str] = None
     confidence: float = 1.0
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate relation chunk after creation."""
         if not self.id or not self.from_entity or not self.to_entity:
             raise ValueError("id, from_entity, and to_entity cannot be empty")
@@ -137,7 +137,7 @@ class RelationChunk:
     
     def to_vector_payload(self) -> Dict[str, Any]:
         """Convert relation chunk to vector storage payload."""
-        payload = {
+        payload: Dict[str, Any] = {
             "chunk_type": "relation",
             "entity_name": self.from_entity,  # Primary entity for search
             "relation_target": self.to_entity,
@@ -164,7 +164,7 @@ class ChatChunk:
     content: str
     timestamp: Optional[str] = None
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate chat chunk after creation."""
         if not self.id or not self.chat_id or not self.content:
             raise ValueError("id, chat_id, and content cannot be empty")
@@ -204,7 +204,7 @@ class Entity:
     complexity_score: Optional[int] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate entity after creation."""
         if not self.name:
             raise ValueError("Entity name cannot be empty")
@@ -249,7 +249,7 @@ class Relation:
     confidence: float = 1.0
     metadata: Dict[str, Any] = field(default_factory=dict)
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate relation after creation."""
         if not self.from_entity or not self.to_entity:
             raise ValueError("Both from_entity and to_entity must be non-empty")
@@ -285,7 +285,7 @@ class EntityFactory:
     """Factory for creating entities with consistent patterns."""
     
     @staticmethod
-    def create_file_entity(file_path: Path, **metadata) -> Entity:
+    def create_file_entity(file_path: Path, **metadata: Any) -> Entity:
         """Create a file entity with standard observations."""
         observations = [
             f"File: {file_path.name}",
@@ -306,8 +306,8 @@ class EntityFactory:
     
     @staticmethod  
     def create_function_entity(name: str, file_path: Path, line_number: int,
-                             signature: str = None, docstring: str = None,
-                             **metadata) -> Entity:
+                             signature: Optional[str] = None, docstring: Optional[str] = None,
+                             **metadata: Any) -> Entity:
         """Create a function entity with standard observations."""
         observations = [
             f"Function: {name}",
@@ -333,8 +333,8 @@ class EntityFactory:
     
     @staticmethod
     def create_class_entity(name: str, file_path: Path, line_number: int,
-                          docstring: str = None, base_classes: List[str] = None,
-                          **metadata) -> Entity:
+                          docstring: Optional[str] = None, base_classes: Optional[List[str]] = None,
+                          **metadata: Any) -> Entity:
         """Create a class entity with standard observations."""
         observations = [
             f"Class: {name}",
@@ -362,7 +362,7 @@ class RelationFactory:
     """Factory for creating relations with consistent patterns."""
     
     @staticmethod
-    def create_contains_relation(parent: str, child: str, context: str = None) -> Relation:
+    def create_contains_relation(parent: str, child: str, context: Optional[str] = None) -> Relation:
         """Create a 'contains' relationship."""
         return Relation(
             from_entity=parent,
@@ -384,7 +384,7 @@ class RelationFactory:
         )
     
     @staticmethod
-    def create_calls_relation(caller: str, callee: str, context: str = None) -> Relation:
+    def create_calls_relation(caller: str, callee: str, context: Optional[str] = None) -> Relation:
         """Create a 'calls' relationship."""
         return Relation(
             from_entity=caller,

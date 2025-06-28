@@ -70,12 +70,30 @@ class QdrantStatsCollector:
     def _analyze_file_types(self, collection_name: str) -> Dict[str, int]:
         """Analyze file types in collection based on v2.4 chunk data."""
         try:
-            # Use scroll to get ALL points with payloads
-            all_points = self.storage.client.scroll(
+            # Use scroll to get ALL points with payloads (fixed pagination bug)
+            all_points = []
+            
+            scroll_result = self.storage.client.scroll(
                 collection_name=collection_name,
-                limit=10000,  # Get many points 
-                with_payload=True
-            )[0]
+                limit=1000,
+                with_payload=True,
+                with_vectors=False
+            )
+            
+            points, next_page_offset = scroll_result
+            all_points.extend(points)
+            
+            # Continue scrolling if there are more points
+            while next_page_offset:
+                scroll_result = self.storage.client.scroll(
+                    collection_name=collection_name,
+                    limit=1000,
+                    offset=next_page_offset,
+                    with_payload=True,
+                    with_vectors=False
+                )
+                points, next_page_offset = scroll_result
+                all_points.extend(points)
             
             entity_types = Counter()
             chunk_types = Counter()
@@ -753,7 +771,7 @@ class QdrantStatsCollector:
                 if file_analysis.get('total_files', 0) > 0:
                     print("  📁 FILES INDEXED")
                     print("  " + "-" * 20)
-                    print(f"    Total Files:     {file_analysis['total_files']:>6}")
+                    print(f"    Total Vectored Files: {file_analysis['total_files']:>6}")
                     
                     # Add tracked files count
                     tracked_count = self._get_tracked_files_count(collection_name)

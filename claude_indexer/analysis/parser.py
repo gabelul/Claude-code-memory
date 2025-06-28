@@ -32,15 +32,15 @@ class ParserResult:
     relations: List['Relation']
     
     # Progressive disclosure: implementation chunks for dual storage
-    implementation_chunks: List['EntityChunk'] = None
+    implementation_chunks: Optional[List['EntityChunk']] = None
     
     # Metadata
     parsing_time: float = 0.0
     file_hash: str = ""
-    errors: List[str] = None
-    warnings: List[str] = None
+    errors: Optional[List[str]] = None
+    warnings: Optional[List[str]] = None
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.errors is None:
             self.errors = []
         if self.warnings is None:

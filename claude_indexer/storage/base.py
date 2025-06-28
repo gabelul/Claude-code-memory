@@ -20,14 +20,14 @@ class StorageResult:
     processing_time: float = 0.0
     
     # For search operations
-    results: List[Dict[str, Any]] = None
+    results: Optional[List[Dict[str, Any]]] = None
     total_found: int = 0
     
     # Error information
-    errors: List[str] = None
-    warnings: List[str] = None
+    errors: Optional[List[str]] = None
+    warnings: Optional[List[str]] = None
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.results is None:
             self.results = []
         if self.errors is None:
@@ -38,7 +38,7 @@ class StorageResult:
     @property
     def has_errors(self) -> bool:
         """Check if there were any errors."""
-        return len(self.errors) > 0 or self.items_failed > 0
+        return len(self.errors or []) > 0 or self.items_failed > 0
     
     @property
     def success_rate(self) -> float:
@@ -57,7 +57,7 @@ class VectorPoint:
     vector: List[float]
     payload: Dict[str, Any]
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # Handle both lists and numpy arrays
         if hasattr(self.vector, '__len__'):
             if len(self.vector) == 0:
@@ -101,7 +101,7 @@ class VectorStore(ABC):
     @abstractmethod
     def search_similar(self, collection_name: str, query_vector: List[float],
                       limit: int = 10, score_threshold: float = 0.0,
-                      filter_conditions: Dict[str, Any] = None) -> StorageResult:
+                      filter_conditions: Optional[Dict[str, Any]] = None) -> StorageResult:
         """Search for similar vectors."""
         pass
     
@@ -160,7 +160,7 @@ class ManagedVectorStore(VectorStore):
         self.auto_create_collections = auto_create_collections
         self.default_vector_size = default_vector_size
     
-    def ensure_collection(self, collection_name: str, vector_size: int = None) -> bool:
+    def ensure_collection(self, collection_name: str, vector_size: Optional[int] = None) -> bool:
         """Ensure collection exists, create if necessary."""
         if self.collection_exists(collection_name):
             return True
@@ -205,7 +205,7 @@ class CachingVectorStore(VectorStore):
     
     def search_similar(self, collection_name: str, query_vector: List[float],
                       limit: int = 10, score_threshold: float = 0.0,
-                      filter_conditions: Dict[str, Any] = None) -> StorageResult:
+                      filter_conditions: Optional[Dict[str, Any]] = None) -> StorageResult:
         """Search with caching."""
         cache_key = self._get_search_cache_key(
             collection_name, query_vector, limit, score_threshold, filter_conditions
@@ -254,49 +254,49 @@ class CachingVectorStore(VectorStore):
         return self.backend.list_collections()
     
     # Delegate custom Qdrant methods
-    def create_entity_point(self, entity, embedding: List[float], collection_name: str):
+    def create_entity_point(self, entity: Any, embedding: List[float], collection_name: str) -> Any:
         """Delegate entity point creation to backend."""
         if hasattr(self.backend, 'create_entity_point'):
             return self.backend.create_entity_point(entity, embedding, collection_name)
         else:
             raise AttributeError(f"Backend {type(self.backend)} does not support create_entity_point")
     
-    def create_relation_point(self, relation, embedding: List[float], collection_name: str):
+    def create_relation_point(self, relation: Any, embedding: List[float], collection_name: str) -> Any:
         """Delegate relation point creation to backend."""  
         if hasattr(self.backend, 'create_relation_point'):
             return self.backend.create_relation_point(relation, embedding, collection_name)
         else:
             raise AttributeError(f"Backend {type(self.backend)} does not support create_relation_point")
     
-    def create_chunk_point(self, chunk, embedding: List[float], collection_name: str):
+    def create_chunk_point(self, chunk: Any, embedding: List[float], collection_name: str) -> Any:
         """Delegate chunk point creation to backend for progressive disclosure."""
         if hasattr(self.backend, 'create_chunk_point'):
             return self.backend.create_chunk_point(chunk, embedding, collection_name)
         else:
             raise AttributeError(f"Backend {type(self.backend)} does not support create_chunk_point")
     
-    def create_relation_chunk_point(self, chunk, embedding: List[float], collection_name: str):
+    def create_relation_chunk_point(self, chunk: Any, embedding: List[float], collection_name: str) -> Any:
         """Delegate relation chunk point creation to backend for v2.4 pure architecture."""
         if hasattr(self.backend, 'create_relation_chunk_point'):
             return self.backend.create_relation_chunk_point(chunk, embedding, collection_name)
         else:
             raise AttributeError(f"Backend {type(self.backend)} does not support create_relation_chunk_point")
     
-    def create_chat_chunk_point(self, chunk, embedding: List[float], collection_name: str):
+    def create_chat_chunk_point(self, chunk: Any, embedding: List[float], collection_name: str) -> Any:
         """Delegate chat chunk point creation to backend for v2.4 pure architecture."""
         if hasattr(self.backend, 'create_chat_chunk_point'):
             return self.backend.create_chat_chunk_point(chunk, embedding, collection_name)
         else:
             raise AttributeError(f"Backend {type(self.backend)} does not support create_chat_chunk_point")
     
-    def generate_deterministic_id(self, content: str) -> str:
+    def generate_deterministic_id(self, content: str) -> int:
         """Delegate deterministic ID generation to backend."""
         if hasattr(self.backend, 'generate_deterministic_id'):
             return self.backend.generate_deterministic_id(content)
         else:
             raise AttributeError(f"Backend {type(self.backend)} does not support generate_deterministic_id")
     
-    def clear_collection(self, collection_name: str, preserve_manual: bool = False):
+    def clear_collection(self, collection_name: str, preserve_manual: bool = False) -> Any:
         """Delegate collection clearing to backend."""
         # Clear cache when collection is cleared
         self._search_cache.clear()
@@ -305,7 +305,7 @@ class CachingVectorStore(VectorStore):
         else:
             raise AttributeError(f"Backend {type(self.backend)} does not support clear_collection")
     
-    def find_entities_for_file(self, collection_name: str, file_path: str):
+    def find_entities_for_file(self, collection_name: str, file_path: str) -> Any:
         """Delegate find entities for file to backend"""
         if hasattr(self.backend, 'find_entities_for_file'):
             return self.backend.find_entities_for_file(collection_name, file_path)
