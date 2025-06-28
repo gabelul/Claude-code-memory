@@ -262,7 +262,10 @@ def backup_manual_entries(collection_name: str, output_file: str = None):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file = f"manual_entries_backup_{collection_name}_{timestamp}.json"
         
-        backup_file = Path(output_file)
+        # Ensure backups directory exists and save there
+        backups_dir = Path("backups")
+        backups_dir.mkdir(exist_ok=True)
+        backup_file = backups_dir / output_file
         with open(backup_file, 'w', encoding='utf-8') as f:
             json.dump(backup_data, f, indent=2, ensure_ascii=False)
         

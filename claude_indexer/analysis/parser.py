@@ -401,14 +401,22 @@ class PythonParser(CodeParser):
                 definitions = script.goto(start_line + 1, node.start_point[1])
                 if definitions:
                     definition = definitions[0]
+                    calls = self._extract_function_calls_from_source(implementation)
                     semantic_metadata = {
                         "inferred_types": self._get_type_hints(definition),
-                        "calls": self._extract_function_calls_from_source(implementation),
+                        "calls": calls,
                         "imports_used": self._extract_imports_used_in_source(implementation),
                         "exceptions_handled": self._extract_exceptions_from_source(implementation),
                         "complexity": self._calculate_complexity_from_source(implementation)
                     }
-            except:
+                else:
+                    semantic_metadata = {
+                        "calls": self._extract_function_calls_from_source(implementation),
+                        "imports_used": [],
+                        "exceptions_handled": [],
+                        "complexity": implementation.count('\n') + 1
+                    }
+            except Exception as e:
                 # Fallback to basic analysis
                 semantic_metadata = {
                     "calls": self._extract_function_calls_from_source(implementation),
