@@ -13,18 +13,9 @@
       "include": [
         "*.py",
         "*.pyi",
-        "*.js",
-        "*.ts",
-        "*.jsx",
-        "*.tsx",
-        "*.mjs",
-        "*.cjs",
         "*.html",
         "*.htm",
         "*.css",
-        "*.json",
-        "*.yaml",
-        "*.yml",
         "*.md",
         "*.txt"
       ],
@@ -38,7 +29,13 @@
         "build",
         "*.min.js",
         ".env",
-        "*.log"
+        "*.log",
+        ".mypy_cache",
+        "qdrant_storage",
+        "backups",
+        "*.egg-info",
+        "settings.txt",
+        ".claude-indexer"
       ]
     },
     "max_file_size": 1048576,
