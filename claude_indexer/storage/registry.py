@@ -49,15 +49,25 @@ class StorageRegistry:
         return list(self._stores.keys())
 
 
-def create_store_from_config(config: Dict[str, Any]) -> VectorStore:
-    """Create vector store from configuration dictionary."""
+def create_store_from_config(config) -> VectorStore:
+    """Create vector store from configuration (IndexerConfig or dict)."""
     registry = StorageRegistry()
     
-    backend = config.get("backend", "qdrant")
-    enable_caching = config.get("enable_caching", True)
-    
-    # Extract backend-specific config
-    backend_config = {k: v for k, v in config.items() 
-                     if k not in ["backend", "enable_caching", "cache_size"]}
+    # Handle both IndexerConfig objects and dicts
+    if hasattr(config, 'storage_type'):
+        # IndexerConfig object
+        backend = config.storage_type
+        enable_caching = True  # Default for IndexerConfig
+        backend_config = {
+            "url": config.qdrant_url,
+            "api_key": config.qdrant_api_key,
+            "collection_name": config.collection_name,
+        }
+    else:
+        # Dict config (backward compatibility)
+        backend = config.get("backend", "qdrant")
+        enable_caching = config.get("enable_caching", True)
+        backend_config = {k: v for k, v in config.items() 
+                         if k not in ["backend", "enable_caching", "cache_size"]}
     
     return registry.create_store(backend, backend_config, enable_caching)

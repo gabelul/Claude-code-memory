@@ -224,6 +224,60 @@ else:
                 traceback.print_exc()
             sys.exit(1)
 
+    @cli.command()
+    @click.option('-p', '--project', 'project_path', required=True, 
+                  type=click.Path(exists=True), help='Project directory path')
+    @click.option('-n', '--name', required=True, help='Project name')
+    @click.option('-c', '--collection', required=True, help='Collection name')
+    @click.option('--force', is_flag=True, help='Overwrite existing config')
+    def init(project_path: str, name: str, collection: str, force: bool):
+        """Initialize project configuration."""
+        from .config.project_config import ProjectConfigManager
+        
+        manager = ProjectConfigManager(Path(project_path))
+        
+        # Check if already exists
+        if manager.exists and not force:
+            click.echo(f"❌ Project config already exists at {manager.config_path}")
+            click.echo("Use --force to overwrite")
+            return
+        
+        # Create default config
+        config = manager.create_default(name, collection)
+        
+        # Save it
+        manager.save(config)
+        
+        click.echo(f"✅ Created project config at {manager.config_path}")
+        click.echo(f"📁 Project: {name}")
+        click.echo(f"🗄️  Collection: {collection}")
+        click.echo(f"📝 Include patterns: {', '.join(config.indexing.file_patterns.include)}")
+
+    @cli.command()
+    @click.option('-p', '--project', 'project_path', 
+                  type=click.Path(exists=True), help='Project directory path')
+    def show_config(project_path: str):
+        """Show effective configuration for project."""
+        from .config.config_loader import ConfigLoader
+        
+        path = Path(project_path) if project_path else Path.cwd()
+        loader = ConfigLoader(path)
+        
+        try:
+            config = loader.load()
+            
+            click.echo("📋 Effective Configuration:")
+            click.echo(f"📁 Project Path: {path}")
+            click.echo(f"🗄️  Collection: {getattr(config, 'collection_name', 'Not set')}")
+            click.echo(f"📝 Include Patterns: {', '.join(config.include_patterns)}")
+            click.echo(f"🚫 Exclude Patterns: {', '.join(config.exclude_patterns)}")
+            click.echo(f"📏 Max File Size: {config.max_file_size:,} bytes")
+            click.echo(f"⏱️  Debounce: {config.debounce_seconds}s")
+            
+        except Exception as e:
+            click.echo(f"❌ Failed to load configuration: {e}", err=True)
+            sys.exit(1)
+
 
     @cli.command()
     @project_options

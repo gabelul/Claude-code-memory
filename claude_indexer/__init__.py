@@ -8,7 +8,7 @@ __version__ = "0.2.0"
 __author__ = "Claude Code Memory Project"
 __description__ = "Universal semantic indexer for Python codebases with vector search"
 
-from .config import IndexerConfig, load_config
+from claude_indexer.config import IndexerConfig, load_config
 from .analysis.entities import Entity, Relation
 from .main import main as cli_main
 

@@ -24,6 +24,10 @@ class TreeSitterParser(CodeParser):
         else:
             # For direct language objects
             self.parser = Parser(language_module)
+    
+    def update_config(self, config: Dict[str, Any]) -> None:
+        """Update parser configuration."""
+        self.config.update(config)
         
     def parse_tree(self, content: str):
         """Parse content into tree-sitter AST."""

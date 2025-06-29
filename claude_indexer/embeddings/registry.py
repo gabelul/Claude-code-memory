@@ -78,16 +78,31 @@ class EmbedderRegistry:
         }
 
 
-def create_embedder_from_config(config: Dict[str, Any]) -> Embedder:
-    """Create embedder from configuration dictionary."""
+def create_embedder_from_config(config) -> Embedder:
+    """Create embedder from configuration (IndexerConfig or dict)."""
     registry = EmbedderRegistry()
     
-    provider = config.get("provider", "openai")
-    enable_caching = config.get("enable_caching", True)
-    
-    # Extract provider-specific config
-    provider_config = {k: v for k, v in config.items() 
-                      if k not in ["provider", "enable_caching", "cache_size"]}
+    # Handle both IndexerConfig objects and dicts
+    if hasattr(config, 'embedding_provider'):
+        # IndexerConfig object
+        provider = config.embedding_provider
+        enable_caching = True  # Default for IndexerConfig
+        if provider == "voyage":
+            provider_config = {
+                "api_key": config.voyage_api_key,
+                "model": config.voyage_model,
+            }
+        else:  # openai
+            provider_config = {
+                "api_key": config.openai_api_key,
+                "model": "text-embedding-3-small",
+            }
+    else:
+        # Dict config (backward compatibility)
+        provider = config.get("provider", "openai")
+        enable_caching = config.get("enable_caching", True)
+        provider_config = {k: v for k, v in config.items() 
+                          if k not in ["provider", "enable_caching", "cache_size"]}
     
     return registry.create_embedder(provider, provider_config, enable_caching)
 

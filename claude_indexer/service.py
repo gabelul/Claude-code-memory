@@ -236,7 +236,7 @@ class IndexingService:
     
     def _start_project_watcher(self, project_config: Dict[str, Any], 
                               global_settings: Dict[str, Any]) -> bool:
-        """Start watcher for a single project."""
+        """Start watcher for a single project with project-specific config."""
         project_path = project_config["path"]
         collection_name = project_config["collection"]
         
@@ -246,13 +246,25 @@ class IndexingService:
                 logger.error(f"❌ Project path does not exist: {project_path}")
                 return False
             
+            # Load project config if available
+            from .config.config_loader import ConfigLoader
+            config_loader = ConfigLoader(Path(project_path))
+            config = config_loader.load()
+            
             # Merge settings from project config and global settings
             settings = {**global_settings, **project_config.get("settings", {})}
             
-            # Get debounce setting from merged settings
-            debounce_seconds = settings.get("debounce_seconds", 2.0)
+            # Override with project-specific patterns and settings
+            settings.update({
+                "watch_patterns": config.include_patterns,
+                "ignore_patterns": config.exclude_patterns,
+                "max_file_size": config.max_file_size
+            })
             
-            # Create event handler
+            # Get debounce setting from merged config
+            debounce_seconds = config.debounce_seconds
+            
+            # Create event handler with merged config
             event_handler = IndexingEventHandler(
                 project_path=project_path,
                 collection_name=collection_name,

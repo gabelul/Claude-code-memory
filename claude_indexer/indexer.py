@@ -88,6 +88,27 @@ class CoreIndexer:
         # Initialize parser registry
         self.parser_registry = ParserRegistry(project_path)
         
+        # Load project configuration if available
+        from .config.config_loader import ConfigLoader
+        self.config_loader = ConfigLoader(project_path)
+        try:
+            # Update config with project-specific settings
+            self.config = self.config_loader.load()
+        except Exception:
+            # Continue with existing config if project config fails
+            pass
+        
+        # Inject parser-specific configurations
+        self._inject_parser_configs()
+    
+    def _inject_parser_configs(self):
+        """Inject project-specific parser configurations."""
+        for parser in self.parser_registry._parsers:
+            parser_name = parser.__class__.__name__.lower().replace('parser', '')
+            parser_config = self.config_loader.get_parser_config(parser_name)
+            if parser_config and hasattr(parser, 'update_config'):
+                parser.update_config(parser_config)
+        
     def _get_state_directory(self) -> Path:
         """Get state directory (configurable for test isolation)."""
         # Use configured state directory if provided (for tests)
@@ -321,29 +342,34 @@ class CoreIndexer:
     
     
     def _find_all_files(self, include_tests: bool = False) -> List[Path]:
-        """Find all source files in the project."""
+        """Find all files matching project patterns."""
         files = []
         
-        for extension in self.parser_registry.get_supported_extensions():
-            pattern = f"**/*{extension}"
-            found = list(self.project_path.glob(pattern))
+        # Use project-specific patterns
+        include_patterns = self.config.include_patterns
+        exclude_patterns = self.config.exclude_patterns
+        
+        # No fallback patterns - use what's configured
+        if not include_patterns:
+            raise ValueError("No include patterns configured")
+        
+        # Find files matching include patterns
+        for pattern in include_patterns:
+            found = list(self.project_path.glob(f"**/{pattern}"))
             files.extend(found)
         
         # Filter files
         filtered_files = []
         for file_path in files:
-            # Skip hidden directories and files
-            if any(part.startswith('.') for part in file_path.parts):
+            # Skip files matching exclude patterns
+            relative_path = file_path.relative_to(self.project_path)
+            if any(relative_path.match(pattern) for pattern in exclude_patterns):
                 continue
             
-            # Skip common ignore patterns
-            ignore_patterns = ['venv', '__pycache__', 'node_modules', '.git']
-            if any(pattern in str(file_path) for pattern in ignore_patterns):
+            # Skip files in excluded directories
+            path_str = str(relative_path)
+            if any(excluded in path_str for excluded in exclude_patterns):
                 continue
-            
-            # Test file exclusion disabled
-            # if not include_tests and self._is_test_file(file_path):
-            #     continue
             
             # Check file size
             if file_path.stat().st_size > self.config.max_file_size:
