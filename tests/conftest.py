@@ -104,6 +104,26 @@ def empty_repo(tmp_path_factory) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# Test collection utilities
+# ---------------------------------------------------------------------------
+
+def get_test_collection_name(base_name: str = "test_collection") -> str:
+    """Generate a unique test collection name with timestamp."""
+    import time
+    timestamp = int(time.time())
+    return f"{base_name}_{timestamp}"
+
+
+def is_production_collection(collection_name: str) -> bool:
+    """Check if a collection name is a production collection that should never be deleted."""
+    PRODUCTION_COLLECTIONS = {
+        'claude-memory-test', 'memory-project', 'general', 
+        'watcher-test'  # Add watcher-test as it's used for debugging
+    }
+    return collection_name in PRODUCTION_COLLECTIONS
+
+
+# ---------------------------------------------------------------------------
 # Qdrant test fixtures
 # ---------------------------------------------------------------------------
 
@@ -124,8 +144,8 @@ def qdrant_client() -> Iterator[QdrantClient]:
         # Fall back to unauthenticated for local testing
         client = QdrantClient("localhost", port=6333)
     
-    # Create test collection if it doesn't exist
-    collection_name = "test_collection"
+    # Create test collection with timestamp to ensure uniqueness and easy cleanup
+    collection_name = get_test_collection_name("test_collection")
     try:
         collections = client.get_collections().collections
         if not any(c.name == collection_name for c in collections):
@@ -141,10 +161,19 @@ def qdrant_client() -> Iterator[QdrantClient]:
     
     yield client
     
-    # Cleanup: Remove all test collections after test session
+    # Cleanup: Remove ONLY temporary test collections after test session
     try:
         collections = client.get_collections().collections
-        test_collections = [c.name for c in collections if 'test' in c.name.lower()]
+        # Only cleanup collections that are clearly temporary test collections  
+        test_collections = [
+            c.name for c in collections 
+            if (c.name.startswith('test_') or  # test_ prefix
+                c.name.endswith('_test') or   # _test suffix  
+                'integration' in c.name.lower() or  # integration tests
+                'temp' in c.name.lower() or    # temporary collections
+                any(char.isdigit() for char in c.name)  # has numbers (likely timestamps)
+                ) and not is_production_collection(c.name)  # NEVER delete production collections
+        ]
         for collection_name in test_collections:
             try:
                 client.delete_collection(collection_name)
@@ -176,10 +205,9 @@ def qdrant_store(qdrant_client) -> "QdrantStore":
         filter_obj = Filter(
             must=[FieldCondition(key="test", match=MatchValue(value=True))]
         )
-        store.client.delete(
-            collection_name="test_collection",
-            points_selector=filter_obj
-        )
+        # Note: collection_name should be passed from fixture if needed
+        # For now, skip cleanup since we use timestamped collections
+        pass
     except Exception:
         # Skip cleanup if it fails
         pass
@@ -437,14 +465,16 @@ def cleanup_test_collections_on_failure():
         
         collections = client.get_collections().collections
         # Only cleanup collections that look like temporary test collections
+        # PRODUCTION SAFEGUARD: Use centralized production collection check
         temp_test_collections = [
             c.name for c in collections 
-            if ('test' in c.name.lower() and 
+            if (not is_production_collection(c.name) and 
+                ('test' in c.name.lower() and 
                 (any(char.isdigit() for char in c.name) or  # has numbers (likely timestamps)
                  c.name.startswith('test_') or  # any test collection
                  c.name.endswith('_test') or   # reverse pattern
                  'integration' in c.name.lower() or  # integration tests
-                 'delete' in c.name.lower()))  # deletion tests
+                 'delete' in c.name.lower())))  # deletion tests
         ]
         
         for collection_name in temp_test_collections:
@@ -646,10 +676,17 @@ def verify_entity_searchable(
         # Increase top_k to handle cases where target entity might not be in top 10
         # due to DummyEmbedder's deterministic but not perfect scoring
         hits = qdrant_store.search(collection_name, search_embedding, top_k=50)
+        if verbose:
+            print(f"DEBUG: Searching for '{entity_name}' in collection '{collection_name}'")
+            print(f"DEBUG: Found {len(hits)} total hits")
+            for i, hit in enumerate(hits[:5]):
+                print(f"DEBUG: Hit {i}: entity_name='{hit.payload.get('entity_name', 'NO_NAME')}', score={hit.score}")
         matching_hits = [
             hit for hit in hits 
-            if entity_name in hit.payload.get("name", "")
+            if entity_name in hit.payload.get("entity_name", "")
         ]
+        if verbose:
+            print(f"DEBUG: Found {len(matching_hits)} matching hits for '{entity_name}'")
         return matching_hits
     
     return wait_for_eventual_consistency(
