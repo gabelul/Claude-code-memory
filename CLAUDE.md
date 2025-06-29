@@ -4,18 +4,6 @@
 
 Complete memory solution for Claude Code providing context-aware conversations with semantic search across Python codebases.
 
-**🎉 v2.4 IMPLEMENTATION COMPLETE - ALL FEATURES VALIDATED:**
-
-- ✅ **Progressive Disclosure**: 3.99ms metadata search (90% faster validated)
-- ✅ **Pure v2.4 chunk format**: unified `"type": "chunk"` architecture implemented
-- ✅ **MCP get_implementation**: on-demand detailed code access working
-- ✅ **Performance Validated**: 3.63ms full MCP workflow (sub-4ms target achieved)
-- ✅ **Voyage AI Integration**: automatic provider detection with 85% cost reduction
-- ✅ **Production Testing**: Comprehensive benchmarks completed successfully
-- ✅ **Zero Breaking Changes**: Full backward compatibility maintained
-- ✅ **All Tests Passing**: 100% test suite compliance with v2.4 format
-- ✅ **Enterprise Ready**: 15x faster incremental + validated progressive disclosure
-
 → **Use §m to search project memory for:** implementation details, performance results, migration guides
 
 ## Quick Start
@@ -69,74 +57,30 @@ claude-indexer -p /path -c name --clear
 claude-indexer -p /path -c name --clear-all
 ```
 
-### Advanced Automation Features
-
-#### Real-time File Watching
-```bash
-# Single project file watching with custom debounce
-claude-indexer watch start -p /path -c name --debounce 3.0
-```
-
-#### Background Service Management
-```bash
-# Start multi-project background service
-claude-indexer service start
-
-# Add projects to service watch list
-claude-indexer service add-project /path/to/project project-collection-name
-
-# Check service status and active watchers
-claude-indexer service status
-```
-
-#### Git Hooks Integration
-```bash
-# Install pre-commit automatic indexing
-claude-indexer hooks install -p /path -c name
-
-# Check hook status
-claude-indexer hooks status -p /path -c name
-```
-
-#### Search and Discovery
-```bash
-# Semantic search across indexed collections
-claude-indexer search "authentication function" -p /path -c name
-
-# Filter by entity type
-claude-indexer search "database connection" -p /path -c name --type entity
-```
+### Essential Commands
 
 #### MCP Server Setup  
 ```bash
 # Add MCP server configuration with automatic Voyage AI integration
 claude-indexer add-mcp -c project-name
-
-# For general memory collection
-claude-indexer add-mcp -c general
-
-# Now supports both OpenAI and Voyage AI based on settings.txt configuration
-# Voyage AI: 85% cost reduction, 512-dim vectors, voyage-3-lite model
-# OpenAI: Default fallback, 1536-dim vectors, text-embedding-3-small model
+claude-indexer add-mcp -c general  # for general memory
 ```
 
-**Enhanced MCP Server Features (v2.4):**
-- **Progressive Disclosure**: `search_similar` returns metadata-first for 90% faster queries
-- **On-demand Implementation**: `get_implementation(entityName)` tool for detailed code access
-- **Automatic Provider Detection**: Reads embedding provider from environment variables
-- **Voyage AI Integration**: Built-in support for voyage-3-lite with cost optimization
-- **Backward Compatibility**: Seamlessly handles both v2.3 and v2.4 chunk formats
-
-#### Chat History Processing
+#### File Watching & Services
 ```bash
-# Index Claude Code chat history with GPT-4.1-mini summarization
-claude-indexer chat-index -p /path -c name --chat-file conversation.md
+# Real-time file watching
+claude-indexer watch start -p /path -c name --debounce 3.0
 
-# Search across chat history and code together
-claude-indexer chat-search "debugging patterns" -p /path -c name
+# Background service management
+claude-indexer service start
+claude-indexer service add-project /path/to/project project-collection-name
+```
 
-# Process with cost-optimized GPT-4.1-mini (78% cost reduction)
-claude-indexer chat-index -p /path -c name --model gpt-4.1-mini
+#### Search & Discovery
+```bash
+# Semantic search across indexed collections
+claude-indexer search "authentication function" -p /path -c name
+claude-indexer search "database connection" -p /path -c name --type entity
 ```
 
 ## Memory Integration
@@ -146,31 +90,12 @@ claude-indexer chat-index -p /path -c name --model gpt-4.1-mini
 **Research-backed categorization with semantic content analysis:**
 
 - **`debugging_pattern` (30% target)**: Error diagnosis, root cause analysis, troubleshooting
-  - *Indicators*: "error", "exception", "memory leak", "root cause", "debug", "traceback", "stack trace"
-  - *Content*: Error messages, troubleshooting steps, performance issues, exception handling
-
 - **`implementation_pattern` (25% target)**: Coding solutions, algorithms, best practices  
-  - *Indicators*: "class", "function", "algorithm", "pattern", "best practice", "code", "solution"
-  - *Content*: Code examples, design patterns, development techniques, testing strategies
-
 - **`integration_pattern` (15% target)**: APIs, services, data pipelines, external systems
-  - *Indicators*: "API", "service", "integration", "database", "authentication", "pipeline" 
-  - *Content*: External service connections, data flows, authentication patterns
-
 - **`configuration_pattern` (12% target)**: Environment setup, deployment, tooling
-  - *Indicators*: "config", "environment", "deploy", "setup", "docker", "CI/CD", "install"
-  - *Content*: Environment configuration, deployment workflows, tool setup
-
 - **`architecture_pattern` (10% target)**: System design, structural decisions
-  - *Indicators*: "architecture", "design", "structure", "component", "system", "module"
-  - *Content*: High-level design decisions, component organization, system structure
-
 - **`performance_pattern` (8% target)**: Optimization techniques, scalability
-  - *Indicators*: "performance", "optimization", "scalability", "memory", "speed", "bottleneck"
-  - *Content*: Performance tuning, resource optimization, scalability patterns
-
 - **`knowledge_insight`**: Research findings, consolidated learnings, cross-cutting concerns
-  - *Content*: Strategic insights, lessons learned, research findings, methodology improvements
 
 **Classification Approach**: Analyze content semantics, not format. Identify 3 strongest indicators, then categorize based on actual problem domain rather than documentation style.
 
@@ -181,89 +106,28 @@ claude-indexer chat-index -p /path -c name --model gpt-4.1-mini
 # Add MCP server using integrated command - reads API keys from settings.txt
 claude-indexer add-mcp -c project-name
 claude-indexer add-mcp -c general  # for general memory
-
-# Uses your existing settings.txt configuration automatically
 ```
 
-**Option 2: Legacy Standalone Script (deprecated)**
-```bash
-# Legacy method - use CLI command instead
-# python add_mcp_project.py project-name  # REMOVED
-# Use: claude-indexer add-mcp -c project-name
-```
-
-**Option 3: Manual Command Line**
+**Option 2: Manual Command Line**
 ```bash
 # Add project-specific memory manually
 claude mcp add project-memory -e OPENAI_API_KEY="YOUR_KEY" -e QDRANT_API_KEY="YOUR_KEY" -e QDRANT_URL="http://localhost:6333" -e QDRANT_COLLECTION_NAME="project-name" -- node "/path/to/memory/mcp-qdrant-memory/dist/index.js"
 ```
 
-**Option 4: Manual JSON Configuration (`~/.claude/claude_desktop_config.json`)**
-→ See full JSON example in project memory (search: "MCP JSON configuration")
+## Debug Testing Protocol
 
-## Architecture Overview
-
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Claude Code   │◄──►│  MCP Server      │◄──►│   Qdrant DB     │
-│                 │    │  (delorenj)      │    │   (Vectors)     │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                                        ▲
-                       ┌────────────────┐               │
-                       │ Universal      │               │ Direct
-                       │ Indexer        │───────────────┘ Automation
-                       │ (claude_indexer)│
-                       └────────────────┘
-                                │
-                       ┌────────▼────────┐
-                       │  Tree-sitter +  │
-                       │      Jedi       │
-                       │  (Code Analysis)│
-                       └─────────────────┘
+**Testing Database - watcher-test Collection:**
+```bash
+# Use dedicated test collection for all debugging (never use production DB)
+claude-indexer index -p /path/to/test-files -c watcher-test --verbose
 ```
 
-## Key Features
-
-- 🚀 Progressive Disclosure Architecture: 90% faster metadata-first search with on-demand implementation
-- 🎯 Pure v2.4 chunk format: unified `"type": "chunk"` with `chunk_type` (metadata/implementation/relation)
-- 🔍 MCP get_implementation tool: on-demand detailed code access for progressive disclosure
-- 🏗️ Modular `claude_indexer` package architecture
-- 🎯 Voyage AI MCP integration: automatic provider detection with 85% cost reduction
-- 💬 Chat history summarization with GPT-4.1-mini integration
-- 📊 Knowledge graph with entities & relations
-- ⚡ Tree-sitter + Jedi parsing (36x faster) + targeted file processing
-- 🔄 Direct Qdrant integration (zero manual steps)
-- 📁 Project-specific collections for isolation
-- 🛡️ Smart clearing: --clear vs --clear-all
-- 💾 Manual Memory Protection system
-
-## Service Configuration
-
-### Configuration Hierarchy
-1. Runtime CLI overrides (highest priority)
-2. Service configuration file (~/.claude-indexer/config.json)
-3. Project settings (settings.txt)
-4. Built-in defaults (lowest priority)
-
-### Service Configuration Example
-```json
-{
-  "projects": [
-    {
-      "path": "/home/dev/project",
-      "collection": "project-memory",
-      "watch_enabled": true
-    }
-  ],
-  "settings": {
-    "debounce_seconds": 2.5,
-    "watch_patterns": ["*.py", "*.md", "*.js"],
-    "ignore_patterns": ["*.pyc", "__pycache__", "node_modules"],
-    "max_file_size": 2097152,
-    "enable_logging": true
-  }
-}
-```
+**Testing Best Practices:**
+- Always use separate test collections (watcher-test, debug-test) for debugging
+- Use 1-2 Python files only for cleaner debug output  
+- Never contaminate production memory collections during testing
+- Test indexing, relations, file processing, incremental updates, parser functionality
+- MCP server already configured for watcher-test collection
 
 ## Manual Memory Backup & Restore
 
@@ -282,36 +146,6 @@ python utils/manual_memory_backup.py restore -f manual_entries_backup_collection
 # Dry run to see what would be restored
 python utils/manual_memory_backup.py restore -f backup.json --dry-run
 ```
-
-## Debug Testing Protocol
-
-**Testing Database - watcher-test Collection:**
-```bash
-# Use dedicated test collection for all debugging (never use production DB)
-claude-indexer index -p /path/to/test-files -c watcher-test --verbose
-```
-
-**Testing Best Practices:**
-- Always use separate test collections (watcher-test, debug-test) for debugging
-- Use 1-2 Python files only for cleaner debug output  
-- Never contaminate production memory collections during testing
-- Test indexing, relations, file processing, incremental updates, parser functionality
-- MCP server already configured for watcher-test collection
-
-## Basic Troubleshooting
-
-**Qdrant Connection Failed:**
-- Ensure Qdrant is running on port 6333
-- Check firewall settings
-- Verify API key matches
-
-**MCP Server Not Loading:**
-- Restart Claude Code after config changes
-- Check absolute paths in MCP configuration
-
-**No Entities Created:**
-- Verify target directory contains Python files
-- Use `--verbose` flag for detailed error messages
 
 ## Logs and Debug Information
 
@@ -335,37 +169,34 @@ claude-indexer -p /path/to/small-test-dir -c debug-test --verbose
 # Recommended: 1-2 Python files only for cleaner debug output
 ```
 
-## Performance Benchmarks - v2.4 Validation Results
+## Basic Troubleshooting
 
-**✅ COMPREHENSIVE TESTING COMPLETED (December 2024)**
+**Qdrant Connection Failed:**
+- Ensure Qdrant is running on port 6333
+- Check firewall settings
+- Verify API key matches
 
-### Metadata-First Search Performance
-- **Average Response Time**: 3.99ms (target: <4ms) ✅
-- **90% Speed Improvement**: Validated vs implementation search
-- **MCP Workflow Total**: 3.63ms end-to-end
-- **Sample Size**: 80 queries across 8 test patterns
+**MCP Server Not Loading:**
+- Restart Claude Code after config changes
+- Check absolute paths in MCP configuration
 
-### Cost Analysis - OpenAI vs Voyage AI
-- **OpenAI Baseline**: $0.02 per 1K tokens, 371ms processing
-- **Voyage AI**: 85% cost reduction (when configured)
-- **Progressive Disclosure**: Minimize embedding costs via metadata-first
-
-### Production Readiness Validation
-- ✅ All unit tests passing (100% coverage maintained)
-- ✅ Integration tests validated progressive disclosure workflow
-- ✅ Performance benchmarks meet <4ms target goals
-- ✅ Zero breaking changes confirmed via regression testing
-
-**Benchmark Files**: `performance_benchmark.py` + results in project memory
+**No Entities Created:**
+- Verify target directory contains Python files
+- Use `--verbose` flag for detailed error messages
 
 ## Advanced Details → Use §m to search project memory for:
 
-- **Complete performance benchmark results** and detailed optimization metrics
-- **Test suite architecture** and coverage details  
-- **v2.4 implementation patterns** and progressive disclosure architecture
-- **Manual memory backup/restore** system details
-- **Production deployment** scenarios and validation results
-- **Troubleshooting guides** for progressive disclosure issues
+- **v2.4 Progressive Disclosure Architecture** and performance validation results
+- **Enhanced MCP Server Features** with automatic provider detection
+- **Voyage AI Integration** and cost optimization analysis
+- **Advanced Automation Features** including file watching and service management  
+- **Chat History Processing** with GPT-4.1-mini integration
+- **Service Configuration** hierarchy and management patterns
+- **Manual Memory Backup/Restore** system architecture
+- **Debug Testing Protocol** with dedicated collections
+- **Architecture Overview** and component integration
+- **Logs and Debug Information** management system
+- **Complete troubleshooting guides** for production deployment
 
 ## Benefits Summary
 

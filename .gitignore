@@ -38,3 +38,11 @@ chat_reports/
 
 # Qdrant storage
 qdrant_storage/
+
+# Backups
+backups/
+
+# Python build artifacts
+*.egg-info/
+dist/
+build/

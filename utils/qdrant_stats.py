@@ -734,7 +734,7 @@ class QdrantStatsCollector:
         print(f"{health_emoji} {collection_name}")
         print(f"  📊 Points: {stats.get('points_count', 0):,}")
         print(f"  🔍 Indexed: {stats.get('indexed_vectors_count', 0):,}")
-        print(f"  ✍️  Manual: {stats.get('manual_entries_count', 0):,}")
+        # Manual count removed from display
         print(f"  🤖 Automated: {stats.get('automated_entries_count', 0):,}")
         
         # Show health details with explanations
