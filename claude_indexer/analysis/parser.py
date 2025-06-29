@@ -151,6 +151,13 @@ class PythonParser(CodeParser):
             calls_relations = self._create_calls_relations_from_chunks(implementation_chunks, file_path)
             result.relations.extend(calls_relations)
             
+            # Extract file operations (open, json.load, etc.)
+            if tree:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                file_op_relations = self._extract_file_operations(tree, file_path, content)
+                result.relations.extend(file_op_relations)
+            
             # Create file entity
             file_entity = EntityFactory.create_file_entity(file_path, 
                                                          entity_count=len(result.entities),
@@ -487,6 +494,120 @@ class PythonParser(CodeParser):
         for keyword in complexity_keywords:
             complexity += source.count(f' {keyword} ') + source.count(f'\n{keyword} ')
         return complexity
+    
+    def _extract_file_operations(self, tree: 'tree_sitter.Tree', file_path: Path, content: str) -> List['Relation']:
+        """Extract file operations from Python AST using tree-sitter."""
+        relations = []
+        
+        # Define file operation patterns to detect
+        FILE_OPERATIONS = {
+            'open': 'file_open',
+            'json.load': 'json_load',
+            'json.dump': 'json_write',
+            'json.loads': 'json_parse',
+            'yaml.load': 'yaml_load',
+            'yaml.dump': 'yaml_write',
+            'pickle.load': 'pickle_load',
+            'pickle.dump': 'pickle_write',
+            'csv.reader': 'csv_read',
+            'csv.writer': 'csv_write',
+        }
+        
+        def extract_string_literal(node):
+            """Extract string literal from node."""
+            if node.type == 'string':
+                text = node.text.decode('utf-8')
+                # Remove quotes
+                if text.startswith(('"""', "'''")):
+                    return text[3:-3]
+                elif text.startswith(('"', "'")):
+                    return text[1:-1]
+            return None
+        
+        def find_file_operations(node):
+            """Recursively find file operations in AST."""
+            if node.type == 'call':
+                func_node = node.child_by_field_name('function')
+                args_node = node.child_by_field_name('arguments')
+                
+                if func_node and args_node:
+                    func_text = func_node.text.decode('utf-8')
+                    
+                    # Check against known file operations
+                    for op_name, op_type in FILE_OPERATIONS.items():
+                        if func_text == op_name or func_text.endswith('.' + op_name):
+                            # Look for file path arguments
+                            for arg in args_node.children:
+                                if arg.type == 'string':
+                                    file_ref = extract_string_literal(arg)
+                                    if file_ref:
+                                        relation = RelationFactory.create_imports_relation(
+                                            importer=str(file_path),
+                                            imported=file_ref,
+                                            import_type=op_type
+                                        )
+                                        relations.append(relation)
+                                        break
+                    
+                    # Special handling for open() built-in
+                    if func_text == 'open':
+                        # Get first string argument
+                        for arg in args_node.children:
+                            if arg.type == 'string':
+                                file_ref = extract_string_literal(arg)
+                                if file_ref:
+                                    relation = RelationFactory.create_imports_relation(
+                                        importer=str(file_path),
+                                        imported=file_ref,
+                                        import_type='file_open'
+                                    )
+                                    relations.append(relation)
+                                    break
+                    
+                    # Handle Path().open() pattern
+                    elif '.open' in func_text and 'Path' in func_text:
+                        # Look backwards for Path constructor
+                        parent = node.parent
+                        while parent:
+                            if parent.type == 'call':
+                                parent_func = parent.child_by_field_name('function')
+                                if parent_func and 'Path' in parent_func.text.decode('utf-8'):
+                                    parent_args = parent.child_by_field_name('arguments')
+                                    if parent_args:
+                                        for arg in parent_args.children:
+                                            if arg.type == 'string':
+                                                file_ref = extract_string_literal(arg)
+                                                if file_ref:
+                                                    relation = RelationFactory.create_imports_relation(
+                                                        importer=str(file_path),
+                                                        imported=file_ref,
+                                                        import_type='path_open'
+                                                    )
+                                                    relations.append(relation)
+                                                    break
+                                    break
+                            parent = parent.parent
+            
+            # Handle with statements
+            elif node.type == 'with_statement':
+                # Look for with_item children
+                for child in node.children:
+                    if child.type == 'with_clause':
+                        for item in child.children:
+                            if item.type == 'with_item':
+                                # Process calls within with_item
+                                for sub in item.children:
+                                    find_file_operations(sub)
+            
+            # Recurse through children
+            for child in node.children:
+                find_file_operations(child)
+        
+        # Start traversal from root
+        if tree and tree.root_node:
+            find_file_operations(tree.root_node)
+        
+        return relations
     
     def _create_calls_relations_from_chunks(self, chunks: List['EntityChunk'], file_path: Path) -> List['Relation']:
         """Create CALLS relations from extracted function calls in implementation chunks."""
