@@ -1,7 +1,24 @@
 # Project-Level File Pattern Configuration Plan
 
+## Current Version: v2.4.1 - Progressive Disclosure Architecture
+**Status**: Plan ready for implementation alongside existing v2.4 features
+
 ## Overview
 Enable per-project configuration of file types to watch and index, specifically adding support for JavaScript (.js) and text (.txt) files as requested. Each project can independently choose which file types to include, with all settings stored locally in `PROJECT_DIR/.claude-indexer/config.json` for complete project isolation and portability.
+
+## Integration with v2.4 Architecture
+
+### Current State (v2.4.1)
+- **Progressive Disclosure**: Semantic scope control (minimal/logical/dependencies)
+- **Dual Provider Support**: Voyage AI + OpenAI embeddings
+- **Enhanced MCP Server**: Automatic provider detection
+- **Service Management**: Multi-project automation via `~/.claude-indexer/config.json`
+
+### Proposed Enhancement
+- Move from global to project-local configuration
+- Add JavaScript/TypeScript parser using tree-sitter
+- Add configurable text file parser
+- Remove ALL hardcoded file patterns
 
 ## Architecture: Project-Local Configuration
 
@@ -10,6 +27,7 @@ Enable per-project configuration of file types to watch and index, specifically 
 - State file: `PROJECT_DIR/.claude-indexer/state.json`
 - Each project self-contained with its own settings
 - No global configuration dependencies
+- Integrates with existing VectorStore and EntityChunk architecture
 
 ### Benefits
 1. **Version Control**: Configuration committed with code
@@ -18,8 +36,17 @@ Enable per-project configuration of file types to watch and index, specifically 
 4. **Isolation**: No cross-project configuration conflicts
 5. **Simplicity**: Settings next to code they configure
 6. **Project Choice**: Each project independently decides which file types to index
+7. **Parser Extensibility**: Easy to add new language parsers
 
 ## Current State Analysis
+
+### Critical Change: Project-Local Settings
+**ALL project settings will be stored INSIDE the project directory at:**
+- `PROJECT_DIR/.claude-indexer/config.json` - Project-specific configuration
+- `PROJECT_DIR/.claude-indexer/state.json` - Indexing state tracking
+- `PROJECT_DIR/.claude-indexer/logs/` - Project-specific logs (optional)
+
+**NOT in user home directory** - This ensures complete project portability and version control.
 
 ### Files to Update
 1. **claude_indexer/config.py**
@@ -97,12 +124,6 @@ my-project/
       "enabled": false,
       "fail_on_error": false
     }
-  },
-  "api_keys": {
-    "use_global": true,  // Use settings.txt from project root
-    "openai_api_key": null,  // Override if needed
-    "qdrant_api_key": null,
-    "qdrant_url": null
   }
 }
 ```
@@ -157,25 +178,25 @@ my-project/
 }
 ```
 
-#### 1.4 Project Registry for Service
+#### 1.4 Project Registry for Service (Minimal)
 **Location**: `~/.claude-indexer/projects.json`
+**Purpose**: Only stores project paths for service discovery. All configuration lives in each project.
 ```json
 {
-  "version": "2.0",
+  "version": "2.5",
   "projects": [
     {
       "path": "/absolute/path/to/project1",
-      "name": "project1",
       "active": true
     },
     {
       "path": "/absolute/path/to/project2", 
-      "name": "project2",
-      "active": true
+      "active": false
     }
   ]
 }
 ```
+**Note**: All project settings are read from each project's local `.claude-indexer/config.json`
 
 ### Phase 2: Core Components
 
@@ -246,9 +267,6 @@ class ProjectConfig:
             "watcher": {
                 "enabled": True,
                 "debounce_seconds": 2.0
-            },
-            "api_keys": {
-                "use_global": True
             }
         }
         
@@ -270,14 +288,14 @@ class ProjectConfig:
 **File**: `claude_indexer/analysis/javascript_parser.py`
 ```python
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 from tree_sitter import Parser, Node
 import tree_sitter_javascript as tjs
-from ..entities import Entity, Relation
-from .base import BaseParser, ParsedFile
+from .entities import Entity, Relation, EntityChunk, EntityType, RelationType
+from .parser import CodeParser, ParserResult
 
-class JavaScriptParser(BaseParser):
-    """Parse JavaScript/TypeScript files using tree-sitter."""
+class JavaScriptParser(CodeParser):
+    """Parse JavaScript/TypeScript files using tree-sitter with v2.4 progressive disclosure."""
     
     SUPPORTED_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']
     
@@ -294,26 +312,33 @@ class JavaScriptParser(BaseParser):
         """Return list of supported file extensions."""
         return self.SUPPORTED_EXTENSIONS
         
-    def parse(self, file_path: Path, content: str) -> ParsedFile:
-        """Parse JavaScript/TypeScript file content."""
+    def parse(self, file_path: Path) -> ParserResult:
+        """Parse JavaScript/TypeScript file content with progressive disclosure."""
+        # Read file content
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
         tree = self.parser.parse(bytes(content, "utf8"))
         
         entities = []
         relations = []
+        chunks = []
         
-        # Extract functions
+        # Extract functions with progressive disclosure
         for node in self._find_nodes(tree.root_node, ['function_declaration', 
                                                       'arrow_function', 
                                                       'function_expression']):
-            entity = self._create_function_entity(node, file_path)
+            entity, entity_chunks = self._create_function_entity(node, file_path, content)
             if entity:
                 entities.append(entity)
+                chunks.extend(entity_chunks)
                 
-        # Extract classes
+        # Extract classes with progressive disclosure
         for node in self._find_nodes(tree.root_node, ['class_declaration']):
-            entity = self._create_class_entity(node, file_path)
+            entity, entity_chunks = self._create_class_entity(node, file_path, content)
             if entity:
                 entities.append(entity)
+                chunks.extend(entity_chunks)
                 
         # Extract imports
         for node in self._find_nodes(tree.root_node, ['import_statement']):
@@ -321,12 +346,66 @@ class JavaScriptParser(BaseParser):
             if relation:
                 relations.append(relation)
                 
-        return ParsedFile(
+        return ParserResult(
             file_path=file_path,
             entities=entities,
             relations=relations,
-            language="javascript"
+            implementation_chunks=chunks
         )
+        
+    def _create_function_entity(self, node: Node, file_path: Path, content: str) -> Tuple[Optional[Entity], List[EntityChunk]]:
+        """Create function entity with metadata and implementation chunks."""
+        name_node = node.child_by_field_name('name')
+        if not name_node:
+            return None, []
+            
+        name = name_node.text.decode('utf8')
+        
+        # Create entity (matches current system)
+        entity = Entity(
+            name=name,
+            entity_type=EntityType.FUNCTION,
+            observations=[f"Function: {name}"],
+            file_path=file_path,
+            line_number=node.start_point[0] + 1,
+            end_line_number=node.end_point[0] + 1,
+            signature=self._extract_function_signature(node, content)
+        )
+        
+        # Create chunks for progressive disclosure
+        chunks = []
+        
+        # Metadata chunk (using same ID format as current system)
+        metadata_content = self._extract_function_signature(node, content)
+        chunks.append(EntityChunk(
+            id=f"{str(file_path)}::{name}::metadata",
+            entity_name=name,
+            chunk_type="metadata",
+            content=metadata_content,
+            metadata={
+                "entity_type": "function",
+                "file_path": str(file_path),
+                "line_number": node.start_point[0] + 1,
+                "has_implementation": True
+            }
+        ))
+        
+        # Implementation chunk
+        implementation = self._extract_implementation(node, content)
+        chunks.append(EntityChunk(
+            id=f"{str(file_path)}::{name}::implementation",
+            entity_name=name,
+            chunk_type="implementation",
+            content=implementation,
+            metadata={
+                "entity_type": "function",
+                "file_path": str(file_path),
+                "line_start": node.start_point[0] + 1,
+                "line_end": node.end_point[0] + 1
+            }
+        ))
+        
+        return entity, chunks
         
     def _find_nodes(self, root: Node, node_types: List[str]) -> List[Node]:
         """Find all nodes of given types."""
@@ -341,19 +420,99 @@ class JavaScriptParser(BaseParser):
         walk(root)
         return nodes
         
-    def _create_function_entity(self, node: Node, file_path: Path) -> Entity:
-        """Create function entity from AST node."""
+        
+    def _extract_function_signature(self, node: Node, content: str) -> str:
+        """Extract function signature from node."""
+        # Get function name
+        name_node = node.child_by_field_name('name')
+        name = name_node.text.decode('utf8') if name_node else 'anonymous'
+        
+        # Get parameters
+        params_node = node.child_by_field_name('parameters')
+        if params_node:
+            params = params_node.text.decode('utf8')
+        else:
+            params = '(...)'
+            
+        # Get return type for TypeScript
+        return_type = ''
+        type_node = node.child_by_field_name('return_type')
+        if type_node:
+            return_type = f": {type_node.text.decode('utf8')}"
+            
+        return f"function {name}{params}{return_type}"
+        
+    def _extract_implementation(self, node: Node, content: str) -> str:
+        """Extract full implementation from node."""
+        start_byte = node.start_byte
+        end_byte = node.end_byte
+        return content[start_byte:end_byte]
+        
+    def _create_class_entity(self, node: Node, file_path: Path, content: str) -> Tuple[Optional[Entity], List[EntityChunk]]:
+        """Create class entity with metadata and implementation chunks."""
         name_node = node.child_by_field_name('name')
         if not name_node:
+            return None, []
+            
+        name = name_node.text.decode('utf8')
+        
+        # Create entity (matches current system)
+        entity = Entity(
+            name=name,
+            entity_type=EntityType.CLASS,
+            observations=[f"Class: {name}"],
+            file_path=file_path,
+            line_number=node.start_point[0] + 1,
+            end_line_number=node.end_point[0] + 1
+        )
+        
+        # Create chunks
+        chunks = []
+        
+        # Metadata chunk (using same ID format as current system)
+        chunks.append(EntityChunk(
+            id=f"{str(file_path)}::{name}::metadata",
+            entity_name=name,
+            chunk_type="metadata",
+            content=f"class {name}",
+            metadata={
+                "entity_type": "class",
+                "file_path": str(file_path),
+                "line_number": node.start_point[0] + 1,
+                "has_implementation": True
+            }
+        ))
+        
+        # Implementation chunk
+        chunks.append(EntityChunk(
+            id=f"{str(file_path)}::{name}::implementation",
+            entity_name=name,
+            chunk_type="implementation",
+            content=self._extract_implementation(node, content),
+            metadata={
+                "entity_type": "class",
+                "file_path": str(file_path),
+                "line_start": node.start_point[0] + 1,
+                "line_end": node.end_point[0] + 1
+            }
+        ))
+        
+        return entity, chunks
+        
+    def _create_import_relation(self, node: Node, file_path: Path) -> Optional[Relation]:
+        """Create import relation from node."""
+        # Extract module name from import statement
+        source_node = node.child_by_field_name('source')
+        if not source_node:
             return None
             
-        return Entity(
-            name=name_node.text.decode('utf8'),
-            type='function',
-            file_path=str(file_path),
-            line_start=node.start_point[0] + 1,
-            line_end=node.end_point[0] + 1,
-            content=node.text.decode('utf8')[:200]
+        module_name = source_node.text.decode('utf8').strip('"\'')
+        
+        return Relation(
+            from_entity=str(file_path),
+            to_entity=module_name,
+            relation_type=RelationType.IMPORTS,
+            context=f"Line {node.start_point[0] + 1}"
         )
 ```
 
@@ -362,11 +521,11 @@ class JavaScriptParser(BaseParser):
 ```python
 from pathlib import Path
 from typing import List, Dict, Any
-from ..entities import Entity
-from .base import BaseParser, ParsedFile
+from .entities import Entity, EntityChunk, EntityType
+from .parser import CodeParser, ParserResult
 
-class TextParser(BaseParser):
-    """Parse plain text files with configurable chunking."""
+class TextParser(CodeParser):
+    """Parse plain text files with configurable chunking for v2.4 progressive disclosure."""
     
     SUPPORTED_EXTENSIONS = ['.txt', '.log', '.csv', '.dat', '.conf', '.ini']
     
@@ -381,54 +540,94 @@ class TextParser(BaseParser):
         """Return list of supported file extensions."""
         return self.SUPPORTED_EXTENSIONS
         
-    def parse(self, file_path: Path, content: str) -> ParsedFile:
-        """Parse text file into searchable chunks."""
+    def parse(self, file_path: Path) -> ParserResult:
+        """Parse text file into searchable chunks with progressive disclosure."""
+        # Read file content
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
         max_line_length = self.config.get('max_line_length', 500)
         chunk_size = self.config.get('chunk_size', 50)  # lines per chunk
         
         lines = content.splitlines()
         entities = []
+        chunks = []
         
         for i in range(0, len(lines), chunk_size):
             chunk_lines = lines[i:i + chunk_size]
             chunk_text = '\n'.join(line[:max_line_length] for line in chunk_lines)
             
             if chunk_text.strip():
-                entities.append(Entity(
-                    name=f"{file_path.stem}_chunk_{i//chunk_size + 1}",
-                    type="text_chunk",
-                    file_path=str(file_path),
-                    line_start=i + 1,
-                    line_end=min(i + chunk_size, len(lines)),
-                    content=chunk_text
+                chunk_name = f"{file_path.stem}_chunk_{i//chunk_size + 1}"
+                
+                # Create entity (matches current system)
+                entity = Entity(
+                    name=chunk_name,
+                    entity_type=EntityType.DOCUMENTATION,  # Text files as documentation
+                    observations=[f"Text chunk from {file_path.name}"],
+                    file_path=file_path,
+                    line_number=i + 1,
+                    end_line_number=min(i + chunk_size, len(lines))
+                )
+                entities.append(entity)
+                
+                # Create metadata chunk (using same ID format as current system)
+                chunks.append(EntityChunk(
+                    id=f"{str(file_path)}::{chunk_name}::metadata",
+                    entity_name=chunk_name,
+                    chunk_type="metadata",
+                    content=chunk_text,
+                    metadata={
+                        "entity_type": "text_chunk",
+                        "file_path": str(file_path),
+                        "line_start": i + 1,
+                        "line_end": min(i + chunk_size, len(lines)),
+                        "has_implementation": False  # Text chunks don't have separate implementation
+                    }
                 ))
                 
-        return ParsedFile(
+        return ParserResult(
             file_path=file_path,
             entities=entities,
             relations=[],
-            language="text"
+            implementation_chunks=chunks
         )
+        
 ```
 
 ### Phase 3: Update Core Services
 
-#### 3.1 Update Indexer
-**File**: `claude_indexer/indexer.py` (key changes)
+#### 3.1 Update CoreIndexer Integration
+**File**: `claude_indexer/index_project.py` (key changes to work with CoreIndexer)
 ```python
-class Indexer:
-    def __init__(self, project_path: str, *args, **kwargs):
+class ProjectIndexer:
+    """High-level indexer that uses CoreIndexer with project-local config."""
+    
+    def __init__(self, project_path: str, collection_name: str = None, config: IndexerConfig = None):
         self.project_path = Path(project_path).resolve()
         self.project_config = ProjectConfig(self.project_path)
         
         if not self.project_config.exists():
             raise ValueError(f"Project not initialized. Run 'claude-indexer init' in {project_path}")
             
-        self.config = self.project_config.load()
-        self.collection = self.config['project']['collection']
-        self.file_patterns = self.config['indexing']['file_patterns']
+        # Load project-local configuration
+        project_cfg = self.project_config.load()
+        self.collection = collection_name or project_cfg['project']['collection']
+        self.file_patterns = project_cfg['indexing']['file_patterns']
         
-        # Initialize other components...
+        # Initialize CoreIndexer with project config
+        self.config = config or load_config()
+        self.core_indexer = CoreIndexer(
+            config=self.config,
+            parser_registry=self._create_parser_registry(project_cfg),
+            embedder=self._create_embedder(),
+            vector_store=self._create_vector_store()
+        )
+        
+    def _create_parser_registry(self, project_cfg: Dict[str, Any]) -> ParserRegistry:
+        """Create parser registry with all parsers."""
+        # ParserRegistry automatically registers all parsers
+        return ParserRegistry(self.project_path)
         
     def _get_state_file(self) -> Path:
         """Get project-local state file."""
@@ -450,6 +649,26 @@ class Indexer:
                 return True
                 
         return False
+        
+    def index_directory(self, incremental: bool = True) -> IndexingResult:
+        """Index directory using project-local configuration."""
+        # Load state from project-local state file
+        state = self._load_state()
+        
+        # Discover files matching project patterns
+        files_to_process = []
+        for pattern in self.file_patterns['include']:
+            files_to_process.extend(self.project_path.glob(f"**/{pattern}"))
+            
+        # Filter by should_process and state
+        filtered_files = [f for f in files_to_process if self._should_process_file(f)]
+        
+        # Use CoreIndexer to process files
+        return self.core_indexer.index_files(
+            file_paths=filtered_files,
+            collection_name=self.collection,
+            state=state if incremental else None
+        )
 ```
 
 #### 3.2 Update Service
@@ -485,7 +704,6 @@ class IndexingService:
         
         project_entry = {
             "path": str(project_path.resolve()),
-            "name": project_path.name,
             "active": True
         }
         
@@ -516,38 +734,29 @@ class IndexingService:
 ```
 
 #### 3.3 Update Parser Registry
-**File**: `claude_indexer/analysis/parser.py` (additions)
+**File**: `claude_indexer/analysis/parser.py` (modifications to _register_default_parsers)
 ```python
-# Import new parsers
-from .javascript_parser import JavaScriptParser
-from .text_parser import TextParser
+# At the top of the file, add imports:
+# from .javascript_parser import JavaScriptParser
+# from .text_parser import TextParser
 
 class ParserRegistry:
-    """Registry for file parsers."""
+    """Registry for managing multiple code parsers."""
     
-    def __init__(self):
-        self._parsers = []
+    def __init__(self, project_path: Path):
+        self.project_path = project_path
+        self._parsers: List[CodeParser] = []
         self._register_default_parsers()
-        
+    
     def _register_default_parsers(self):
-        """Register all default parsers."""
-        self.register(PythonParser())
+        """Register default parsers."""
+        # Always register Python and Markdown
+        self.register(PythonParser(self.project_path))
         self.register(MarkdownParser())
+        
+        # Always register new parsers - they check file extensions internally
         self.register(JavaScriptParser())
         self.register(TextParser())
-        
-    def register(self, parser: BaseParser):
-        """Register a parser."""
-        self._parsers.append(parser)
-        
-    def get_parser(self, file_path: Path, config: Dict[str, Any] = None) -> BaseParser:
-        """Get appropriate parser for file."""
-        for parser in self._parsers:
-            if parser.can_parse(file_path):
-                if config:
-                    parser.config = config
-                return parser
-        return None
 ```
 
 ### Phase 4: CLI Commands
@@ -772,37 +981,35 @@ def load_project_config(project_path: Path) -> Dict[str, Any]:
        """Verify every file pattern is configuration-driven."""
    ```
 
-## Implementation Timeline
+## Streamlined Implementation Timeline (3-4 Days)
 
-### Day 1: Core Infrastructure
-1. Create `ProjectConfig` class
-2. Update state management
-3. Remove legacy code
+### Day 1: Core Infrastructure & Parser Development
+1. Create `ProjectConfig` class for project-local configuration
+2. Implement JavaScript parser using tree-sitter-javascript
+3. Implement configurable text parser with chunking
+4. Update parser registry to include new parsers
+5. Remove ALL hardcoded patterns from codebase
 
-### Day 2: Parser Development
-1. Implement JavaScript parser
-2. Implement text parser
-3. Update parser registry
+### Day 2: Integration & Migration
+1. Update CoreIndexer to use project-local config
+2. Modify state management to use `PROJECT_DIR/.claude-indexer/state.json`
+3. Update WatcherBridgeHandler to load patterns from ProjectConfig
+4. Update service to read project-local configs
+5. Ensure backward compatibility during transition
 
-### Day 3: Service Updates
-1. Update Indexer for project-local config
-2. Update Service for project discovery
-3. Update Watcher integration
+### Day 3: CLI & Testing
+1. Add `claude-indexer init` command for project initialization
+2. Update existing commands to work with project-local config
+3. Add `claude-indexer project set-patterns` command
+4. Write comprehensive tests for JS/TXT parsing
+5. Test project isolation and pattern configuration
 
-### Day 4: CLI Implementation
-1. Add init command
-2. Update all commands for project-local
-3. Add project management commands
-
-### Day 5: Testing
-1. Write all unit tests
-2. Write integration tests
-3. Fix any issues
-
-### Day 6: Documentation
-1. Update README
-2. Update CLAUDE.md
-3. Create examples
+### Day 4: Documentation & Deployment
+1. Update README with new project-local approach
+2. Update CLAUDE.md with examples
+3. Create migration guide for existing users
+4. Final testing and bug fixes
+5. Release as v2.5.0
 
 ## Key Requirements Summary
 
@@ -837,3 +1044,41 @@ def load_project_config(project_path: Path) -> Dict[str, Any]:
 8. ✅ **Service Compatible**: Multi-project watching with isolation
 9. ✅ **Comprehensive Tests**: Full coverage of new functionality
 10. ✅ **Documentation**: Clear examples and migration guide
+
+## Integration with v2.4.1 Architecture
+
+### How This Enhancement Builds on v2.4.1
+1. **Progressive Disclosure**: New parsers generate EntityChunk objects with metadata/implementation separation
+2. **CoreIndexer**: ProjectIndexer wraps CoreIndexer, providing project-local configuration layer
+3. **VectorStore**: Unchanged - continues to store EntityChunks with dual vectors
+4. **Parser Registry**: Extended with JavaScript and Text parsers following existing CodeParser interface
+5. **Dual Embeddings**: Works seamlessly with Voyage AI / OpenAI provider selection
+
+### Key Architecture Alignments
+- EntityChunk and ChunkType from v2.4 used by new parsers
+- ParserResult includes chunks list for progressive disclosure
+- CoreIndexer remains stateless - ProjectIndexer handles state management
+- Existing embedding and storage infrastructure unchanged
+- MCP server integration continues to work with project-local collections
+
+## v2.5.0 Release Summary
+
+### Breaking Changes
+- Configuration moves from `~/.claude-indexer/config.json` to `PROJECT_DIR/.claude-indexer/config.json`
+- State files move to project-local directories
+- Service registry simplified to only store project paths
+
+### New Features
+- JavaScript/TypeScript parsing with tree-sitter (with progressive disclosure)
+- Configurable text file parsing with chunking
+- Per-project file pattern configuration
+- `claude-indexer init` command for project setup
+- Complete removal of hardcoded patterns
+- Full integration with v2.4 progressive disclosure architecture
+
+### Migration Path
+1. Run `claude-indexer init` in each project directory
+2. Customize file patterns with `claude-indexer project set-patterns`
+3. Service automatically discovers project-local configs
+4. Old global configs can be deleted after migration
+5. Existing v2.4 collections remain compatible

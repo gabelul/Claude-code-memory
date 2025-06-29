@@ -604,10 +604,8 @@ qdrant_url={base_config.qdrant_url}
             f"Should have no errors in initial indexing. Errors: {initial_errors}"
         
         # Find state file location (CLI uses centralized state directory)
-        import hashlib
-        project_hash = hashlib.md5(str(temp_repo).encode()).hexdigest()[:8]
         state_dir = Path.home() / '.claude-indexer' / 'state'
-        state_file = state_dir / f"{project_hash}_test_custom_new_file.json"
+        state_file = state_dir / "test_custom_new_file.json"
         
         # Verify state file was created after initial index
         assert state_file.exists(), f"State file should exist at {state_file}"
@@ -728,10 +726,8 @@ DELETABLE_CONSTANT = "to_be_removed"
             f"Should have no errors in initial indexing. Errors: {initial_errors}"
         
         # Find state file location (CLI uses centralized state directory)
-        import hashlib
-        project_hash = hashlib.md5(str(temp_repo).encode()).hexdigest()[:8]
         state_dir = Path.home() / '.claude-indexer' / 'state'
-        state_file = state_dir / f"{project_hash}_test_custom_deletion.json"
+        state_file = state_dir / "test_custom_deletion.json"
         
         # Verify state file was created and contains deletable file
         assert state_file.exists(), f"State file should exist at {state_file}"
@@ -843,10 +839,8 @@ qdrant_url={base_config.qdrant_url}
             f"Should have no errors in initial indexing. Errors: {initial_errors}"
         
         # Find state file location (CLI uses centralized state directory)
-        import hashlib
-        project_hash = hashlib.md5(str(temp_repo).encode()).hexdigest()[:8]
         state_dir = Path.home() / '.claude-indexer' / 'state'
-        state_file = state_dir / f"{project_hash}_test_custom_three_new.json"
+        state_file = state_dir / "test_custom_three_new.json"
         
         # Verify state file was created after initial index
         assert state_file.exists(), f"State file should exist at {state_file}"
@@ -988,10 +982,8 @@ class DeletableClass_{i}:
             f"Should have no errors in initial indexing. Errors: {initial_errors}"
         
         # Find state file location (CLI uses centralized state directory)
-        import hashlib
-        project_hash = hashlib.md5(str(temp_repo).encode()).hexdigest()[:8]
         state_dir = Path.home() / '.claude-indexer' / 'state'
-        state_file = state_dir / f"{project_hash}_test_custom_three_deletion.json"
+        state_file = state_dir / "test_custom_three_deletion.json"
         
         # Verify state file was created and contains all deletable files
         assert state_file.exists(), f"State file should exist at {state_file}"
