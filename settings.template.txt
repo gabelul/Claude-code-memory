@@ -39,7 +39,7 @@ qdrant_api_key=your_qdrant_api_key_here
 # Indexer Settings
 indexer_debug=false
 indexer_verbose=true
-debounce_seconds=2.0
+debounce_seconds=60
 
 # File Processing Settings
 include_markdown=true

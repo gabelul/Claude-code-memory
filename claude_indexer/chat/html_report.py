@@ -640,7 +640,7 @@ class ChatHtmlReporter:
                                 'score': result.get('score', 0.0),
                                 'metadata': {
                                     'name': data.get('name', 'Unknown Entry'),
-                                    'entityType': data.get('entityType', 'unknown'),
+                                    'entity_type': data.get('entity_type', 'unknown'),
                                     'observations': observations
                                 }
                             })
@@ -886,7 +886,7 @@ class ChatHtmlReporter:
                 'score': final_score,
                 'metadata': {
                     'name': name,
-                    'entityType': category,
+                    'entity_type': category,
                     'observations': observations
                 }
             }
@@ -904,7 +904,7 @@ class ChatHtmlReporter:
         for i, entry in enumerate(entries):
             score = entry.get('score', 0.0)
             name = entry.get('metadata', {}).get('name', f'Memory Entry {i+1}')
-            entity_type = entry.get('metadata', {}).get('entityType', 'unknown')
+            entity_type = entry.get('metadata', {}).get('entity_type', 'unknown')
             observations = entry.get('metadata', {}).get('observations', [])
             
             # Determine score class

@@ -888,8 +888,8 @@ def main():
             
             try:
                 while True:
-                    # Clear screen
-                    os.system('clear' if os.name == 'posix' else 'cls')
+                    # Clear screen with ANSI escape sequences
+                    print('\033[H\033[2J\033[3J', end='', flush=True)
                     
                     # Show timestamp
                     print(f"🕐 Last update: {datetime.now().strftime('%H:%M:%S')}")

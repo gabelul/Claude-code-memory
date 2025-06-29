@@ -283,6 +283,21 @@ python utils/manual_memory_backup.py restore -f manual_entries_backup_collection
 python utils/manual_memory_backup.py restore -f backup.json --dry-run
 ```
 
+## Debug Testing Protocol
+
+**Testing Database - watcher-test Collection:**
+```bash
+# Use dedicated test collection for all debugging (never use production DB)
+claude-indexer index -p /path/to/test-files -c watcher-test --verbose
+```
+
+**Testing Best Practices:**
+- Always use separate test collections (watcher-test, debug-test) for debugging
+- Use 1-2 Python files only for cleaner debug output  
+- Never contaminate production memory collections during testing
+- Test indexing, relations, file processing, incremental updates, parser functionality
+- MCP server already configured for watcher-test collection
+
 ## Basic Troubleshooting
 
 **Qdrant Connection Failed:**
