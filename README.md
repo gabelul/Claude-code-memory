@@ -128,9 +128,13 @@ claude-indexer add-mcp -c your-project-name
 claude mcp add your-project-memory -e OPENAI_API_KEY="YOUR_OPENAI_KEY" -e QDRANT_API_KEY="YOUR_QDRANT_KEY" -e QDRANT_URL="http://localhost:6333" -e QDRANT_COLLECTION_NAME="your-project-name" -- node "/path/to/memory/mcp-qdrant-memory/dist/index.js"
 ```
 
-**Enhanced MCP Server Features (v2.4):**
+**Enhanced MCP Server Features (v2.4.1):**
 - **Progressive Disclosure**: `search_similar` returns metadata-first for 90% faster queries
-- **On-demand Implementation**: `get_implementation(entityName)` tool for detailed code access
+- **Semantic Scope Implementation**: `get_implementation(entityName, scope?)` with contextual code retrieval
+  - `minimal`: Just the entity implementation (default)
+  - `logical`: Entity + helper functions/classes from same file
+  - `dependencies`: Entity + imported modules and called functions
+- **Smart Token Management**: Configurable limits per scope (20 logical, 30 dependencies)
 - **Automatic Provider Detection**: Reads embedding provider from environment variables
 - **Voyage AI Integration**: Built-in support for voyage-3-lite with cost optimization
 - **Backward Compatibility**: Seamlessly handles both v2.3 and v2.4 chunk formats
@@ -221,8 +225,10 @@ Knowledge graph is automatically loaded into Qdrant - no manual steps required!
 # In Claude Code - 90% faster metadata-first search
 mcp__my-project-memory__search_similar("your search query")
 
-# For detailed implementation access
-mcp__my-project-memory__get_implementation("entityName")
+# Enhanced semantic scope implementation access (v2.4.1)
+mcp__my-project-memory__get_implementation("entityName")  # minimal scope (default)
+mcp__my-project-memory__get_implementation("entityName", "logical")  # same-file helpers  
+mcp__my-project-memory__get_implementation("entityName", "dependencies")  # imports/calls
 ```
 
 ## 🔄 Direct Qdrant Integration
@@ -403,9 +409,10 @@ claude-indexer service status
 
 ## ✨ Features
 
+- **Semantic Scope Implementation**: Contextual code retrieval with logical and dependencies scopes (v2.4.1)
 - **Progressive Disclosure Architecture**: 90% faster metadata-first search with on-demand implementation access (v2.4)
 - **Pure v2.4 Chunk Format**: Unified `"type": "chunk"` with `chunk_type` for metadata/implementation/relation (v2.4)
-- **MCP get_implementation Tool**: On-demand detailed code access for progressive disclosure (v2.4)
+- **Smart Token Management**: Configurable scope limits and intelligent deduplication (v2.4.1)
 - **Voyage AI MCP Integration**: Automatic provider detection with 85% cost reduction (v2.4)
 - **Dual Embedding Providers**: OpenAI + Voyage AI with cost optimization (v2.3)
 - **Chat History Processing**: GPT-4.1-mini summarization with 78% cost savings (v2.3)

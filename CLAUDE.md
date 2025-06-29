@@ -85,17 +85,18 @@ claude-indexer search "database connection" -p /path -c name --type entity
 
 ## Memory Integration
 
-### Enhanced 7-Category System for Manual Entries
+### Enhanced 8-Category System for Manual Entries
 
 **Research-backed categorization with semantic content analysis:**
 
 - **`debugging_pattern` (30% target)**: Error diagnosis, root cause analysis, troubleshooting
 - **`implementation_pattern` (25% target)**: Coding solutions, algorithms, best practices  
-- **`integration_pattern` (15% target)**: APIs, services, data pipelines, external systems
-- **`configuration_pattern` (12% target)**: Environment setup, deployment, tooling
-- **`architecture_pattern` (10% target)**: System design, structural decisions
-- **`performance_pattern` (8% target)**: Optimization techniques, scalability
-- **`knowledge_insight`**: Research findings, consolidated learnings, cross-cutting concerns
+- **`integration_pattern` (15% target)**: APIs, databases, authentication, pipelines
+- **`configuration_pattern` (12% target)**: Environment setup, deployment, CI/CD
+- **`architecture_pattern` (10% target)**: System design, component structure
+- **`performance_pattern` (8% target)**: Optimization, caching, bottlenecks
+- **`knowledge_insight`**: Research findings, lessons learned, methodology
+- **`active_issue`**: Current bugs/problems requiring attention (delete when fixed)
 
 **Classification Approach**: Analyze content semantics, not format. Identify 3 strongest indicators, then categorize based on actual problem domain rather than documentation style.
 
@@ -186,8 +187,9 @@ claude-indexer -p /path/to/small-test-dir -c debug-test --verbose
 
 ## Advanced Details → Use §m to search project memory for:
 
+- **v2.4.1 Semantic Scope Enhancement** with contextual code retrieval implementation
 - **v2.4 Progressive Disclosure Architecture** and performance validation results
-- **Enhanced MCP Server Features** with automatic provider detection
+- **Enhanced MCP Server Features** with automatic provider detection and scope control
 - **Voyage AI Integration** and cost optimization analysis
 - **Advanced Automation Features** including file watching and service management  
 - **Chat History Processing** with GPT-4.1-mini integration
