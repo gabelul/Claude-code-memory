@@ -301,9 +301,8 @@ python utils/manual_memory_backup.py restore -f backup.json --dry-run
 ## Logs and Debug Information
 
 **Application Logs Location:**
-- Service logs: `~/.claude-indexer/service.log`
-- Watcher logs: `~/.claude-indexer/watcher.log`
-- Background service logs: `~/.claude-indexer/logs/`
+- Project logs: `{project_path}/logs/{collection_name}.log`
+- Service logs: `~/.claude-indexer/logs/` (fallback when no project path)
 
 **Debug Commands:**
 ```bash
@@ -314,7 +313,11 @@ claude-indexer -p /path -c name --verbose
 claude-indexer service status --verbose
 
 # Monitor real-time logs during operation
-tail -f ~/.claude-indexer/service.log
+tail -f {project_path}/logs/{collection_name}.log
+
+# For testing relation formats and orphan cleanup - use small test directory
+claude-indexer -p /path/to/small-test-dir -c debug-test --verbose
+# Recommended: 1-2 Python files only for cleaner debug output
 ```
 
 ## Performance Benchmarks - v2.4 Validation Results

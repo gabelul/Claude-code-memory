@@ -458,7 +458,7 @@ class QdrantStore(ManagedVectorStore):
         
         Args:
             collection_name: Name of the collection
-            preserve_manual: If True, only delete auto-generated memories (entities with file_path or relations with from/to/relationType)
+            preserve_manual: If True, only delete auto-generated memories (entities with file_path or relations with entity_name/relation_target/relation_type)
         """
         start_time = time.time()
         
@@ -494,9 +494,9 @@ class QdrantStore(ManagedVectorStore):
                     # Auto-generated entities have file_path
                     if 'file_path' in point.payload and point.payload['file_path']:
                         auto_generated_ids.append(point.id)
-                    # Auto-generated relations have from/to/relationType structure
-                    elif ('from' in point.payload and 'to' in point.payload and 
-                          'relationType' in point.payload):
+                    # Auto-generated relations have entity_name/relation_target/relation_type structure
+                    elif ('entity_name' in point.payload and 'relation_target' in point.payload and 
+                          'relation_type' in point.payload):
                         auto_generated_ids.append(point.id)
                 
                 # Delete auto-generated points by ID if any found
@@ -808,7 +808,7 @@ class QdrantStore(ManagedVectorStore):
                 results.append({
                     "id": point.id,
                     "name": point.payload.get('entity_name', point.payload.get('name', 'Unknown')),
-                    "type": point.payload.get('entity_type') or point.payload.get('entityType', 'unknown'),
+                    "type": point.payload.get('entity_type', 'unknown'),
                     "payload": point.payload
                 })
             
@@ -889,9 +889,8 @@ class QdrantStore(ManagedVectorStore):
             relations = []
             
             for point in all_points:
-                # Handle both legacy v2.3 ("type": "relation") and v2.4 ("type": "chunk", "chunk_type": "relation")
-                if (point.payload.get('type') == 'relation' or 
-                    (point.payload.get('type') == 'chunk' and point.payload.get('chunk_type') == 'relation')):
+                # v2.4 format only: "type": "chunk", "chunk_type": "relation"
+                if (point.payload.get('type') == 'chunk' and point.payload.get('chunk_type') == 'relation'):
                     relations.append(point)
                 else:
                     name = point.payload.get('entity_name', point.payload.get('name', ''))
@@ -910,9 +909,9 @@ class QdrantStore(ManagedVectorStore):
             valid_relations = 0
             
             for relation in relations:
-                from_entity = relation.payload.get('from', '')
-                to_entity = relation.payload.get('to', '')
-                relation_type = relation.payload.get('relationType', 'unknown')
+                # v2.4 relation format only
+                from_entity = relation.payload.get('entity_name', '')
+                to_entity = relation.payload.get('relation_target', '')
                 
                 # Check if either end of the relation references a non-existent entity
                 from_missing = from_entity not in entity_names

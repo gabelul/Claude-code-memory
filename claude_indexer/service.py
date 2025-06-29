@@ -44,7 +44,6 @@ class IndexingService:
                 default_config = {
                     "projects": [],
                     "settings": {
-                        "debounce_seconds": 2.0,
                         "watch_patterns": ["*.py", "*.md"],
                         "ignore_patterns": [
                             "*.pyc", "__pycache__", ".git", ".venv", 
@@ -247,8 +246,10 @@ class IndexingService:
                 logger.error(f"❌ Project path does not exist: {project_path}")
                 return False
             
-            # Merge settings
+            # Merge settings from project config and global settings
             settings = {**global_settings, **project_config.get("settings", {})}
+            
+            # Get debounce setting from merged settings
             debounce_seconds = settings.get("debounce_seconds", 2.0)
             
             # Create event handler

@@ -71,7 +71,8 @@ def get_qdrant_files(collection_name: str, qdrant_store: QdrantStore, project_ro
         
         for point in all_points:
             if hasattr(point, 'payload') and point.payload:
-                entity_type = point.payload.get('entityType', 'unknown')
+                # Handle both old and new chunk formats
+                entity_type = point.payload.get('entity_type', 'unknown')
                 entity_stats[entity_type] += 1
                 
                 if entity_type == 'file':
@@ -119,8 +120,8 @@ def get_state_files(collection_name: str) -> Set[str]:
     # Check global state directory
     global_state_dir = Path.home() / '.claude-indexer' / 'state'
     if global_state_dir.exists():
-        # Look for state files with collection name
-        state_files = list(global_state_dir.glob(f'*_{collection_name}.json'))
+        # Look for state files with collection name (new simple naming)
+        state_files = list(global_state_dir.glob(f'{collection_name}.json'))
         print(f"Found {len(state_files)} state file(s): {[f.name for f in state_files]}")
         
         for state_file in state_files:
@@ -228,7 +229,7 @@ def print_comparison_results(comparison: Dict[str, List[str]]):
 
 def main():
     """Main function to find missing files."""
-    collection_name = "memory-project"
+    collection_name = "claude-memory-test"
     
     try:
         # Load settings

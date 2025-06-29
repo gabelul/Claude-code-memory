@@ -75,15 +75,15 @@ def get_code_entity_types() -> Set[str]:
 
 def is_truly_manual_entry(payload: Dict[str, Any]) -> bool:
     """
-    Enhanced logic for v2.4 chunk format while maintaining v2.3 compatibility.
+    Enhanced logic for v2.4 chunk format.
     Uses the same detection logic as qdrant_stats.py for consistency.
     """
     # Pattern 1: Auto entities have file_path field
     if 'file_path' in payload:
         return False
     
-    # Pattern 2: Auto relations have from/to/relationType structure  
-    if all(field in payload for field in ['from', 'to', 'relationType']):
+    # Pattern 2: Auto relations have entity_name/relation_target/relation_type structure  
+    if all(field in payload for field in ['entity_name', 'relation_target', 'relation_type']):
         return False
     
     # Pattern 3: Auto entities have extended metadata fields
@@ -100,16 +100,16 @@ def is_truly_manual_entry(payload: Dict[str, Any]) -> bool:
     # Both manual and auto entries can have chunk_type in v2.4
     # Manual entries from MCP also get type='chunk' + chunk_type='metadata'
     
-    # True manual entries have minimal fields: entity_name/name, entity_type/entityType, observations
-    # Handle both v2.3 (name, entityType) and v2.4 (entity_name, entity_type) formats
-    has_name = 'entity_name' in payload or 'name' in payload
-    has_type = 'entity_type' in payload or 'entityType' in payload
+    # True manual entries have minimal fields: entity_name, entity_type, observations
+    # v2.4 format only
+    has_name = 'entity_name' in payload
+    has_type = 'entity_type' in payload
     
     if not (has_name and has_type):
         return False
     
     # Additional check: Manual entries typically have meaningful content
-    # Check for either observations (v2.3 legacy) or content (v2.4 MCP format)
+    # Check for observations or content (v2.4 MCP format)
     observations = payload.get('observations', [])
     content = payload.get('content', '')
     
@@ -180,17 +180,17 @@ def backup_manual_entries(collection_name: str, output_file: str = None):
         for point in all_points:
             payload = point.payload or {}
             
-            # Check for relations first (both v2.3 and v2.4)
-            if ('from' in payload and 'to' in payload and 'relationType' in payload):
+            # Check for relations first (v2.4 format only)
+            if ('entity_name' in payload and 'relation_target' in payload and 'relation_type' in payload):
                 point_type = payload.get('type', 'relation')
                 chunk_type = payload.get('chunk_type', 'relation')
                 relation_entries.append({
                     'id': str(point.id),
                     'type': point_type,
                     'chunk_type': chunk_type if point_type == 'chunk' else None,
-                    'from': payload.get('from', 'unknown'),
-                    'to': payload.get('to', 'unknown'),
-                    'relationType': payload.get('relationType', 'unknown')
+                    'from': payload.get('entity_name', 'unknown'),
+                    'to': payload.get('relation_target', 'unknown'),
+                    'relationType': payload.get('relation_type', 'unknown')
                 })
             
             # Check for manual entries (using same logic as qdrant_stats)
@@ -202,28 +202,28 @@ def backup_manual_entries(collection_name: str, output_file: str = None):
                 
             # Everything else is auto-indexed
             else:
-                # Handle both v2.3 and v2.4 format fields
-                entity_type = payload.get('entity_type') or payload.get('entityType', 'unknown')
-                entity_name = payload.get('entity_name') or payload.get('name', 'unknown')
+                # v2.4 format only
+                entity_type = payload.get('entity_type', 'unknown')
+                entity_name = payload.get('entity_name', 'unknown')
                 code_entries.append({
                     'id': str(point.id),
-                    'entityType': entity_type,
+                    'entity_type': entity_type,
                     'name': entity_name
                 })
         
         # Filter relations to only those connected to manual entries
-        # Handle both v2.3 (name) and v2.4 (entity_name) formats
+        # v2.4 format only
         manual_entity_names = set()
         for entry in manual_entries:
             payload = entry['payload']
-            entity_name = payload.get('entity_name') or payload.get('name', '')
+            entity_name = payload.get('entity_name', '')
             if entity_name:
                 manual_entity_names.add(entity_name)
         
         relevant_relations = []
         
         for relation in relation_entries:
-            from_entity = relation.get('from', '')
+            from_entity = relation.get('from', '')  # These use 'from'/'to' keys as stored above
             to_entity = relation.get('to', '')
             
             # Keep relation if either end connects to a manual entry

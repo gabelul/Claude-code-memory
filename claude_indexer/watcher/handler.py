@@ -332,7 +332,7 @@ class AsyncIndexingEventHandler:
 class Watcher:
     """Unified watcher class that bridges sync file events to async processing."""
     
-    def __init__(self, repo_path: str, config, embedder, store):
+    def __init__(self, repo_path: str, config, embedder, store, debounce_seconds: float = 2.0):
         """Initialize the watcher with required dependencies.
         
         Args:
@@ -340,6 +340,7 @@ class Watcher:
             config: IndexerConfig object with settings
             embedder: Embedder instance for creating embeddings
             store: VectorStore instance for storage operations
+            debounce_seconds: Debounce delay in seconds for file changes
         """
         if not WATCHDOG_AVAILABLE:
             raise ImportError("Watchdog not available. Install with: pip install watchdog")
@@ -353,7 +354,7 @@ class Watcher:
         
         # Extract settings from config for compatibility
         self.collection_name = getattr(config, 'collection_name', 'default')
-        self.debounce_seconds = getattr(config, 'watch_debounce', getattr(config, 'debounce_seconds', 2.0))
+        self.debounce_seconds = debounce_seconds
         
         # File filtering from config
         self.include_patterns = getattr(config, 'include_patterns', ['*.py', '*.md'])

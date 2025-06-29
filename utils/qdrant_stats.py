@@ -103,13 +103,13 @@ class QdrantStatsCollector:
             
             for point in all_points:
                 if hasattr(point, 'payload') and point.payload:
-                    # Detect relations first - skip entity_type counting for relations
-                    has_relation_structure = ('from' in point.payload and 
-                                            'to' in point.payload and 
-                                            'relationType' in point.payload)
+                    # Detect relations first - skip entity_type counting for relations (v2.4 format)
+                    has_relation_structure = ('entity_name' in point.payload and 
+                                            'relation_target' in point.payload and 
+                                            'relation_type' in point.payload)
                     
-                    # Handle both v2.3 (entityType) and v2.4 (entity_type) formats
-                    entity_type = point.payload.get('entity_type') or point.payload.get('entityType', 'unknown')
+                    # v2.4 format only
+                    entity_type = point.payload.get('entity_type', 'unknown')
                     
                     # Only count entity_type for non-relation entries
                     if not has_relation_structure:
@@ -202,13 +202,13 @@ class QdrantStatsCollector:
             return 0
     
     def _is_truly_manual_entry(self, payload: Dict[str, Any]) -> bool:
-        """Enhanced logic for v2.4 chunk format while maintaining v2.3 compatibility."""
+        """Enhanced logic for v2.4 chunk format."""
         # Pattern 1: Auto entities have file_path field
         if 'file_path' in payload:
             return False
         
-        # Pattern 2: Auto relations have from/to/relationType structure  
-        if all(field in payload for field in ['from', 'to', 'relationType']):
+        # Pattern 2: Auto relations have entity_name/relation_target/relation_type structure  
+        if all(field in payload for field in ['entity_name', 'relation_target', 'relation_type']):
             return False
         
         # Pattern 3: Auto entities have extended metadata fields
@@ -225,16 +225,16 @@ class QdrantStatsCollector:
         # Both manual and auto entries can have chunk_type in v2.4
         # Manual entries from MCP also get type='chunk' + chunk_type='metadata'
         
-        # True manual entries have minimal fields: entity_name/name, entity_type/entityType, observations
-        # Handle both v2.3 (name, entityType) and v2.4 (entity_name, entity_type) formats
-        has_name = 'entity_name' in payload or 'name' in payload
-        has_type = 'entity_type' in payload or 'entityType' in payload
+        # True manual entries have minimal fields: entity_name, entity_type, observations
+        # v2.4 format only
+        has_name = 'entity_name' in payload
+        has_type = 'entity_type' in payload
         
         if not (has_name and has_type):
             return False
         
         # Additional check: Manual entries typically have meaningful content
-        # Check for either observations (v2.3 legacy) or content (v2.4 MCP format)
+        # Check for observations or content (v2.4 MCP format)
         observations = payload.get('observations', [])
         content = payload.get('content', '')
         
@@ -554,7 +554,7 @@ class QdrantStatsCollector:
             global_state_dir = Path.home() / '.claude-indexer' / 'state'
             if global_state_dir.exists():
                 # Look for state files with collection name
-                for state_file in global_state_dir.glob(f'*_{collection_name}.json'):
+                for state_file in global_state_dir.glob(f'{collection_name}.json'):
                     try:
                         with open(state_file) as f:
                             state_data = json.load(f)

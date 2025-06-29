@@ -91,17 +91,17 @@ else:
             sys.exit(1)
         
         try:
-            # Setup logging with collection-specific file logging
-            logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection)
-            
-            # Load configuration
-            config_obj = load_config(Path(config) if config else None)
-        
-            # Validate project path
+            # Validate project path first
             project_path = Path(project).resolve()
             if not project_path.exists():
                 click.echo(f"Error: Project path does not exist: {project_path}", err=True)
                 sys.exit(1)
+            
+            # Setup logging with collection-specific file logging and project path
+            logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection, project_path=project_path)
+            
+            # Load configuration
+            config_obj = load_config(Path(config) if config else None)
             
             # Create components using direct Qdrant integration
             provider = config_obj.embedding_provider
@@ -322,9 +322,14 @@ else:
             service_settings = service_config.get("settings", {})
             
             # Determine effective debounce using proper configuration hierarchy
-            # CLI override > JSON config > built-in default
+            # CLI override > settings.txt > built-in default (no JSON config)
             debounce_explicitly_set = 'debounce' in ctx.params and ctx.get_parameter_source('debounce') != click.core.ParameterSource.DEFAULT
-            effective_debounce = debounce if debounce_explicitly_set else service_settings.get("debounce_seconds", 2.0)
+            if debounce_explicitly_set:
+                effective_debounce = debounce
+            elif hasattr(config_obj, 'debounce_seconds'):
+                effective_debounce = config_obj.debounce_seconds
+            else:
+                effective_debounce = 2.0
             
             # Create event handler with service configuration
             settings = {
@@ -625,7 +630,7 @@ else:
                     click.echo(f"{i}. {payload.get('name', 'Unknown')} (score: {score:.3f})")
                     
                     if verbose:
-                        entity_type = payload.get('entityType', payload.get('type', 'unknown'))
+                        entity_type = payload.get('entity_type', payload.get('type', 'unknown'))
                         click.echo(f"   Type: {entity_type}")
                         
                         if 'file_path' in payload:

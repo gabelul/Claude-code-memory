@@ -101,35 +101,10 @@ class CoreIndexer:
         return state_dir
     
     def _get_state_file(self, collection_name: str) -> Path:
-        """Get collection-specific state file with atomic migration."""
-        import hashlib
-        
-        # Create unique project identifier using path hash
-        project_hash = hashlib.md5(str(self.project_path).encode()).hexdigest()[:8]
-        filename = f"{project_hash}_{collection_name}.json"
-        
-        # Check for migration from legacy location
-        legacy_state = self.project_path / f".indexer_state_{collection_name}.json"
-        new_state = self._get_state_directory() / filename
-        
-        # Atomic migration with race condition protection
-        if legacy_state.exists() and not new_state.exists():
-            temp_file = None
-            try:
-                # Use atomic two-step rename to prevent race conditions
-                temp_file = new_state.with_suffix('.tmp')
-                legacy_state.rename(temp_file)  # Atomic move from legacy
-                temp_file.rename(new_state)     # Atomic move to final location
-                logger.info(f"Migrated state file: {legacy_state} -> {new_state}")
-            except FileNotFoundError:
-                # Another process already migrated it - this is expected
-                self._cleanup_temp_file(temp_file)
-            except Exception as e:
-                self._cleanup_temp_file(temp_file)
-                logger.warning(f"Migration failed, using legacy location: {e}")
-                return legacy_state  # Graceful fallback to legacy location
-        
-        return new_state
+        """Get collection-specific state file with simple naming."""
+        # Simple, predictable naming: just use collection name
+        filename = f"{collection_name}.json"
+        return self._get_state_directory() / filename
     
     @property
     def state_file(self) -> Path:
@@ -676,11 +651,15 @@ class CoreIndexer:
             if deleted_files:
                 files_removed = 0
                 for deleted_file in deleted_files:
+                    logger.info(f"🗑️ DEBUG: About to check for deletion from JSON state: '{deleted_file}' (exists in state: {deleted_file in final_state})")
                     if deleted_file in final_state:
+                        logger.info(f"🗑️ DEBUG: DELETING '{deleted_file}' from JSON state")
                         del final_state[deleted_file]
                         files_removed += 1
                         if verbose:
                             logger.debug(f"   Removed {deleted_file} from state")
+                    else:
+                        logger.info(f"⚠️ DEBUG: File '{deleted_file}' NOT FOUND in state for deletion")
                 
                 if files_removed > 0:
                     # Update description to reflect deletions
@@ -827,6 +806,7 @@ class CoreIndexer:
                     
                 if point_ids:
                     # Delete the points
+                    logger.info(f"🗑️ DEBUG: About to DELETE from Qdrant - file: '{deleted_file}' resolved to: '{full_path}' with {len(point_ids)} points")
                     logger.info(f"   🗑️ Attempting to delete {len(point_ids)} points...")
                     delete_result = self.vector_store.delete_points(collection_name, point_ids)
                     
