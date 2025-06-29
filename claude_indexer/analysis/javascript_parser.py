@@ -17,6 +17,15 @@ class JavaScriptParser(TreeSitterParser):
         super().__init__(tsjs, config)
         self.ts_server = self._init_ts_server() if config and config.get('use_ts_server') else None
         
+        # Store language modules for TypeScript support
+        try:
+            import tree_sitter_typescript as tsts
+            self.ts_language = tsts.language_typescript()
+            self.tsx_language = tsts.language_tsx()
+        except ImportError:
+            self.ts_language = None
+            self.tsx_language = None
+        
     def can_parse(self, file_path: Path) -> bool:
         """Check if this parser can handle the file."""
         return file_path.suffix in self.SUPPORTED_EXTENSIONS
@@ -24,6 +33,22 @@ class JavaScriptParser(TreeSitterParser):
     def get_supported_extensions(self) -> List[str]:
         """Return list of supported file extensions."""
         return self.SUPPORTED_EXTENSIONS
+    
+    def parse_tree(self, content: str, file_path: Path = None):
+        """Parse content with appropriate language based on file extension."""
+        if file_path and file_path.suffix in ['.ts'] and self.ts_language:
+            # Use TypeScript grammar for .ts files
+            from tree_sitter import Parser, Language
+            parser = Parser(Language(self.ts_language))
+            return parser.parse(bytes(content, "utf8"))
+        elif file_path and file_path.suffix in ['.tsx'] and self.tsx_language:
+            # Use TSX grammar for .tsx files
+            from tree_sitter import Parser, Language
+            parser = Parser(Language(self.tsx_language))
+            return parser.parse(bytes(content, "utf8"))
+        else:
+            # Use JavaScript grammar for .js, .jsx, .mjs, .cjs files
+            return super().parse_tree(content)
         
     def parse(self, file_path: Path) -> ParserResult:
         """Extract functions, classes, imports with progressive disclosure."""
@@ -36,7 +61,7 @@ class JavaScriptParser(TreeSitterParser):
                 content = f.read()
             
             result.file_hash = self._get_file_hash(file_path)
-            tree = self.parse_tree(content)
+            tree = self.parse_tree(content, file_path)
             
             # Check for syntax errors
             if self._has_syntax_errors(tree):
