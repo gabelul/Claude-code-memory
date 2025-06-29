@@ -430,6 +430,110 @@ claude-indexer service status
 - **Smart Memory Clearing**: --clear preserves manual memories, --clear-all removes everything
 - **Advanced Token Management**: Progressive disclosure with smart response sizing
 
+## 🐛 Debugging Protocol
+
+### Memory-First Debugging Workflow
+
+**Step 1: Search Similar Patterns**
+```bash
+# Search project memory for similar error patterns
+mcp__project-memory__search_similar("error pattern or symptom")
+
+# Check logs and store new patterns discovered
+claude-indexer --verbose  # Check application logs for errors/warnings
+```
+
+**Step 2: Understand Problem Context**
+```bash
+# Read project relationships to understand connections
+mcp__project-memory__read_graph(mode="relationships", limit=300)
+
+# Get entity overview for context
+mcp__project-memory__read_graph(mode="smart", limit=100)
+
+# Focus on specific entities
+mcp__project-memory__read_graph(mode="entities", entityTypes=["class","function"], limit=200)
+```
+
+**Step 3: Semantic Scope Analysis**
+```bash
+# Find relevant entities first
+mcp__project-memory__search_similar("authentication function")
+
+# Get minimal implementation
+mcp__project-memory__get_implementation("EntityName", "minimal")
+
+# Get local context with helper functions
+mcp__project-memory__get_implementation("EntityName", "logical")
+
+# Trace cross-file dependencies and imports
+mcp__project-memory__get_implementation("EntityName", "dependencies")
+```
+
+**Step 4: Root Cause Analysis**
+- **Problem-focused approach**: Understand the exact error/problem with same parameters and context
+- **Replicate first**: Ensure you can reproduce the issue before proposing fixes
+- **Deep investigation**: Continue searching deeper until root cause is identified
+- **Validation**: Don't fix until certain the solution addresses the exact problem
+
+**Step 5: Solution Implementation**
+- **Check for duplicates**: Verify no existing functions solve the problem ($dup)
+- **Test implementation**: Run tests to ensure the specific problem is solved
+- **Store solution patterns**: Add insights to project memory for future reference
+
+### Debug Commands Reference
+
+**Log Analysis:**
+```bash
+# Application logs location
+{project_path}/logs/{collection_name}.log
+
+# Monitor real-time logs
+tail -f {project_path}/logs/{collection_name}.log
+
+# Check service logs with verbose output
+claude-indexer service status --verbose
+```
+
+**Memory Graph Functions:**
+```bash
+# Full relations view
+read_graph(mode="relationships", limit=300)
+
+# AI-optimized overview  
+read_graph(mode="smart", limit=100)
+
+# Entity-focused view
+read_graph(mode="entities", entityTypes=["class","function"], limit=200)
+
+# Raw data dump
+read_graph(mode="raw", limit=50)
+```
+
+**Implementation Access:**
+```bash
+# Just the entity (default)
+get_implementation("ClassName", "minimal")
+
+# Entity + same-file helpers
+get_implementation("ClassName", "logical") 
+
+# Entity + imports/calls
+get_implementation("ClassName", "dependencies")
+
+# Find related entities
+search_similar("pattern", limit=10)
+```
+
+**Debugging Best Practices:**
+- Use separate test collections (watcher-test, debug-test) for debugging
+- Test with 1-2 Python files only for cleaner debug output
+- Never contaminate production memory collections during testing
+- Store solution patterns and insights, not just bug information
+- Use memory categorization: debugging_pattern, implementation_pattern, integration_pattern
+
+> **💡 Tip for End Users**: Add this debugging protocol to your project's `CLAUDE.md` file so Claude automatically follows these steps during debugging sessions. This ensures consistent memory-first debugging across all your projects.
+
 ## 🧪 Testing
 
 **Run All Tests:**
