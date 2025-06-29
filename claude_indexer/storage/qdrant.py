@@ -563,40 +563,6 @@ class QdrantStore(ManagedVectorStore):
                 "has_api_key": self.api_key is not None
             }
     
-    def create_entity_point(self, entity: 'Entity', embedding: List[float], 
-                           collection_name: str) -> VectorPoint:
-        """Create a vector point from an entity."""
-        from ..analysis.entities import Entity
-        
-        # Generate deterministic ID using file path + entity name to prevent collisions
-        entity_key = f"{entity.file_path}::{entity.name}" if entity.file_path else entity.name
-        point_id = self.generate_deterministic_id(entity_key)
-        
-        # Create payload - v2.4 format
-        payload = {
-            "entity_name": entity.name,
-            "entity_type": entity.entity_type.value,
-            "observations": entity.observations,
-            "collection": collection_name,
-            "type": "chunk",
-            "chunk_type": "metadata"
-        }
-        
-        # Add optional metadata
-        if entity.file_path:
-            payload["file_path"] = str(entity.file_path)
-        if entity.line_number:
-            payload["line_number"] = entity.line_number
-        if entity.docstring:
-            payload["docstring"] = entity.docstring
-        if entity.signature:
-            payload["signature"] = entity.signature
-        
-        return VectorPoint(
-            id=point_id,
-            vector=embedding,
-            payload=payload
-        )
     
     def create_chunk_point(self, chunk: 'EntityChunk', embedding: List[float], 
                           collection_name: str) -> VectorPoint:

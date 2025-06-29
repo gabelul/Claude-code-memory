@@ -426,7 +426,7 @@ class PythonParser(CodeParser):
                 }
             
             return EntityChunk(
-                id=f"{hash(str(file_path))}::{entity_name}::implementation",
+                id=f"{str(file_path)}::{entity_name}::implementation",
                 entity_name=entity_name,
                 chunk_type="implementation",
                 content=implementation,

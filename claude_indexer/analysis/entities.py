@@ -82,7 +82,7 @@ class EntityChunk:
         content = " | ".join(content_parts)
         
         return cls(
-            id=f"{hash(str(entity.file_path))}::{entity.name}::metadata",
+            id=f"{str(entity.file_path)}::{entity.name}::metadata",
             entity_name=entity.name,
             chunk_type="metadata",
             content=content,

@@ -254,12 +254,6 @@ class CachingVectorStore(VectorStore):
         return self.backend.list_collections()
     
     # Delegate custom Qdrant methods
-    def create_entity_point(self, entity: Any, embedding: List[float], collection_name: str) -> Any:
-        """Delegate entity point creation to backend."""
-        if hasattr(self.backend, 'create_entity_point'):
-            return self.backend.create_entity_point(entity, embedding, collection_name)
-        else:
-            raise AttributeError(f"Backend {type(self.backend)} does not support create_entity_point")
     
     def create_relation_point(self, relation: Any, embedding: List[float], collection_name: str) -> Any:
         """Delegate relation point creation to backend."""  
