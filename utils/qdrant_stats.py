@@ -56,12 +56,21 @@ class QdrantStatsCollector:
         # Get direct API health status
         direct_health = self._get_health_status_from_api(collection_name)
         
+        # Get collection config for threshold info
+        raw_config = None
+        try:
+            collection_info = self.storage.client.get_collection(collection_name)
+            if hasattr(collection_info, 'config'):
+                raw_config = collection_info.config
+        except:
+            pass
+        
         stats.update({
             "file_types": file_types,
             "manual_entries_count": manual_entries,
             "automated_entries_count": stats.get("points_count", 0) - manual_entries,
             "health_status": self._get_health_status(stats),
-            "health_details": self._get_detailed_health_info(collection_name, stats),
+            "health_details": self._get_detailed_health_info(collection_name, stats, raw_config),
             "direct_api_health": direct_health
         })
         
@@ -279,14 +288,15 @@ class QdrantStatsCollector:
         else:
             return "UNKNOWN"
     
-    def _get_detailed_health_info(self, collection_name: str, stats: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_detailed_health_info(self, collection_name: str, stats: Dict[str, Any], raw_config=None) -> Dict[str, Any]:
         """Get detailed health analysis for troubleshooting."""
         health_info = {
             "basic_status": self._get_health_status(stats),
             "connection_ok": True,
             "optimization_progress": 0.0,
             "segment_health": "UNKNOWN",
-            "performance_indicators": {}
+            "performance_indicators": {},
+            "raw_config": raw_config
         }
         
         if "error" in stats:
@@ -752,6 +762,16 @@ class QdrantStatsCollector:
                 seg_health = health_details['segment_health']
                 segments = stats.get('segments_count', 0)
                 print(f"     Segments: {seg_health} ({segments} segments)")
+            
+            # Show indexing threshold from direct API data
+            if 'raw_config' in health_details and health_details['raw_config']:
+                raw_config = health_details['raw_config']
+                if hasattr(raw_config, 'optimizer_config'):
+                    optimizer_config = raw_config.optimizer_config
+                    if hasattr(optimizer_config, 'indexing_threshold'):
+                        threshold = optimizer_config.indexing_threshold
+                        if threshold is not None:
+                            print(f"  ⚙️  Threshold: {threshold:,} KB")
                 
             if health_details.get('response_time_ms'):
                 response_time = health_details['response_time_ms']

@@ -1,0 +1,61 @@
+{
+  "version": "2.6",
+  "project": {
+    "name": "claude-code-memory",
+    "collection": "claude-memory-test",
+    "description": "Configuration for claude-code-memory",
+    "version": "1.0.0"
+  },
+  "indexing": {
+    "enabled": true,
+    "incremental": true,
+    "file_patterns": {
+      "include": [
+        "*.py",
+        "*.pyi",
+        "*.js",
+        "*.ts",
+        "*.jsx",
+        "*.tsx",
+        "*.mjs",
+        "*.cjs",
+        "*.html",
+        "*.htm",
+        "*.css",
+        "*.json",
+        "*.yaml",
+        "*.yml",
+        "*.md",
+        "*.txt"
+      ],
+      "exclude": [
+        "*.pyc",
+        "__pycache__",
+        ".git",
+        ".venv",
+        "node_modules",
+        "dist",
+        "build",
+        "*.min.js",
+        ".env",
+        "*.log"
+      ]
+    },
+    "max_file_size": 1048576,
+    "parser_config": {
+      "javascript": {
+        "enabled": true,
+        "config": {}
+      },
+      "markdown": {
+        "enabled": true,
+        "config": {}
+      }
+    }
+  },
+  "watcher": {
+    "enabled": true,
+    "debounce_seconds": 30.0,
+    "use_gitignore": true
+  }
+}
