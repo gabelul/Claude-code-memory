@@ -501,6 +501,7 @@ class PythonParser(CodeParser):
         
         # Define file operation patterns to detect
         FILE_OPERATIONS = {
+            # Existing patterns (unchanged)
             'open': 'file_open',
             'json.load': 'json_load',
             'json.dump': 'json_write',
@@ -511,6 +512,35 @@ class PythonParser(CodeParser):
             'pickle.dump': 'pickle_write',
             'csv.reader': 'csv_read',
             'csv.writer': 'csv_write',
+            
+            # NEW PATTERNS: Pandas operations
+            'pandas.read_json': 'pandas_json_read',
+            'pandas.read_csv': 'pandas_csv_read',
+            'pandas.read_excel': 'pandas_excel_read',
+            'pd.read_json': 'pandas_json_read',  # Common alias
+            'pd.read_csv': 'pandas_csv_read',
+            'pd.read_excel': 'pandas_excel_read',
+            
+            # NEW PATTERNS: Pandas DataFrame export methods  
+            '.to_json': 'pandas_json_write',
+            '.to_csv': 'pandas_csv_write',
+            '.to_excel': 'pandas_excel_write',
+            
+            # NEW PATTERNS: Pathlib operations
+            '.read_text': 'path_read_text',
+            '.read_bytes': 'path_read_bytes',
+            '.write_text': 'path_write_text',
+            '.write_bytes': 'path_write_bytes',
+            
+            # NEW PATTERNS: Requests operations
+            'requests.get': 'requests_get',
+            'requests.post': 'requests_post',
+            'urllib.request.urlopen': 'urllib_open',
+            
+            # NEW PATTERNS: Config operations
+            'configparser.read': 'config_ini_read',
+            'toml.load': 'toml_read',
+            'xml.etree.ElementTree.parse': 'xml_parse',
         }
         
         def extract_string_literal(node):
@@ -548,6 +578,25 @@ class PythonParser(CodeParser):
                                         )
                                         relations.append(relation)
                                         break
+                    
+                    # Handle method calls on objects (e.g., df.to_json())
+                    if func_node.type == 'attribute':
+                        attr_value = func_node.child_by_field_name('attribute')
+                        if attr_value:
+                            method_name = '.' + attr_value.text.decode('utf-8')
+                            if method_name in FILE_OPERATIONS:
+                                # For pandas DataFrame methods like .to_json(), .to_csv()
+                                for arg in args_node.children:
+                                    if arg.type == 'string':
+                                        file_ref = extract_string_literal(arg)
+                                        if file_ref:
+                                            relation = RelationFactory.create_imports_relation(
+                                                importer=str(file_path),
+                                                imported=file_ref,
+                                                import_type=FILE_OPERATIONS[method_name]
+                                            )
+                                            relations.append(relation)
+                                            break
                     
                     # Special handling for open() built-in
                     if func_text == 'open':
