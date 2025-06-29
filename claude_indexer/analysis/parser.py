@@ -659,8 +659,32 @@ class ParserRegistry:
     
     def _register_default_parsers(self):
         """Register default parsers."""
+        from .javascript_parser import JavaScriptParser
+        from .json_parser import JSONParser
+        from .html_parser import HTMLParser
+        from .css_parser import CSSParser
+        from .yaml_parser import YAMLParser
+        from .text_parser import TextParser, CSVParser, INIParser
+        
+        # Core language parsers
         self.register(PythonParser(self.project_path))
+        self.register(JavaScriptParser())
+        
+        # Data format parsers  
+        self.register(JSONParser())
+        self.register(YAMLParser())
+        
+        # Web parsers
+        self.register(HTMLParser())
+        self.register(CSSParser())
+        
+        # Documentation parsers
         self.register(MarkdownParser())
+        self.register(TextParser())
+        
+        # Config parsers
+        self.register(CSVParser())
+        self.register(INIParser())
     
     def register(self, parser: CodeParser):
         """Register a new parser."""
