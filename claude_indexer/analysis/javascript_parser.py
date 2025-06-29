@@ -75,6 +75,10 @@ class JavaScriptParser(TreeSitterParser):
                 if relation:
                     relations.append(relation)
             
+            # Extract dynamic JSON/file loading patterns
+            json_relations = self._extract_json_loading_patterns(tree.root_node, file_path, content)
+            relations.extend(json_relations)
+            
             # Create file entity
             file_entity = self._create_file_entity(file_path, len(entities), "javascript")
             entities.insert(0, file_entity)
@@ -324,6 +328,70 @@ class JavaScriptParser(TreeSitterParser):
             imported=module_name,
             import_type="module"
         )
+    
+    def _extract_json_loading_patterns(self, root: Node, file_path: Path, content: str) -> List[Relation]:
+        """Extract dynamic JSON loading patterns like fetch(), require(), json.load()."""
+        relations = []
+        
+        # Find all function calls
+        for call in self._find_nodes_by_type(root, ['call_expression']):
+            call_text = self.extract_node_text(call, content)
+            
+            # Pattern 1: fetch('config.json')
+            if 'fetch(' in call_text:
+                json_file = self._extract_string_from_call(call, content, 'fetch')
+                if json_file and json_file.endswith('.json'):
+                    relation = RelationFactory.create_imports_relation(
+                        importer=str(file_path),
+                        imported=json_file,
+                        import_type="json_fetch"
+                    )
+                    relations.append(relation)
+            
+            # Pattern 2: require('./config.json')
+            elif 'require(' in call_text:
+                json_file = self._extract_string_from_call(call, content, 'require')
+                if json_file and json_file.endswith('.json'):
+                    relation = RelationFactory.create_imports_relation(
+                        importer=str(file_path),
+                        imported=json_file,
+                        import_type="json_require"
+                    )
+                    relations.append(relation)
+            
+            # Pattern 3: JSON.parse() with file content
+            elif 'JSON.parse(' in call_text:
+                # Look for potential file references in the arguments
+                for child in call.children:
+                    if child.type == 'arguments':
+                        arg_text = self.extract_node_text(child, content)
+                        # Simple heuristic: if contains .json in string
+                        if '.json' in arg_text:
+                            import re
+                            json_match = re.search(r'["\']([^"\']*\.json)["\']', arg_text)
+                            if json_match:
+                                json_file = json_match.group(1)
+                                relation = RelationFactory.create_imports_relation(
+                                    importer=str(file_path),
+                                    imported=json_file,
+                                    import_type="json_parse"
+                                )
+                                relations.append(relation)
+        
+        return relations
+    
+    def _extract_string_from_call(self, call_node: Node, content: str, function_name: str) -> Optional[str]:
+        """Extract string argument from a function call."""
+        # Find arguments node
+        for child in call_node.children:
+            if child.type == 'arguments':
+                # Get first string argument
+                for arg in child.children:
+                    if arg.type == 'string':
+                        string_value = self.extract_node_text(arg, content)
+                        # Remove quotes
+                        return string_value.strip('\'"')
+        return None
     
     def _init_ts_server(self):
         """Initialize TypeScript language server (stub for future implementation)."""
