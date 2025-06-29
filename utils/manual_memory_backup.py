@@ -389,6 +389,7 @@ def restore_manual_entries(backup_file: str, collection_name: str = None, batch_
         
         # Process in batches
         total_restored = 0
+        total_skipped = 0
         failed_entries = []
         
         for batch_start in range(0, len(manual_entries), batch_size):
@@ -401,6 +402,8 @@ def restore_manual_entries(backup_file: str, collection_name: str = None, batch_
             
             # Create v2.4 format points directly (bypassing Entity objects)
             vector_points = []
+            skipped_duplicates = 0
+            
             for entry in batch:
                 payload = entry.get("payload", {})
                 entry_id = entry.get('id', 'unknown')
@@ -438,11 +441,32 @@ def restore_manual_entries(backup_file: str, collection_name: str = None, batch_
                     # No file_path or automation fields - this preserves manual classification
                 }
                 
-                # Create Qdrant point with UUID
-                import uuid
+                # Create deterministic ID for manual entry to prevent duplicates
+                import hashlib
                 from qdrant_client.models import PointStruct
+                
+                # Create deterministic ID: "manual::{entity_type}::{entity_name}::{content_hash}"
+                content_hash = hashlib.sha256(content_for_embedding.encode()).hexdigest()[:16]
+                deterministic_key = f"manual::{entity_type}::{entity_name}::{content_hash}"
+                deterministic_id = int(hashlib.sha256(deterministic_key.encode()).hexdigest()[:8], 16)
+                
+                # Check if entry already exists using deterministic ID
+                try:
+                    existing_point = store.client.retrieve(
+                        collection_name=target_collection,
+                        ids=[deterministic_id],
+                        with_payload=True
+                    )
+                    if existing_point and len(existing_point) > 0:
+                        print(f"⏭️  Skipping duplicate: {entity_name}")
+                        skipped_duplicates += 1
+                        continue
+                except Exception:
+                    # Point doesn't exist, proceed with creation
+                    pass
+                
                 point = PointStruct(
-                    id=str(uuid.uuid4()),  # Generate new UUID instead of reusing old ID
+                    id=deterministic_id,
                     vector=embedding_result.embedding,
                     payload=manual_payload
                 )
@@ -455,7 +479,10 @@ def restore_manual_entries(backup_file: str, collection_name: str = None, batch_
                 
                 if result.success:
                     total_restored += len(vector_points)
-                    print(f"✅ Batch {batch_num} restored: {len(vector_points)} entities")
+                    if skipped_duplicates > 0:
+                        print(f"✅ Batch {batch_num}: {len(vector_points)} new, {skipped_duplicates} skipped duplicates")
+                    else:
+                        print(f"✅ Batch {batch_num} restored: {len(vector_points)} entities")
                 else:
                     print(f"❌ Batch {batch_num} failed: {result.errors}")
                     for point in vector_points:
@@ -463,6 +490,8 @@ def restore_manual_entries(backup_file: str, collection_name: str = None, batch_
                             "name": point.payload.get("entity_name", "unknown"),
                             "error": "Qdrant upsert failed"
                         })
+            elif skipped_duplicates > 0:
+                print(f"⏭️  Batch {batch_num}: {skipped_duplicates} duplicates skipped, 0 new entries")
             
             # Rate limiting pause between batches
             if batch_end < len(manual_entries):

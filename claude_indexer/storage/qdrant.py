@@ -564,6 +564,12 @@ class QdrantStore(ManagedVectorStore):
             }
     
     
+    def generate_deterministic_id(self, content: str) -> int:
+        """Generate deterministic ID from content (same as base.py)."""
+        import hashlib
+        hash_hex = hashlib.sha256(content.encode()).hexdigest()[:8]
+        return int(hash_hex, 16)
+    
     def create_chunk_point(self, chunk: 'EntityChunk', embedding: List[float], 
                           collection_name: str) -> VectorPoint:
         """Create a vector point from an EntityChunk for progressive disclosure."""
@@ -883,7 +889,24 @@ class QdrantStore(ManagedVectorStore):
                 from_missing = from_entity not in entity_names
                 to_missing = to_entity not in entity_names
                 
-                if from_missing or to_missing:
+                # Determine if this is a file operation relation (target is external file)
+                # Check for common file extensions to identify external file references
+                is_file_reference = False
+                if to_entity and '.' in to_entity:
+                    extension = to_entity.split('.')[-1].lower()
+                    file_extensions = {
+                        'json', 'csv', 'txt', 'xml', 'yaml', 'yml', 'xlsx', 'xls',
+                        'ini', 'toml', 'html', 'css', 'log', 'md', 'pdf', 'doc',
+                        'docx', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'bin', 'dat'
+                    }
+                    is_file_reference = extension in file_extensions
+                
+                # Only mark as orphaned if:
+                # 1. Source entity is missing (always invalid)
+                # 2. Target is missing AND it's an internal entity (not external file)
+                if from_missing:
+                    orphaned_relations.append(relation)
+                elif to_missing and not is_file_reference:
                     orphaned_relations.append(relation)
                 else:
                     valid_relations += 1

@@ -1,8 +1,8 @@
 # Claude Code Memory Solution
 
-## Current Version: v2.5 - Enhanced Multi-Language Support ✅ PRODUCTION READY
+## Current Version: v2.6 - Project Configuration & Python File Operations ✅ PRODUCTION READY
 
-Complete memory solution for Claude Code providing context-aware conversations with semantic search across **10+ programming languages** with universal Tree-sitter parsing.
+Complete memory solution for Claude Code providing context-aware conversations with semantic search across **10+ programming languages** with universal Tree-sitter parsing, enhanced Python file operations, and project-level configuration.
 
 → **Use §m to search project memory for:** implementation details, performance results, migration guides
 
@@ -185,7 +185,71 @@ claude-indexer -p /path/to/small-test-dir -c debug-test --verbose
 - Verify target directory contains supported files (Python, JavaScript, TypeScript, JSON, HTML, CSS, YAML, etc.)
 - Use `--verbose` flag for detailed error messages
 
-## 🚀 Multi-Language Support (v2.5) - NEW!
+## 🏗️ NEW in v2.6 - Project Configuration System
+
+### Project-Level Configuration
+
+Each project can now have its own `.claude-indexer/config.json` for custom settings:
+
+```json
+{
+  "indexing": {
+    "file_patterns": {
+      "include": ["*.py", "*.js", "*.ts", "*.json", "*.yaml", "*.html", "*.css"],
+      "exclude": ["node_modules", ".git", "dist", "build", "*.min.js"]
+    },
+    "parser_config": {
+      "javascript": {
+        "use_ts_server": false,
+        "jsx": true,
+        "typescript": true
+      },
+      "json": {
+        "extract_schema": true,
+        "special_files": ["package.json", "tsconfig.json"]
+      },
+      "text": {
+        "chunk_size": 50,
+        "max_line_length": 1000
+      }
+    }
+  }
+}
+```
+
+**Configuration Hierarchy (Priority Order):**
+1. Project Config (`.claude-indexer/config.json`) - Highest priority
+2. Environment Variables - Override specific values
+3. Global Config (`settings.txt`) - Default values
+4. System Defaults - Minimal fallback
+
+### Enhanced Python File Operations v2.6
+
+**20+ New File Operation Patterns:**
+
+```python
+# Pandas operations (auto-detected)
+df = pd.read_csv('sales_data.csv')        # Creates pandas_csv_read relation
+df.to_json('output/results.json')        # Creates pandas_json_write relation
+data = pd.read_excel('inventory.xlsx')    # Creates pandas_excel_read relation
+
+# Pathlib operations
+config = Path('config.txt').read_text()   # Creates path_read_text relation
+Path('output.txt').write_text('results')  # Creates path_write_text relation
+
+# Requests/API operations
+data = requests.get('api/data.json')      # Creates requests_get relation
+response = requests.post('upload.json')   # Creates requests_post relation
+
+# Configuration files
+config = configparser.ConfigParser()
+config.read('settings.ini')              # Creates config_ini_read relation
+settings = toml.load('pyproject.toml')   # Creates toml_read relation
+```
+
+**Semantic Relation Types:** All file operations create semantic relations with specific `import_type` values for precise search and dependency tracking.
+
+## 🚀 Multi-Language Support (v2.5)
 
 ### Supported Languages & File Types
 
@@ -272,6 +336,8 @@ RelationFactory.create_imports_relation("lodash", import_type="npm_dependency")
 
 ## Advanced Details → Use §m to search project memory for:
 
+- **v2.6 Project Configuration System** with .claude-indexer/config.json support and hierarchy management
+- **v2.6 Enhanced Python File Operations** with 20+ new patterns (pandas, pathlib, requests, config files)
 - **v2.5 Enhanced Multi-Language Support** with Tree-sitter universal parsing and web stack coverage
 - **Universal Parser Registry** implementation and extensible architecture patterns
 - **Cross-Language Relations** detection and HTML→CSS, JS→JSON dependency tracking

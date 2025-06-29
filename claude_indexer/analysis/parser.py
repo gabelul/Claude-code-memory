@@ -22,6 +22,10 @@ try:
 except ImportError:
     ENTITIES_AVAILABLE = False
 
+# Import logger
+from ..indexer_logging import get_logger
+logger = get_logger()
+
 
 @dataclass
 class ParserResult:
@@ -498,6 +502,7 @@ class PythonParser(CodeParser):
     def _extract_file_operations(self, tree: 'tree_sitter.Tree', file_path: Path, content: str) -> List['Relation']:
         """Extract file operations from Python AST using tree-sitter."""
         relations = []
+        logger.debug(f"🔍 _extract_file_operations called for {file_path.name}")
         
         # Define file operation patterns to detect
         FILE_OPERATIONS = {
@@ -565,7 +570,7 @@ class PythonParser(CodeParser):
                     
                     # Check against known file operations
                     for op_name, op_type in FILE_OPERATIONS.items():
-                        if func_text == op_name or func_text.endswith('.' + op_name):
+                        if func_text == op_name or (op_name.startswith('.') and func_text.endswith(op_name)):
                             # Look for file path arguments
                             for arg in args_node.children:
                                 if arg.type == 'string':
@@ -577,6 +582,7 @@ class PythonParser(CodeParser):
                                             import_type=op_type
                                         )
                                         relations.append(relation)
+                                        logger.debug(f"   ✅ Created {op_type} relation: {file_ref}")
                                         break
                     
                     # Handle method calls on objects (e.g., df.to_json())
@@ -656,6 +662,7 @@ class PythonParser(CodeParser):
         if tree and tree.root_node:
             find_file_operations(tree.root_node)
         
+        logger.debug(f"🔍 _extract_file_operations found {len(relations)} file operations")
         return relations
     
     def _create_calls_relations_from_chunks(self, chunks: List['EntityChunk'], file_path: Path) -> List['Relation']:

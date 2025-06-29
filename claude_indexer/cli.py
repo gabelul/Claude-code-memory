@@ -12,6 +12,11 @@ def cli():
         # Try to import Click and the full CLI
         import click
         from . import cli_full
+        
+        # Backward compatibility: auto-add 'index' if first arg isn't a subcommand
+        if len(sys.argv) > 1 and not sys.argv[1] in ['hooks', 'watch', 'service', 'search', 'file', 'add-mcp', 'chat', 'index', '--help', '-h', '--version']:
+            sys.argv.insert(1, 'index')
+        
         return cli_full.cli()
     except ImportError as e:
         logger.error("❌ Missing dependencies for CLI functionality")

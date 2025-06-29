@@ -2,19 +2,27 @@
 
 🧠 **Refactored Universal Semantic Indexer** - Modular, production-ready package providing persistent memory for Claude Code through direct Qdrant integration, knowledge graphs, and Tree-sitter parsing
 
-## ✅ v2.5 - Enhanced Multi-Language Support - COMPLETE & PRODUCTION READY
+## ✅ v2.6 - Project Configuration & Python File Operations - COMPLETE & PRODUCTION READY
 
-🎉 **NEW**: Extended from Python-only to **10+ file types** with tree-sitter universal parsing  
-✅ **Multi-Language**: JavaScript/TypeScript, JSON, HTML, CSS, YAML, Text, CSV, INI support  
-✅ **24 File Extensions**: Comprehensive web stack coverage (.js, .ts, .json, .html, .css, .yml, etc.)  
-✅ **Progressive Disclosure**: Maintained across all languages with metadata/implementation chunks  
-✅ **Smart Detection**: Automatic parser assignment based on file extensions  
-✅ **Performance**: 7 multi-language files processed in 0.40s (49 entities, 78 relations)  
-✅ **Zero Breaking Changes**: All existing Python/Markdown functionality preserved  
-✅ **TreeSitter Foundation**: Unified AST parsing for consistent entity extraction  
-✅ **Production Tested**: Complete integration with CoreIndexer and MCP server  
+🎉 **NEW**: Project-level configuration system + Enhanced Python file operations detection  
+✅ **Project Config**: `.claude-indexer/config.json` support with hierarchical settings  
+✅ **20+ File Operation Patterns**: Pandas, pathlib, requests, config files auto-detected  
+✅ **Semantic Relations**: Enhanced import_type values for precise dependency tracking  
+✅ **Configuration Hierarchy**: Project → Environment → Global → System defaults  
+✅ **Parser-Specific Settings**: Customize JavaScript, JSON, text, YAML parsers per project  
+✅ **Zero Breaking Changes**: All v2.5 multi-language functionality preserved  
+✅ **Performance**: New patterns detected with zero performance regression  
+✅ **Production Ready**: Validated with comprehensive test coverage  
 
 ## ✨ Previous Updates
+
+**v2.5 - Enhanced Multi-Language Support**
+🎉 **Multi-Language**: Extended from Python-only to **10+ file types** with tree-sitter universal parsing  
+✅ **Web Stack Coverage**: JavaScript/TypeScript, JSON, HTML, CSS, YAML, Text, CSV, INI support  
+✅ **24 File Extensions**: Comprehensive coverage (.js, .ts, .json, .html, .css, .yml, etc.)  
+✅ **Smart Detection**: Automatic parser assignment based on file extensions  
+✅ **Performance**: 7 multi-language files processed in 0.40s (49 entities, 78 relations)  
+✅ **TreeSitter Foundation**: Unified AST parsing for consistent entity extraction  
 
 **v2.4 - Progressive Disclosure Architecture**
 - 🚀 3.99ms metadata search (90% faster validated)
@@ -419,6 +427,14 @@ claude-indexer service status
 
 ## ✨ Features
 
+### 🏗️ NEW v2.6 Features
+- **Project Configuration System**: `.claude-indexer/config.json` with hierarchical settings override
+- **Enhanced Python File Operations**: 20+ new patterns (pandas, pathlib, requests, config files)
+- **Semantic Relation Types**: Precise import_type values for advanced dependency tracking
+- **Parser-Specific Settings**: Per-project customization for JavaScript, JSON, text, YAML parsers
+- **Configuration Hierarchy**: Project → Environment → Global → System defaults priority
+
+### 🚀 Core Features
 - **Multi-Language Support**: 10+ programming languages with 24 file extensions (v2.5)
 - **Universal AST Parsing**: Tree-sitter foundation for consistent entity extraction across languages (v2.5)
 - **Web Stack Coverage**: Complete JavaScript/TypeScript, HTML, CSS, JSON, YAML support (v2.5)
