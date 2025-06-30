@@ -166,7 +166,7 @@ class HTMLParser(TreeSitterParser):
         """Extract link relations from href attributes and form actions."""
         relations = []
         
-        # Extract links
+        # Extract links from regular elements
         for element in self._find_nodes_by_type(root, ['element']):
             tag_name = self._get_element_tag(element, content)
             
@@ -204,6 +204,17 @@ class HTMLParser(TreeSitterParser):
                     )
                     relations.append(relation)
         
+        # Handle script_element nodes separately (tree-sitter HTML specific)
+        for script_element in self._find_nodes_by_type(root, ['script_element']):
+            src = self._get_attribute_value(script_element, 'src', content)
+            if src and not src.startswith(('http:', 'https:', '//')):
+                relation = RelationFactory.create_imports_relation(
+                    importer=str(file_path),
+                    imported=src,
+                    import_type="html_resource"
+                )
+                relations.append(relation)
+        
         return relations
     
     def _extract_class_references(self, root: Node, content: str, file_path: Path) -> List[Relation]:
@@ -233,9 +244,10 @@ class HTMLParser(TreeSitterParser):
         # Find start_tag child
         for child in element.children:
             if child.type == 'start_tag':
-                # First child of start_tag should be the tag name
-                if child.children:
-                    return self.extract_node_text(child.children[0], content)
+                # Look for tag_name child (second child after '<')
+                for grandchild in child.children:
+                    if grandchild.type == 'tag_name':
+                        return self.extract_node_text(grandchild, content)
         return "unknown"
     
     def _get_attribute_value(self, element: Node, attr_name: str, content: str) -> Optional[str]:

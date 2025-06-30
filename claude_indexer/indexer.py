@@ -569,8 +569,9 @@ class CoreIndexer:
         current_vectored_files = self._get_vectored_files(collection_name)
         
         if before_vectored_files is None:
-            # If no before state provided, assume all current files are existing
-            return [], list(current_vectored_files), []
+            # If no before state provided, we can't determine what changed
+            # Return empty lists instead of showing all files as modified
+            return [], [], []
         
         new_vectored = list(current_vectored_files - before_vectored_files)
         deleted_vectored = list(before_vectored_files - current_vectored_files)
