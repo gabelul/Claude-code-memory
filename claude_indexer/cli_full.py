@@ -104,16 +104,7 @@ else:
             config_obj = load_config(Path(config) if config else None)
             
             # Create components using direct Qdrant integration
-            provider = config_obj.embedding_provider
-            api_key = getattr(config_obj, f'{provider}_api_key', None)
-            model = config_obj.voyage_model if provider == "voyage" else "text-embedding-3-small"
-            
-            embedder = create_embedder_from_config({
-                "provider": provider,
-                "api_key": api_key,
-                "model": model,
-                "enable_caching": True
-            })
+            embedder = create_embedder_from_config(config_obj)
             
             vector_store = create_store_from_config({
                 "backend": "qdrant",
@@ -123,7 +114,7 @@ else:
             })
             
             if not quiet and verbose:
-                provider_name = provider.title()
+                provider_name = config_obj.embedding_provider.title() if config_obj.embedding_provider else "OpenAI"
                 click.echo(f"⚡ Using Qdrant + {provider_name} (direct mode)")
             
             # Create indexer
@@ -182,10 +173,82 @@ else:
             # Report results
             if result.success:
                 if not quiet:
+                    # Load previous statistics for comparison
+                    from .indexer import format_change
+                    prev_stats = indexer._load_previous_statistics(collection)
+                    
+                    # Get total tracked files from state (not just current run)
+                    state = indexer._load_state(collection)
+                    total_tracked = len([k for k in state.keys() if not k.startswith('_')])
+                    
+                    # Get file change details for this run
+                    new_files, modified_files, deleted_files = indexer._categorize_file_changes(False, collection)
+                    
                     click.echo(f"✅ Indexing completed in {result.processing_time:.1f}s")
-                    click.echo(f"   Files processed: {result.files_processed}")
-                    click.echo(f"   Entities created: {result.entities_created}")
-                    click.echo(f"   Relations created: {result.relations_created}")
+                    click.echo(f"   Total Vectored Files:    {format_change(total_tracked, prev_stats.get('total_tracked', 0)):>6}")
+                    click.echo(f"   Total tracked files:     {format_change(total_tracked, prev_stats.get('total_tracked', 0)):>6}")
+                    
+                    # Show file changes if any
+                    if new_files or modified_files or deleted_files:
+                        click.echo(f"   📁 File Changes:")
+                        for file_path in new_files:
+                            rel_path = file_path.relative_to(indexer.project_path)
+                            click.echo(f"      + {rel_path}")
+                        for file_path in modified_files:
+                            rel_path = file_path.relative_to(indexer.project_path)
+                            click.echo(f"      = {rel_path}")
+                        for deleted_file in deleted_files:
+                            click.echo(f"      - {deleted_file}")
+                    # Get actual database counts using direct Qdrant client
+                    try:
+                        from qdrant_client.http import models
+                        
+                        # Access the underlying QdrantStore client (bypass ManagedVectorStore wrapper)
+                        if hasattr(indexer.vector_store, 'backend'):
+                            qdrant_client = indexer.vector_store.backend.client
+                        else:
+                            qdrant_client = indexer.vector_store.client
+                        
+                        # Direct database count queries (proven to work)
+                        metadata_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="metadata"))])
+                        implementation_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="implementation"))])
+                        relation_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="relation"))])
+                        
+                        metadata_count = qdrant_client.count(collection, count_filter=metadata_filter).count
+                        implementation_count = qdrant_client.count(collection, count_filter=implementation_filter).count
+                        relation_count = qdrant_client.count(collection, count_filter=relation_filter).count
+                        
+                    except Exception as e:
+                        # Fallback to current run counts if database query fails
+                        metadata_count = result.entities_created
+                        implementation_count = result.implementation_chunks_created
+                        relation_count = result.relations_created
+                    
+                    click.echo(f"   💻 Implementation:      {format_change(implementation_count, prev_stats.get('implementation_chunks_created', 0)):>6}")
+                    click.echo(f"   🔗 Relation:         {format_change(relation_count, prev_stats.get('relations_created', 0)):>6}")
+                    click.echo(f"   📋 Metadata:          {format_change(metadata_count, prev_stats.get('entities_created', 0)):>6}")
+                    
+                    # Save current statistics for next run (including total tracked count)
+                    import time
+                    state = indexer._load_state(collection)
+                    state['_statistics'] = {
+                        'files_processed': result.files_processed,
+                        'total_tracked': total_tracked,
+                        'entities_created': metadata_count,
+                        'relations_created': relation_count,
+                        'implementation_chunks_created': implementation_count,
+                        'processing_time': result.processing_time,
+                        'timestamp': time.time()
+                    }
+                    
+                    # Save updated state
+                    state_file = indexer._get_state_file(collection)
+                    state_file.parent.mkdir(parents=True, exist_ok=True)
+                    temp_file = state_file.with_suffix('.tmp')
+                    import json
+                    with open(temp_file, 'w') as f:
+                        json.dump(state, f, indent=2)
+                    temp_file.rename(state_file)
                     
                     # Report cost information if available 
                     if result.total_tokens > 0:
@@ -302,16 +365,7 @@ else:
                 sys.exit(1)
             
             # Create components using dynamic provider detection
-            provider = config_obj.embedding_provider
-            api_key = getattr(config_obj, f'{provider}_api_key', None)
-            model = config_obj.voyage_model if provider == "voyage" else "text-embedding-3-small"
-            
-            embedder = create_embedder_from_config({
-                "provider": provider,
-                "api_key": api_key,
-                "model": model,
-                "enable_caching": True
-            })
+            embedder = create_embedder_from_config(config_obj)
             
             vector_store = create_store_from_config({
                 "backend": "qdrant",
@@ -640,16 +694,7 @@ else:
             config_obj = load_config(Path(config) if config else None)
             
             # Create components using dynamic provider detection
-            provider = config_obj.embedding_provider
-            api_key = getattr(config_obj, f'{provider}_api_key', None)
-            model = config_obj.voyage_model if provider == "voyage" else "text-embedding-3-small"
-            
-            embedder = create_embedder_from_config({
-                "provider": provider,
-                "api_key": api_key,
-                "model": model,
-                "enable_caching": True
-            })
+            embedder = create_embedder_from_config(config_obj)
             
             vector_store = create_store_from_config({
                 "backend": "qdrant",

@@ -56,11 +56,95 @@ def run_indexing_with_shared_deletion(project_path: str, collection_name: str,
         deleted_path = Path(deleted_file_path)
         relative_path = str(deleted_path.relative_to(project))
         
+        # Load previous statistics for comparison
+        from .indexer import format_change
+        prev_stats = indexer._load_previous_statistics(collection_name)
+        
+        # Get database counts BEFORE deletion for accurate change tracking
+        try:
+            from qdrant_client.http import models
+            
+            # Access the underlying QdrantStore client (bypass CachingVectorStore wrapper)
+            if hasattr(indexer.vector_store, 'backend'):
+                qdrant_client = indexer.vector_store.backend.client
+            else:
+                qdrant_client = indexer.vector_store.client
+            
+            # Get counts before deletion
+            metadata_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="metadata"))])
+            implementation_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="implementation"))])
+            relation_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="relation"))])
+            
+            before_metadata_count = qdrant_client.count(collection_name, count_filter=metadata_filter).count
+            before_implementation_count = qdrant_client.count(collection_name, count_filter=implementation_filter).count
+            before_relation_count = qdrant_client.count(collection_name, count_filter=relation_filter).count
+            
+        except Exception as e:
+            if verbose:
+                logger.warning(f"Failed to get database counts before deletion: {e}")
+            # Set to 0 if we can't get counts - change tracking will show negative
+            before_metadata_count = before_implementation_count = before_relation_count = 0
+
         # Use consolidated deletion function
         indexer._handle_deleted_files(collection_name, relative_path, verbose)
         
         # Update state file to remove deleted file entry
         indexer._update_state([], collection_name, verbose, full_rebuild=False, deleted_files=[relative_path])
+        
+        # Show deletion statistics if verbose
+        if not quiet and verbose:
+            # Get total tracked files from state (after deletion)
+            state = indexer._load_state(collection_name)
+            total_tracked = len([k for k in state.keys() if not k.startswith('_')])
+            
+            # Get actual database counts AFTER deletion
+            try:
+                metadata_count = qdrant_client.count(collection_name, count_filter=metadata_filter).count
+                implementation_count = qdrant_client.count(collection_name, count_filter=implementation_filter).count
+                relation_count = qdrant_client.count(collection_name, count_filter=relation_filter).count
+                
+            except Exception as e:
+                if verbose:
+                    logger.warning(f"Failed to get actual database counts after deletion: {e}")
+                # Fall back to before counts (no change will be shown)
+                metadata_count = before_metadata_count
+                implementation_count = before_implementation_count
+                relation_count = before_relation_count
+            
+            logger.info(f"✅ Deletion completed")
+            logger.info(f"   Total Vectored Files:    {format_change(total_tracked, prev_stats.get('total_tracked', 0)):>6}")
+            logger.info(f"   Total tracked files:     {format_change(total_tracked, prev_stats.get('total_tracked', 0)):>6}")
+            logger.info(f"   📁 File Changes:")
+            logger.info(f"      📋 Tracked (State JSON):")
+            logger.info(f"         - {relative_path}")
+            logger.info(f"      🗄️  Vectored (Database):")
+            logger.info(f"         - {relative_path}")
+            logger.info(f"   💻 Implementation:      {format_change(implementation_count, prev_stats.get('implementation_chunks_created', before_implementation_count)):>6}")
+            logger.info(f"   🔗 Relation:         {format_change(relation_count, prev_stats.get('relations_created', before_relation_count)):>6}")
+            logger.info(f"   📋 Metadata:          {format_change(metadata_count, prev_stats.get('entities_created', before_metadata_count)):>6}")
+            
+            # Save current statistics for next run
+            import time
+            state = indexer._load_state(collection_name)
+            state['_statistics'] = {
+                'files_processed': 0,  # Deletion doesn't process files, it removes them
+                'total_tracked': total_tracked,
+                'entities_created': metadata_count,
+                'relations_created': relation_count,
+                'implementation_chunks_created': implementation_count,
+                'processing_time': 0.0,
+                'timestamp': time.time()
+            }
+            
+            # Save updated state
+            state_file = indexer._get_state_file(collection_name)
+            state_file.parent.mkdir(parents=True, exist_ok=True)
+            temp_file = state_file.with_suffix('.tmp')
+            import json
+            with open(temp_file, 'w') as f:
+                json.dump(state, f, indent=2)
+            temp_file.rename(state_file)
+            logger.info("-----------------------------------------")
         
         return True
         
@@ -186,10 +270,36 @@ def run_indexing_with_specific_files(project_path: str, collection_name: str,
         
         # Update state file with successfully processed files
         successfully_processed = [f for f in paths_to_process if str(f) not in errors]
+        
+        # Get file changes before updating state (for display purposes)
+        file_changes_for_display = None
+        vectored_changes_for_display = None
+        incremental = False
         if successfully_processed:
             # Auto-detect incremental mode for state management
             state_file = indexer._get_state_file(collection_name)
             incremental = state_file.exists()
+            
+            # Get changes before state update for accurate display
+            if incremental:
+                file_changes_for_display = indexer._categorize_file_changes(False, collection_name)
+                
+                # Get vectored file changes (what actually changed in the database)
+                # Capture before state for accurate vectored file comparison
+                before_vectored_files = indexer._get_vectored_files(collection_name)
+                
+                # Process files will change the vectored state, so we'll check after storage
+                # For now, use the processed files as the basis for vectored changes
+                processed_relative_paths = []
+                for file_path in successfully_processed:
+                    try:
+                        rel_path = str(file_path.relative_to(indexer.project_path))
+                        processed_relative_paths.append(rel_path)
+                    except ValueError:
+                        continue
+                
+                # We'll update this after storage to get accurate vectored changes
+                vectored_changes_for_display = None
             
             # Use incremental update to merge with existing state
             indexer._update_state(successfully_processed, collection_name, verbose, 
@@ -204,6 +314,14 @@ def run_indexing_with_specific_files(project_path: str, collection_name: str,
                     logger.info(f"✅ Cleanup complete: {orphaned_deleted} orphaned relations removed")
                 elif verbose:
                     logger.info("✅ No orphaned relations found")
+                
+                # Now get the accurate vectored file changes after all operations
+                if 'before_vectored_files' in locals():
+                    vectored_changes_for_display = indexer._categorize_vectored_file_changes(
+                        collection_name, before_vectored_files
+                    )
+                    if verbose:
+                        logger.debug(f"DEBUG: Updated vectored_changes_for_display: {vectored_changes_for_display}")
         
         # Report results
         files_processed = len(successfully_processed)
@@ -211,11 +329,134 @@ def run_indexing_with_specific_files(project_path: str, collection_name: str,
         
         if not quiet:
             if verbose:
+                logger.debug(f"DEBUG: successfully_processed={len(successfully_processed) if successfully_processed else 0}")
+                logger.debug(f"DEBUG: incremental={incremental}")
+                # Load previous statistics for comparison
+                from .indexer import format_change
+                prev_stats = indexer._load_previous_statistics(collection_name)
+                
+                # Get total tracked files from state (not just current run)
+                state = indexer._load_state(collection_name)
+                total_tracked = len([k for k in state.keys() if not k.startswith('_')])
+                
+                # Get actual database counts using direct Qdrant client  
+                try:
+                    from qdrant_client.http import models
+                    
+                    # Direct database count queries (proven to work)
+                    metadata_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="metadata"))])
+                    implementation_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="implementation"))])
+                    relation_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="relation"))])
+                    
+                    # Access the underlying QdrantStore client (bypass CachingVectorStore wrapper)
+                    if hasattr(indexer.vector_store, 'backend'):
+                        qdrant_client = indexer.vector_store.backend.client
+                    else:
+                        qdrant_client = indexer.vector_store.client
+                    
+                    metadata_count = qdrant_client.count(collection_name, count_filter=metadata_filter).count
+                    implementation_count = qdrant_client.count(collection_name, count_filter=implementation_filter).count
+                    relation_count = qdrant_client.count(collection_name, count_filter=relation_filter).count
+                    
+                except Exception as e:
+                    # Fallback to current run counts if database query fails
+                    if verbose:
+                        logger.warning(f"Failed to get actual database counts, using current run counts: {e}")
+                    metadata_count = len(entities)
+                    implementation_count = len(implementation_chunks)
+                    relation_count = len(relations)
+                
                 logger.info(f"✅ Processing completed")
-                logger.info(f"   Files processed: {files_processed}")
+                logger.info(f"   Total Vectored Files:    {format_change(total_tracked, prev_stats.get('total_tracked', 0)):>6}")
+                logger.info(f"   Total tracked files:     {format_change(total_tracked, prev_stats.get('total_tracked', 0)):>6}")
+                
+                # Show file changes if any
+                has_tracked_changes = file_changes_for_display and any(file_changes_for_display)
+                has_vectored_changes = vectored_changes_for_display and any(vectored_changes_for_display)
+                
+                if verbose:
+                    logger.debug(f"DEBUG file_changes_for_display: {file_changes_for_display}")
+                    logger.debug(f"DEBUG vectored_changes_for_display: {vectored_changes_for_display}")
+                    logger.debug(f"DEBUG has_tracked_changes: {has_tracked_changes}")
+                    logger.debug(f"DEBUG has_vectored_changes: {has_vectored_changes}")
+                
+                if has_tracked_changes or has_vectored_changes:
+                    logger.info(f"   📁 File Changes:")
+                    
+                    # Show tracked file changes (from state JSON)
+                    if has_tracked_changes:
+                        new_files, modified_files, deleted_files = file_changes_for_display
+                        if new_files or modified_files or deleted_files:
+                            logger.info(f"      📋 Tracked (State JSON):")
+                            for file_path in new_files:
+                                rel_path = file_path.relative_to(indexer.project_path)
+                                logger.info(f"         + {rel_path}")
+                            for file_path in modified_files:
+                                rel_path = file_path.relative_to(indexer.project_path)
+                                logger.info(f"         = {rel_path}")
+                            for deleted_file in deleted_files:
+                                logger.info(f"         - {deleted_file}")
+                    
+                    # Show vectored file changes (from database)
+                    if has_vectored_changes:
+                        new_vectored, modified_vectored, deleted_vectored = vectored_changes_for_display
+                        if new_vectored or modified_vectored or deleted_vectored:
+                            logger.info(f"      🗄️  Vectored (Database):")
+                            for rel_path in new_vectored:
+                                logger.info(f"         + {rel_path}")
+                            for rel_path in modified_vectored:
+                                logger.info(f"         = {rel_path}")
+                            for rel_path in deleted_vectored:
+                                logger.info(f"         - {rel_path}")
+                
+                elif successfully_processed and not incremental:
+                    # First run - show all processed files as new
+                    logger.info(f"   📁 File Changes:")
+                    logger.info(f"      📋 Tracked (State JSON):")
+                    for file_path in successfully_processed:
+                        rel_path = file_path.relative_to(indexer.project_path)
+                        logger.info(f"         + {rel_path}")
+                    logger.info(f"      🗄️  Vectored (Database):")
+                    for file_path in successfully_processed:
+                        rel_path = file_path.relative_to(indexer.project_path)
+                        logger.info(f"         + {rel_path}")
+                logger.info(f"   💻 Implementation:      {format_change(implementation_count, prev_stats.get('implementation_chunks_created', 0)):>6}")
+                logger.info(f"   🔗 Relation:         {format_change(relation_count, prev_stats.get('relations_created', 0)):>6}")
+                logger.info(f"   📋 Metadata:          {format_change(metadata_count, prev_stats.get('entities_created', 0)):>6}")
                 logger.info(f"   Files failed: {files_failed}")
-                logger.info(f"   Entities created: {len(entities)}")
-                logger.info(f"   Relations created: {len(relations)}")
+                
+                # Save current statistics for next run (including total tracked count)
+                from .indexer import IndexingResult
+                result = IndexingResult(
+                    success=True,
+                    operation="manual",
+                    files_processed=files_processed,
+                    entities_created=len(entities),
+                    relations_created=len(relations),
+                    implementation_chunks_created=len(implementation_chunks)
+                )
+                
+                # Save with total tracked count and actual database counts for future comparison
+                import time
+                state = indexer._load_state(collection_name)
+                state['_statistics'] = {
+                    'files_processed': files_processed,
+                    'total_tracked': total_tracked,
+                    'entities_created': metadata_count,
+                    'relations_created': relation_count,
+                    'implementation_chunks_created': implementation_count,
+                    'processing_time': 0.0,
+                    'timestamp': time.time()
+                }
+                
+                # Save updated state
+                state_file = indexer._get_state_file(collection_name)
+                state_file.parent.mkdir(parents=True, exist_ok=True)
+                temp_file = state_file.with_suffix('.tmp')
+                import json
+                with open(temp_file, 'w') as f:
+                    json.dump(state, f, indent=2)
+                temp_file.rename(state_file)
                 
                 # Show cost information if available
                 if hasattr(indexer, '_session_cost_data'):
@@ -299,7 +540,93 @@ def run_indexing(project_path: str, collection_name: str,
             
             # Handle deleted files first
             if deleted_files:
+                # Show deletion statistics if this is a pure deletion operation (no files to process afterward)
+                if not files_to_process and not quiet and verbose:
+                    # Load previous statistics for comparison
+                    from .indexer import format_change
+                    prev_stats = indexer._load_previous_statistics(collection_name)
+                    
+                    # Get database counts BEFORE deletion for accurate change tracking
+                    try:
+                        from qdrant_client.http import models
+                        
+                        # Access the underlying QdrantStore client (bypass CachingVectorStore wrapper)
+                        if hasattr(indexer.vector_store, 'backend'):
+                            qdrant_client = indexer.vector_store.backend.client
+                        else:
+                            qdrant_client = indexer.vector_store.client
+                        
+                        # Get counts before deletion
+                        metadata_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="metadata"))])
+                        implementation_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="implementation"))])
+                        relation_filter = models.Filter(must=[models.FieldCondition(key="chunk_type", match=models.MatchValue(value="relation"))])
+                        
+                        before_metadata_count = qdrant_client.count(collection_name, count_filter=metadata_filter).count
+                        before_implementation_count = qdrant_client.count(collection_name, count_filter=implementation_filter).count
+                        before_relation_count = qdrant_client.count(collection_name, count_filter=relation_filter).count
+                        
+                    except Exception as e:
+                        if verbose:
+                            logger.warning(f"Failed to get database counts before deletion: {e}")
+                        before_metadata_count = before_implementation_count = before_relation_count = 0
+                
                 indexer._handle_deleted_files(collection_name, deleted_files, verbose)
+                
+                # Show deletion statistics for pure deletion operations
+                if not files_to_process and not quiet and verbose:
+                    # Get total tracked files from state (after deletion)
+                    state = indexer._load_state(collection_name)
+                    total_tracked = len([k for k in state.keys() if not k.startswith('_')])
+                    
+                    # Get actual database counts AFTER deletion
+                    try:
+                        metadata_count = qdrant_client.count(collection_name, count_filter=metadata_filter).count
+                        implementation_count = qdrant_client.count(collection_name, count_filter=implementation_filter).count
+                        relation_count = qdrant_client.count(collection_name, count_filter=relation_filter).count
+                        
+                    except Exception as e:
+                        if verbose:
+                            logger.warning(f"Failed to get actual database counts after deletion: {e}")
+                        metadata_count = before_metadata_count
+                        implementation_count = before_implementation_count
+                        relation_count = before_relation_count
+                    
+                    logger.info(f"✅ Deletion completed")
+                    logger.info(f"   Total Vectored Files:    {format_change(total_tracked, prev_stats.get('total_tracked', 0)):>6}")
+                    logger.info(f"   Total tracked files:     {format_change(total_tracked, prev_stats.get('total_tracked', 0)):>6}")
+                    logger.info(f"   📁 File Changes:")
+                    logger.info(f"      📋 Tracked (State JSON):")
+                    for deleted_file in deleted_files:
+                        logger.info(f"         - {deleted_file}")
+                    logger.info(f"      🗄️  Vectored (Database):")
+                    for deleted_file in deleted_files:
+                        logger.info(f"         - {deleted_file}")
+                    logger.info(f"   💻 Implementation:      {format_change(implementation_count, prev_stats.get('implementation_chunks_created', before_implementation_count)):>6}")
+                    logger.info(f"   🔗 Relation:         {format_change(relation_count, prev_stats.get('relations_created', before_relation_count)):>6}")
+                    logger.info(f"   📋 Metadata:          {format_change(metadata_count, prev_stats.get('entities_created', before_metadata_count)):>6}")
+                    
+                    # Save current statistics for next run
+                    import time
+                    state = indexer._load_state(collection_name)
+                    state['_statistics'] = {
+                        'files_processed': 0,  # Deletion doesn't process files, it removes them
+                        'total_tracked': total_tracked,
+                        'entities_created': metadata_count,
+                        'relations_created': relation_count,
+                        'implementation_chunks_created': implementation_count,
+                        'processing_time': 0.0,
+                        'timestamp': time.time()
+                    }
+                    
+                    # Save updated state
+                    state_file = indexer._get_state_file(collection_name)
+                    state_file.parent.mkdir(parents=True, exist_ok=True)
+                    temp_file = state_file.with_suffix('.tmp')
+                    import json
+                    with open(temp_file, 'w') as f:
+                        json.dump(state, f, indent=2)
+                    temp_file.rename(state_file)
+                    logger.info("-----------------------------------------")
         else:
             files_to_process = indexer._find_all_files(include_tests)
             deleted_files = []

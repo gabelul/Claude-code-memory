@@ -52,6 +52,7 @@ class QdrantStatsCollector:
         # Add file type analysis
         file_types = self._analyze_file_types(collection_name)
         manual_entries = self._count_manual_entries(collection_name)
+        tracked_files = self._get_tracked_files_count(collection_name)
         
         # Get direct API health status
         direct_health = self._get_health_status_from_api(collection_name)
@@ -69,6 +70,7 @@ class QdrantStatsCollector:
             "file_types": file_types,
             "manual_entries_count": manual_entries,
             "automated_entries_count": stats.get("points_count", 0) - manual_entries,
+            "tracked_files_count": tracked_files,
             "health_status": self._get_health_status(stats),
             "health_details": self._get_detailed_health_info(collection_name, stats, raw_config),
             "direct_api_health": direct_health
@@ -578,6 +580,18 @@ class QdrantStatsCollector:
             
         except Exception:
             pass
+        
+        # Fallback: check current directory .claude-indexer/ if no project mapping
+        current_dir_state = Path.cwd() / '.claude-indexer' / f'{collection_name}.json'
+        if current_dir_state.exists():
+            try:
+                with open(current_dir_state) as f:
+                    state_data = json.load(f)
+                # Count file entries (exclude metadata keys)
+                return len([k for k in state_data.keys() if not k.startswith('_')])
+            except Exception:
+                pass
+        
         return 0
     
     def get_database_overview(self) -> Dict[str, Any]:
@@ -733,7 +747,6 @@ class QdrantStatsCollector:
         print(f"{health_emoji} {collection_name}")
         print(f"  📊 Points: {stats.get('points_count', 0):,}")
         print(f"  🔍 Indexed: {stats.get('indexed_vectors_count', 0):,}")
-        # Manual count removed from display
         print(f"  🤖 Automated: {stats.get('automated_entries_count', 0):,}")
         
         # Show health details with explanations
@@ -783,9 +796,8 @@ class QdrantStatsCollector:
                     print(f"    Total Vectored Files: {file_analysis['total_files']:>6}")
                     
                     # Add tracked files count
-                    tracked_count = self._get_tracked_files_count(collection_name)
-                    if tracked_count > 0:
-                        print(f"    Tracked Files:   {tracked_count:>6}")
+                    tracked_count = stats.get('tracked_files_count', 0)
+                    print(f"    Tracked Files:        {tracked_count:>6}")
                     
                     file_extensions = file_analysis.get('file_extensions', {})
                     if file_extensions:
@@ -802,7 +814,7 @@ class QdrantStatsCollector:
                 manual_count = stats.get('manual_entries_count', 0)
                 
                 if chunk_type_breakdown or manual_count > 0:
-                    print("  🧩 CHUNK TYPES (v2.4)")
+                    print("  🧩 CHUNK TYPES")
                     print("  " + "-" * 25)
                     
                     # Show manual entries first

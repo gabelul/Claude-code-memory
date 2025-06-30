@@ -4,7 +4,7 @@ import time
 import hashlib
 import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import List, Dict, Any, Optional, Tuple, Union, Set
 from dataclasses import dataclass
 
 from .config import IndexerConfig
@@ -15,6 +15,17 @@ from .storage.base import VectorStore
 from .indexer_logging import get_logger
 
 logger = get_logger()
+
+
+def format_change(current: int, previous: int) -> str:
+    """Format a change value with +/- indicator."""
+    change = current - previous
+    if change > 0:
+        return f"{current} (+{change})"
+    elif change < 0:
+        return f"{current} ({change})"
+    else:
+        return f"{current} (+0)" if previous > 0 else str(current)
 
 
 @dataclass
@@ -459,6 +470,118 @@ class CoreIndexer:
         
         return changed_files, deleted_files
     
+    def _categorize_file_changes(self, include_tests: bool = False, collection_name: str = None) -> Tuple[List[Path], List[Path], List[str]]:
+        """Categorize files into new, modified, and deleted."""
+        current_files = self._find_all_files(include_tests)
+        current_state = self._get_current_state(current_files)
+        previous_state = self._load_state(collection_name)
+        
+        new_files = []
+        modified_files = []
+        deleted_files = []
+        
+        # Categorize changed files
+        for file_path in current_files:
+            file_key = str(file_path.relative_to(self.project_path))
+            current_hash = current_state.get(file_key, {}).get("hash", "")
+            previous_hash = previous_state.get(file_key, {}).get("hash", "")
+            
+            if current_hash != previous_hash:
+                if previous_hash == "":  # Not in previous state = new file
+                    new_files.append(file_path)
+                else:  # In previous state but different hash = modified file
+                    modified_files.append(file_path)
+        
+        # Find deleted files
+        current_keys = set(current_state.keys())
+        previous_keys = set(k for k in previous_state.keys() if not k.startswith('_'))  # Exclude metadata
+        deleted_keys = previous_keys - current_keys
+        deleted_files.extend(deleted_keys)
+        
+        return new_files, modified_files, deleted_files
+    
+    def _get_vectored_files(self, collection_name: str) -> Set[str]:
+        """Get set of files that currently have entities in the vector database."""
+        try:
+            from qdrant_client.http import models
+            
+            # Access the underlying QdrantStore client (bypass CachingVectorStore wrapper)
+            if hasattr(self.vector_store, 'backend'):
+                qdrant_client = self.vector_store.backend.client
+            else:
+                qdrant_client = self.vector_store.client
+            
+            # Scroll through all points to get file paths
+            file_paths = set()
+            scroll_result = qdrant_client.scroll(
+                collection_name=collection_name,
+                limit=10000,  # Large batch size
+                with_payload=True,
+                with_vectors=False
+            )
+            
+            points = scroll_result[0]  # First element is the points list
+            next_page_offset = scroll_result[1]  # Second element is next page offset
+            
+            # Process first batch
+            for point in points:
+                payload = point.payload if hasattr(point, 'payload') else {}
+                file_path = payload.get('file_path')
+                if file_path:
+                    # Convert to relative path for consistency
+                    try:
+                        rel_path = str(Path(file_path).relative_to(self.project_path))
+                        file_paths.add(rel_path)
+                    except ValueError:
+                        # If relative_to fails, use the file_path as-is
+                        file_paths.add(file_path)
+            
+            # Handle pagination if there are more points
+            while next_page_offset is not None:
+                scroll_result = qdrant_client.scroll(
+                    collection_name=collection_name,
+                    offset=next_page_offset,
+                    limit=10000,
+                    with_payload=True,
+                    with_vectors=False
+                )
+                
+                points = scroll_result[0]
+                next_page_offset = scroll_result[1]
+                
+                for point in points:
+                    payload = point.payload if hasattr(point, 'payload') else {}
+                    file_path = payload.get('file_path')
+                    if file_path:
+                        try:
+                            rel_path = str(Path(file_path).relative_to(self.project_path))
+                            file_paths.add(rel_path)
+                        except ValueError:
+                            file_paths.add(file_path)
+            
+            return file_paths
+        except Exception as e:
+            logger.warning(f"Failed to get vectored files: {e}")
+            return set()
+    
+    def _categorize_vectored_file_changes(self, collection_name: str, before_vectored_files: Set[str] = None) -> Tuple[List[str], List[str], List[str]]:
+        """Categorize vectored files (files with entities in database) into new, modified, and deleted."""
+        current_vectored_files = self._get_vectored_files(collection_name)
+        
+        if before_vectored_files is None:
+            # If no before state provided, assume all current files are existing
+            return [], list(current_vectored_files), []
+        
+        new_vectored = list(current_vectored_files - before_vectored_files)
+        deleted_vectored = list(before_vectored_files - current_vectored_files)
+        
+        # Files that exist in both are considered "modified" in the context of this operation
+        # (they may have had entities added/removed/updated)
+        common_files = current_vectored_files & before_vectored_files
+        modified_vectored = list(common_files) if common_files else []
+        
+        return new_vectored, modified_vectored, deleted_vectored
+    
     def _process_file_batch(self, files: List[Path], verbose: bool = False) -> Tuple[List[Entity], List[Relation], List[EntityChunk], List[str]]:
         """Process a batch of files with progressive disclosure support."""
         all_entities = []
@@ -724,6 +847,37 @@ class CoreIndexer:
         except Exception:
             pass
         return {}
+    
+    def _load_previous_statistics(self, collection_name: str) -> Dict[str, int]:
+        """Load previous run statistics from state file."""
+        state = self._load_state(collection_name)
+        return state.get('_statistics', {})
+    
+    def _save_statistics_to_state(self, collection_name: str, result: 'IndexingResult'):
+        """Save current statistics to state file."""
+        import time
+        try:
+            state = self._load_state(collection_name)
+            state['_statistics'] = {
+                'files_processed': result.files_processed,
+                'entities_created': result.entities_created,
+                'relations_created': result.relations_created,
+                'implementation_chunks_created': result.implementation_chunks_created,
+                'processing_time': result.processing_time,
+                'timestamp': time.time()
+            }
+            
+            # Save updated state
+            state_file = self._get_state_file(collection_name)
+            state_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            temp_file = state_file.with_suffix('.tmp')
+            with open(temp_file, 'w') as f:
+                json.dump(state, f, indent=2)
+            temp_file.rename(state_file)
+            
+        except Exception as e:
+            logger.debug(f"Failed to save statistics to state: {e}")
     
     def _update_state(self, new_files: List[Path], collection_name: str, verbose: bool = False, full_rebuild: bool = False, deleted_files: List[str] = None):
         """Update state file by merging new files with existing state, or do full rebuild."""
