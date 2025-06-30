@@ -35,7 +35,9 @@ class TreeSitterParser(CodeParser):
         
     def extract_node_text(self, node: Node, content: str) -> str:
         """Extract text from tree-sitter node."""
-        return content[node.start_byte:node.end_byte]
+        # Convert content to bytes for proper byte-based indexing
+        content_bytes = content.encode('utf-8')
+        return content_bytes[node.start_byte:node.end_byte].decode('utf-8')
     
     def _get_file_hash(self, file_path: Path) -> str:
         """Calculate SHA256 hash of file contents (follows existing pattern)."""

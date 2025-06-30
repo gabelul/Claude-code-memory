@@ -115,6 +115,10 @@ class JavaScriptParser(TreeSitterParser):
                     relation = RelationFactory.create_contains_relation(file_name, entity.name)
                     relations.append(relation)
             
+            # Create function call relations from semantic metadata
+            function_call_relations = self._create_function_call_relations(chunks, file_path)
+            relations.extend(function_call_relations)
+            
             result.entities = entities
             result.relations = relations
             result.implementation_chunks = chunks
@@ -417,6 +421,25 @@ class JavaScriptParser(TreeSitterParser):
                         # Remove quotes
                         return string_value.strip('\'"')
         return None
+    
+    def _create_function_call_relations(self, chunks: List[EntityChunk], file_path: Path) -> List[Relation]:
+        """Create CALLS relations from extracted function calls in implementation chunks."""
+        relations = []
+        
+        for chunk in chunks:
+            if chunk.chunk_type == "implementation":
+                semantic_metadata = chunk.metadata.get("semantic_metadata", {})
+                calls = semantic_metadata.get("calls", [])
+                
+                for called_function in calls:
+                    relation = RelationFactory.create_calls_relation(
+                        caller=chunk.entity_name,
+                        callee=called_function,
+                        context=f"Function call in {file_path.name}"
+                    )
+                    relations.append(relation)
+        
+        return relations
     
     def _init_ts_server(self):
         """Initialize TypeScript language server (stub for future implementation)."""

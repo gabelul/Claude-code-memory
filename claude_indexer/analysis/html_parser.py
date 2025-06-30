@@ -37,6 +37,8 @@ class HTMLParser(TreeSitterParser):
             result.file_hash = self._get_file_hash(file_path)
             tree = self.parse_tree(content)
             
+            # Debug logging (can be removed in production)
+            
             # Check for syntax errors
             if self._has_syntax_errors(tree):
                 result.errors.append(f"HTML syntax errors in {file_path.name}")
@@ -214,7 +216,6 @@ class HTMLParser(TreeSitterParser):
                     import_type="html_resource"
                 )
                 relations.append(relation)
-        
         return relations
     
     def _extract_class_references(self, root: Node, content: str, file_path: Path) -> List[Relation]:
@@ -293,3 +294,4 @@ class HTMLParser(TreeSitterParser):
         ))
         
         return chunks
+    

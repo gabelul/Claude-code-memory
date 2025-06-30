@@ -237,6 +237,12 @@ def run_indexing_with_specific_files(project_path: str, collection_name: str,
             logger.info(f"🔄 Processing {len(paths_to_process)} specific files")
             logger.info(f"📦 Collection: {collection_name}")
         
+        # Capture vectored files state BEFORE any processing for accurate comparison
+        before_vectored_files = None
+        state_file = indexer._get_state_file(collection_name)
+        if state_file.exists():
+            before_vectored_files = indexer._get_vectored_files(collection_name)
+        
         # Clean up existing entities for each file BEFORE processing (prevents duplicates)
         # This ensures modified files get same cleanup treatment as deleted files
         for file_path in paths_to_process:
@@ -284,21 +290,8 @@ def run_indexing_with_specific_files(project_path: str, collection_name: str,
             if incremental:
                 file_changes_for_display = indexer._categorize_file_changes(False, collection_name)
                 
-                # Get vectored file changes (what actually changed in the database)
-                # Capture before state for accurate vectored file comparison
-                before_vectored_files = indexer._get_vectored_files(collection_name)
-                
-                # Process files will change the vectored state, so we'll check after storage
-                # For now, use the processed files as the basis for vectored changes
-                processed_relative_paths = []
-                for file_path in successfully_processed:
-                    try:
-                        rel_path = str(file_path.relative_to(indexer.project_path))
-                        processed_relative_paths.append(rel_path)
-                    except ValueError:
-                        continue
-                
-                # We'll update this after storage to get accurate vectored changes
+                # We already captured before_vectored_files at the start
+                # No need to capture it again here
                 vectored_changes_for_display = None
             
             # Use incremental update to merge with existing state

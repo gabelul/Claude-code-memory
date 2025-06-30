@@ -581,16 +581,29 @@ class QdrantStatsCollector:
         except Exception:
             pass
         
-        # Fallback: check current directory .claude-indexer/ if no project mapping
-        current_dir_state = Path.cwd() / '.claude-indexer' / f'{collection_name}.json'
-        if current_dir_state.exists():
-            try:
-                with open(current_dir_state) as f:
-                    state_data = json.load(f)
-                # Count file entries (exclude metadata keys)
-                return len([k for k in state_data.keys() if not k.startswith('_')])
-            except Exception:
-                pass
+        # Enhanced fallback: search for state files in multiple locations
+        search_paths = [
+            Path.cwd() / '.claude-indexer' / f'{collection_name}.json',
+            # Search in parent directories up to 3 levels
+            Path.cwd().parent / '.claude-indexer' / f'{collection_name}.json',
+            Path.cwd().parent.parent / '.claude-indexer' / f'{collection_name}.json',
+            # Search in subdirectories (for cases like mcp-qdrant-memory)
+            *list(Path.cwd().glob(f'*/.claude-indexer/{collection_name}.json')),
+            # Search recursively up to 2 levels deep
+            *list(Path.cwd().glob(f'*/*/.claude-indexer/{collection_name}.json'))
+        ]
+        
+        for state_path in search_paths:
+            if state_path.exists():
+                try:
+                    with open(state_path) as f:
+                        state_data = json.load(f)
+                    # Count file entries (exclude metadata keys)
+                    count = len([k for k in state_data.keys() if not k.startswith('_')])
+                    if count > 0:
+                        return count
+                except Exception:
+                    continue
         
         return 0
     
