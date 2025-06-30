@@ -632,15 +632,21 @@ class QdrantStore(ManagedVectorStore):
         """Create a vector point from a relation."""
         from ..analysis.entities import Relation
         
-        # Generate deterministic ID
-        relation_key = f"{relation.from_entity}-{relation.relation_type.value}-{relation.to_entity}"
+        # Generate deterministic ID - include import_type to prevent deduplication
+        # Check if relation has import_type in metadata
+        import_type = relation.metadata.get('import_type', '') if relation.metadata else ''
+        if import_type:
+            relation_key = f"{relation.from_entity}-{relation.relation_type.value}-{relation.to_entity}-{import_type}"
+        else:
+            # Fallback for relations without import_type
+            relation_key = f"{relation.from_entity}-{relation.relation_type.value}-{relation.to_entity}"
         point_id = self.generate_deterministic_id(relation_key)
         
-        # Create payload - v2.4 format
+        # Create payload - v2.4 format matching RelationChunk
         payload = {
-            "from": relation.from_entity,
-            "to": relation.to_entity,
-            "relationType": relation.relation_type.value,
+            "entity_name": relation.from_entity,
+            "relation_target": relation.to_entity,
+            "relation_type": relation.relation_type.value,
             "collection": collection_name,
             "type": "chunk",
             "chunk_type": "relation",
@@ -652,6 +658,9 @@ class QdrantStore(ManagedVectorStore):
             payload["context"] = relation.context
         if relation.confidence != 1.0:
             payload["confidence"] = relation.confidence
+        # Add import_type if present
+        if import_type:
+            payload["import_type"] = import_type
         
         return VectorPoint(
             id=point_id,

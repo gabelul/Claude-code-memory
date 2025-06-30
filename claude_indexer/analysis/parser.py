@@ -582,7 +582,9 @@ class PythonParser(CodeParser):
                                             import_type=op_type
                                         )
                                         relations.append(relation)
-                                        logger.debug(f"   ✅ Created {op_type} relation: {file_ref}")
+                                        # Truncate long content for cleaner logs
+                                        display_ref = file_ref[:50] + "..." if len(file_ref) > 50 else file_ref
+                                        logger.debug(f"   ✅ Created {op_type} relation: {display_ref}")
                                         break
                     
                     # Handle method calls on objects (e.g., df.to_json())

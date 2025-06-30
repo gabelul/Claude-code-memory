@@ -306,7 +306,7 @@ def backup_manual_entries(collection_name: str, output_file: str = None):
         print(f"❌ Error during backup: {e}")
         raise
 
-def restore_manual_entries(backup_file: str, collection_name: str = None, batch_size: int = 10, dry_run: bool = False):
+def restore_manual_entries(backup_file: str, collection_name: str = None, batch_size: int = 10, dry_run: bool = False, force_duplicates: bool = False):
     """Directly restore manual entries to Qdrant with proper vectorization.
     
     This function bypasses MCP and directly inserts entities into Qdrant with embeddings.
@@ -450,20 +450,21 @@ def restore_manual_entries(backup_file: str, collection_name: str = None, batch_
                 deterministic_key = f"manual::{entity_type}::{entity_name}::{content_hash}"
                 deterministic_id = int(hashlib.sha256(deterministic_key.encode()).hexdigest()[:8], 16)
                 
-                # Check if entry already exists using deterministic ID
-                try:
-                    existing_point = store.client.retrieve(
-                        collection_name=target_collection,
-                        ids=[deterministic_id],
-                        with_payload=True
-                    )
-                    if existing_point and len(existing_point) > 0:
-                        print(f"⏭️  Skipping duplicate: {entity_name}")
-                        skipped_duplicates += 1
-                        continue
-                except Exception:
-                    # Point doesn't exist, proceed with creation
-                    pass
+                # Check if entry already exists using deterministic ID (unless forcing duplicates)
+                if not force_duplicates:
+                    try:
+                        existing_point = store.client.retrieve(
+                            collection_name=target_collection,
+                            ids=[deterministic_id],
+                            with_payload=True
+                        )
+                        if existing_point and len(existing_point) > 0:
+                            print(f"⏭️  Skipping duplicate: {entity_name}")
+                            skipped_duplicates += 1
+                            continue
+                    except Exception:
+                        # Point doesn't exist, proceed with creation
+                        pass
                 
                 point = PointStruct(
                     id=deterministic_id,
@@ -479,6 +480,7 @@ def restore_manual_entries(backup_file: str, collection_name: str = None, batch_
                 
                 if result.success:
                     total_restored += len(vector_points)
+                    total_skipped += skipped_duplicates
                     if skipped_duplicates > 0:
                         print(f"✅ Batch {batch_num}: {len(vector_points)} new, {skipped_duplicates} skipped duplicates")
                     else:
@@ -491,6 +493,7 @@ def restore_manual_entries(backup_file: str, collection_name: str = None, batch_
                             "error": "Qdrant upsert failed"
                         })
             elif skipped_duplicates > 0:
+                total_skipped += skipped_duplicates
                 print(f"⏭️  Batch {batch_num}: {skipped_duplicates} duplicates skipped, 0 new entries")
             
             # Rate limiting pause between batches
@@ -502,6 +505,8 @@ def restore_manual_entries(backup_file: str, collection_name: str = None, batch_
         print(f"\n{'='*60}")
         print(f"🎉 Direct restoration complete!")
         print(f"✅ Successfully restored: {total_restored} entities")
+        if total_skipped > 0:
+            print(f"⏭️  Skipped duplicates: {total_skipped} entities")
         if failed_entries:
             print(f"❌ Failed entries: {len(failed_entries)}")
             for entry in failed_entries[:5]:
@@ -538,6 +543,7 @@ Examples:
   python manual_memory_backup.py restore -f manual_entries_backup_memory-project.json
   python manual_memory_backup.py restore -f backup.json -c target-collection
   python manual_memory_backup.py restore -f backup.json --dry-run
+  python manual_memory_backup.py restore -f backup.json --force  # Force duplicates
   
   # List supported entity types
   python manual_memory_backup.py --list-types
@@ -563,6 +569,8 @@ Examples:
                                help="Number of entities per batch (default: 10)")
     restore_parser.add_argument("--dry-run", action="store_true",
                                help="Preview what would be restored without making changes")
+    restore_parser.add_argument("--force", action="store_true",
+                               help="Force restore duplicates (default: skip existing entries)")
     
     # Global options
     parser.add_argument("--list-types", action="store_true",
@@ -598,7 +606,8 @@ Examples:
                 backup_file=args.file,
                 collection_name=args.collection,
                 batch_size=args.batch_size,
-                dry_run=args.dry_run
+                dry_run=args.dry_run,
+                force_duplicates=args.force
             )
             
             if result:

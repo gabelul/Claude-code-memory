@@ -513,10 +513,29 @@ class CoreIndexer:
             if relations:
                 if logger:
                     logger.debug(f"🔗 Processing relations: {len(relations)} items")
+                
+                # Deduplicate relations BEFORE embedding to save API costs
+                seen_relation_keys = set()
+                unique_relations = []
+                duplicate_count = 0
+                
+                for relation in relations:
+                    # Generate the same key that will be used for storage
+                    relation_chunk = RelationChunk.from_relation(relation)
+                    relation_key = relation_chunk.id
                     
-                relation_texts = [self._relation_to_text(relation) for relation in relations]
+                    if relation_key not in seen_relation_keys:
+                        seen_relation_keys.add(relation_key)
+                        unique_relations.append(relation)
+                    else:
+                        duplicate_count += 1
+                
+                if logger and duplicate_count > 0:
+                    logger.debug(f"🔍 Deduplicated {duplicate_count} relations before embedding (saved {duplicate_count} API calls)")
+                    
+                relation_texts = [self._relation_to_text(relation) for relation in unique_relations]
                 if logger:
-                    logger.debug(f"🔤 Generating embeddings for {len(relation_texts)} relation texts")
+                    logger.debug(f"🔤 Generating embeddings for {len(relation_texts)} unique relation texts")
                     
                 embedding_results = self.embedder.embed_batch(relation_texts)
                 if logger:
@@ -528,7 +547,7 @@ class CoreIndexer:
                 total_cost += cost_data['cost']
                 total_requests += cost_data['requests']
                 
-                for relation, embedding_result in zip(relations, embedding_results):
+                for relation, embedding_result in zip(unique_relations, embedding_results):
                     if embedding_result.success:
                         # Convert relation to chunk for v2.4 pure architecture
                         relation_chunk = RelationChunk.from_relation(relation)
