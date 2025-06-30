@@ -270,7 +270,7 @@ class AsyncIndexingEventHandler:
             
             if deleted_files:
                 print(f"🗑️  Processing {len(deleted_files)} deletions")
-                await self._handle_batch_deletions(deleted_files)
+                await self._handle_deletions(deleted_files)
             
             self.batches_processed += 1
             
@@ -297,26 +297,6 @@ class AsyncIndexingEventHandler:
         except Exception as e:
             print(f"❌ Batch indexing failed: {e}")
             return False
-    
-    async def _handle_batch_deletions(self, file_paths: list):
-        """Handle batch file deletions."""
-        try:
-            print(f"🗑️  Processing batch deletion of {len(file_paths)} files...")
-            
-            # Trigger incremental indexing to handle deletions and cleanup orphaned relations
-            # This uses the existing state-based deletion detection which will:
-            # 1. Detect the deleted files via SHA256 state comparison
-            # 2. Call _handle_deleted_files() which removes entities
-            # 3. Automatically clean up orphaned relations via _cleanup_orphaned_relations()
-            success = await self._run_batch_indexing([])  # Empty list triggers incremental indexing
-            
-            if success:
-                print(f"✅ Batch cleanup completed for {len(file_paths)} deleted files")
-            else:
-                print(f"❌ Batch cleanup may have failed for {len(file_paths)} deleted files")
-        
-        except Exception as e:
-            print(f"❌ Error handling deletions: {e}")
     
     def get_stats(self) -> Dict[str, Any]:
         """Get async handler statistics."""

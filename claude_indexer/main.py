@@ -153,6 +153,18 @@ def run_indexing_with_specific_files(project_path: str, collection_name: str,
             logger.info(f"🔄 Processing {len(paths_to_process)} specific files")
             logger.info(f"📦 Collection: {collection_name}")
         
+        # Clean up existing entities for each file BEFORE processing (prevents duplicates)
+        # This ensures modified files get same cleanup treatment as deleted files
+        for file_path in paths_to_process:
+            try:
+                relative_path = str(file_path.relative_to(project))
+                if verbose:
+                    logger.debug(f"🧹 Cleaning existing entities for: {relative_path}")
+                indexer._handle_deleted_files(collection_name, relative_path, verbose)
+            except Exception as e:
+                if verbose:
+                    logger.warning(f"⚠️ Failed to clean existing entities for {file_path}: {e}")
+        
         # Process files directly using batch processing
         entities, relations, implementation_chunks, errors = indexer._process_file_batch(paths_to_process, verbose)
         

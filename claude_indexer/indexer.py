@@ -253,6 +253,37 @@ class CoreIndexer:
         result = IndexingResult(success=True, operation="single_file")
         
         try:
+            # Clean up existing entities for this file BEFORE processing (prevents duplicates)
+            # This ensures single file indexing gets same cleanup treatment as batch processing
+            try:
+                relative_path = str(file_path.relative_to(self.project_path))
+                logger.info(f"🧹 DEBUG: Single file cleanup starting for: {relative_path}")
+                
+                # Check if collection exists first
+                collection_exists = self.vector_store.collection_exists(collection_name)
+                logger.info(f"🧹 DEBUG: Collection '{collection_name}' exists: {collection_exists}")
+                
+                if collection_exists:
+                    # Try to find entities before deletion
+                    full_path = str(file_path)
+                    logger.info(f"🧹 DEBUG: Searching for entities with path: {full_path}")
+                    found_entities = self.vector_store.find_entities_for_file(collection_name, full_path)
+                    logger.info(f"🧹 DEBUG: Found {len(found_entities)} entities before cleanup")
+                    
+                    # Run cleanup
+                    self._handle_deleted_files(collection_name, relative_path, verbose=True)
+                    
+                    # Check after cleanup
+                    found_entities_after = self.vector_store.find_entities_for_file(collection_name, full_path)
+                    logger.info(f"🧹 DEBUG: Found {len(found_entities_after)} entities after cleanup")
+                else:
+                    logger.info(f"🧹 DEBUG: Collection doesn't exist, skipping cleanup")
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to clean existing entities for {file_path}: {e}")
+                import traceback
+                logger.warning(f"⚠️ Traceback: {traceback.format_exc()}")
+            
             # Parse file
             parse_result = self.parser_registry.parse_file(file_path)
             

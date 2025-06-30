@@ -272,33 +272,6 @@ def backup_manual_entries(collection_name: str, output_file: str = None):
         print(f"✅ Manual entries backup saved to: {backup_file}")
         print(f"💾 Backup contains {len(manual_entries)} manual entries")
         
-        # Create summary report
-        summary_file = Path(f"backup_summary_{collection_name}.txt")
-        with open(summary_file, 'w') as f:
-            f.write(f"Backup Summary for {collection_name}\n")
-            f.write("=" * 50 + "\n\n")
-            f.write(f"Backup timestamp: {backup_data['backup_timestamp']}\n")
-            f.write(f"Total points in collection: {len(all_points)}\n")
-            f.write(f"Manual entries backed up: {len(manual_entries)}\n")
-            f.write(f"Code entries (not backed up): {len(code_entries)}\n")
-            f.write(f"Relation entries (identified): {len(relation_entries)}\n")
-            f.write(f"Unknown entries (included for review): {len(unknown_entries)}\n\n")
-            
-            if manual_entries:
-                f.write("Manual Entry Types Found:\n")
-                manual_types = set(e['payload'].get('entity_type') for e in manual_entries)
-                for et in sorted(manual_types):
-                    count = sum(1 for e in manual_entries if e['payload'].get('entity_type') == et)
-                    f.write(f"  - {et}: {count} entries\n")
-            
-            if unknown_entries:
-                f.write(f"\nUnknown Entry Types (review needed):\n")
-                unknown_types = set(e['entity_type'] for e in unknown_entries)
-                for et in sorted(unknown_types):
-                    count = sum(1 for e in unknown_entries if e['entity_type'] == et)
-                    f.write(f"  - {et}: {count} entries\n")
-        
-        print(f"📋 Summary report saved to: {summary_file}")
         
         return backup_file, len(manual_entries)
         

@@ -88,7 +88,7 @@ class EntityChunk:
             content=content,
             metadata={
                 "entity_type": entity.entity_type.value,
-                "file_path": str(entity.file_path) if entity.file_path else None,
+                "file_path": str(entity.file_path) if entity.file_path else "",
                 "line_number": entity.line_number,
                 "end_line_number": entity.end_line_number,
                 "has_implementation": has_implementation
