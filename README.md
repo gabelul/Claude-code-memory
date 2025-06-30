@@ -2,17 +2,16 @@
 
 🧠 **Refactored Universal Semantic Indexer** - Modular, production-ready package providing persistent memory for Claude Code through direct Qdrant integration, knowledge graphs, and Tree-sitter parsing
 
-## ✅ v2.6 - Project Configuration & Python File Operations - COMPLETE & PRODUCTION READY
+## 🎯 v2.7 - Entity-Specific Graph Filtering - COMPLETE & PRODUCTION READY
 
-🎉 **NEW**: Project-level configuration system + Enhanced Python file operations detection  
-✅ **Project Config**: `.claude-indexer/config.json` support with hierarchical settings  
-✅ **20+ File Operation Patterns**: Pandas, pathlib, requests, config files auto-detected  
-✅ **Semantic Relations**: Enhanced import_type values for precise dependency tracking  
-✅ **Configuration Hierarchy**: Project → Environment → Global → System defaults  
-✅ **Parser-Specific Settings**: Customize JavaScript, JSON, text, YAML parsers per project  
-✅ **Zero Breaking Changes**: All v2.5 multi-language functionality preserved  
-✅ **Performance**: New patterns detected with zero performance regression  
-✅ **Production Ready**: Validated with comprehensive test coverage  
+🎉 **NEW**: Focus on specific entities instead of browsing massive project graphs  
+✅ **Laser-Focused Debugging**: See only what connects to one entity (10-20 relations vs 300+)  
+✅ **Smart Entity Summaries**: AI-generated overviews with key statistics and relationship breakdowns  
+✅ **4 Analysis Modes**: smart, entities, relationships, raw - all entity-focused  
+✅ **Error Handling**: Clear messages for non-existent entities  
+✅ **Backward Compatible**: General graph calls still work without entity parameter  
+✅ **Performance Optimized**: Targeted queries eliminate information overload  
+✅ **Production Ready**: Full implementation with comprehensive testing  
 
 ## ✨ Previous Updates
 
@@ -236,10 +235,19 @@ claude-indexer -p /path/to/your/project -c my-project --verbose
 ### Step 4: Automatic Knowledge Graph Loading
 Knowledge graph is automatically loaded into Qdrant - no manual steps required!
 
-### Step 5: Test Progressive Disclosure Search
+### Step 5: Test Entity-Specific Graph Filtering (NEW v2.7)
 ```bash
-# In Claude Code - 90% faster metadata-first search
-mcp__my-project-memory__search_similar("your search query")
+# In Claude Code - Focus on specific entities for targeted debugging
+mcp__my-project-memory__read_graph(entity="AuthService", mode="smart")
+# Returns: AI summary of AuthService connections, dependencies, usage patterns
+
+# Debug specific function relationships
+mcp__my-project-memory__read_graph(entity="process_login", mode="relationships") 
+# Returns: Only relations involving process_login (10-20 vs 300+ scattered)
+
+# Find entities connected to specific component
+mcp__my-project-memory__read_graph(entity="validate_token", mode="entities")
+# Returns: All entities that connect to validate_token
 
 # Enhanced semantic scope implementation access (v2.4.1)
 mcp__my-project-memory__get_implementation("entityName")  # minimal scope (default)
@@ -427,12 +435,13 @@ claude-indexer service status
 
 ## ✨ Features
 
-### 🏗️ NEW v2.6 Features
-- **Project Configuration System**: `.claude-indexer/config.json` with hierarchical settings override
-- **Enhanced Python File Operations**: 20+ new patterns (pandas, pathlib, requests, config files)
-- **Semantic Relation Types**: Precise import_type values for advanced dependency tracking
-- **Parser-Specific Settings**: Per-project customization for JavaScript, JSON, text, YAML parsers
-- **Configuration Hierarchy**: Project → Environment → Global → System defaults priority
+### 🎯 NEW v2.7 Features
+- **Entity-Specific Graph Filtering**: Focus on individual entities instead of massive project graphs
+- **Smart Entity Analysis**: AI-powered summaries with connection statistics and relationship breakdowns
+- **4 Targeted Modes**: smart (AI summary), entities (connections), relationships (only relations), raw (complete data)
+- **Laser-Focused Debugging**: 10-20 targeted relations instead of 300+ overwhelming connections
+- **Performance Optimized**: Eliminate information overload with precise entity-centered queries
+- **Error Handling**: Clear feedback for non-existent entities with helpful suggestions
 
 ### 🚀 Core Features
 - **Multi-Language Support**: 10+ programming languages with 24 file extensions (v2.5)
@@ -486,18 +495,22 @@ mcp__project-memory__read_graph(mode="smart", limit=100)
 mcp__project-memory__read_graph(mode="entities", entityTypes=["class","function"], limit=200)
 ```
 
-**Step 3: Semantic Scope Analysis**
+**Step 3: Entity-Specific Analysis (NEW v2.7)**
 ```bash
 # Find relevant entities first
 mcp__project-memory__search_similar("authentication function")
 
-# Get minimal implementation
+# Focus on specific entity with AI summary
+mcp__project-memory__read_graph(entity="AuthService", mode="smart")
+# Returns: Connection stats, key relationships, entity breakdown
+
+# See only relationships for debugging
+mcp__project-memory__read_graph(entity="process_login", mode="relationships") 
+# Returns: 10-20 focused relations instead of 300+ scattered ones
+
+# Get implementation with semantic scope
 mcp__project-memory__get_implementation("EntityName", "minimal")
-
-# Get local context with helper functions
 mcp__project-memory__get_implementation("EntityName", "logical")
-
-# Trace cross-file dependencies and imports
 mcp__project-memory__get_implementation("EntityName", "dependencies")
 ```
 
@@ -528,17 +541,16 @@ claude-indexer service status --verbose
 
 **Memory Graph Functions:**
 ```bash
-# Full relations view
-read_graph(mode="relationships", limit=300)
+# Entity-specific graph filtering (NEW v2.7)
+read_graph(entity="AuthService", mode="smart")      # AI summary of entity connections
+read_graph(entity="process_login", mode="relationships")  # Only relations for entity
+read_graph(entity="validate_token", mode="entities")     # Entities connected to target
 
-# AI-optimized overview  
-read_graph(mode="smart", limit=100)
-
-# Entity-focused view
-read_graph(mode="entities", entityTypes=["class","function"], limit=200)
-
-# Raw data dump
-read_graph(mode="raw", limit=50)
+# General graph views (legacy)
+read_graph(mode="relationships", limit=300)  # Full relations view
+read_graph(mode="smart", limit=100)          # AI-optimized overview  
+read_graph(mode="entities", entityTypes=["class","function"], limit=200)  # Type-filtered
+read_graph(mode="raw", limit=50)             # Raw data dump
 ```
 
 **Implementation Access:**

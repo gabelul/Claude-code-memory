@@ -1,6 +1,6 @@
 # Claude Code Memory Solution
 
-## Current Version: v2.6 - Project Configuration & Python File Operations ✅ PRODUCTION READY
+## Current Version: v2.7 - Entity-Specific Graph Filtering ✅ PRODUCTION READY
 
 Complete memory solution for Claude Code providing context-aware conversations with semantic search across **10+ programming languages** with universal Tree-sitter parsing, enhanced Python file operations, and project-level configuration.
 
@@ -169,6 +169,50 @@ tail -f {project_path}/logs/{collection_name}.log
 claude-indexer -p /path/to/small-test-dir -c debug-test --verbose
 # Recommended: 1-2 Python files only for cleaner debug output
 ```
+
+## 🎯 Entity-Specific Graph Filtering (NEW in v2.7)
+
+**Focus on specific entities instead of browsing entire project graphs:**
+
+```python
+# Focus on specific function's dependencies and usage
+read_graph(entity="AuthService", mode="smart")
+# Returns: AI summary of AuthService's connections, dependencies, usage
+
+# See all relationships for a specific entity  
+read_graph(entity="process_login", mode="relationships") 
+# Returns: Only relations involving process_login (incoming/outgoing)
+
+# Get entities connected to a specific component
+read_graph(entity="validate_token", mode="entities")
+# Returns: All entities that connect to validate_token
+
+# Raw data for a specific entity's network
+read_graph(entity="DatabaseManager", mode="raw")
+# Returns: Complete entities + relations for DatabaseManager's network
+```
+
+**Common Debugging Workflows:**
+```python
+# 1. Debug specific function
+search_similar("authentication error")                    # Find problematic function
+read_graph(entity="validate_token", mode="smart")         # See its context  
+get_implementation("validate_token", scope="dependencies") # Get full code
+
+# 2. Understand class architecture
+read_graph(entity="UserService", mode="smart")
+# Shows: inheritance, methods, dependencies, usage patterns
+
+# 3. Trace error sources
+read_graph(entity="handle_request", mode="relationships")
+# Shows: what calls it, what it calls, error propagation paths
+```
+
+**Performance Benefits:**
+- **10-20 focused relations** instead of 300+ scattered ones
+- **Smart entity summaries** with key statistics and relationship breakdown  
+- **Laser-focused debugging** without information overload
+- **Backward compatible** - general graph still works without entity parameter
 
 ## Basic Troubleshooting
 
