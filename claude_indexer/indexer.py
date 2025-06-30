@@ -115,8 +115,8 @@ class CoreIndexer:
         if self.config.state_directory is not None:
             state_dir = self.config.state_directory
         else:
-            # Default to centralized state directory for production
-            state_dir = Path.home() / '.claude-indexer' / 'state'
+            # Default to project-local state directory
+            state_dir = self.project_path / '.claude-indexer'
         
         state_dir.mkdir(parents=True, exist_ok=True)
         return state_dir
@@ -125,7 +125,26 @@ class CoreIndexer:
         """Get collection-specific state file with simple naming."""
         # Simple, predictable naming: just use collection name
         filename = f"{collection_name}.json"
-        return self._get_state_directory() / filename
+        new_state_file = self._get_state_directory() / filename
+        
+        # Auto-migrate from global state directory if exists
+        if not new_state_file.exists():
+            old_global_state_file = Path.home() / '.claude-indexer' / 'state' / filename
+            if old_global_state_file.exists():
+                try:
+                    # Copy state file content to new location
+                    with open(old_global_state_file, 'r') as old_f:
+                        state_data = old_f.read()
+                    with open(new_state_file, 'w') as new_f:
+                        new_f.write(state_data)
+                    
+                    # Remove old state file
+                    old_global_state_file.unlink()
+                    self.logger.info(f"Migrated state file: {old_global_state_file} -> {new_state_file}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to migrate state file {old_global_state_file}: {e}")
+        
+        return new_state_file
     
     @property
     def state_file(self) -> Path:

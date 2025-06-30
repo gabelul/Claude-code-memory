@@ -117,11 +117,14 @@ def get_state_files(collection_name: str) -> Set[str]:
     
     tracked_files = set()
     
-    # Check global state directory
-    global_state_dir = Path.home() / '.claude-indexer' / 'state'
-    if global_state_dir.exists():
-        # Look for state files with collection name (new simple naming)
-        state_files = list(global_state_dir.glob(f'{collection_name}.json'))
+    # Project root is parent of utils directory (where this script is located)
+    project_root = Path(__file__).parent.parent
+    
+    # Check project-local state directory
+    project_state_dir = project_root / '.claude-indexer'
+    if project_state_dir.exists():
+        # Look for state files with collection name
+        state_files = list(project_state_dir.glob(f'{collection_name}.json'))
         print(f"Found {len(state_files)} state file(s): {[f.name for f in state_files]}")
         
         for state_file in state_files:
@@ -142,23 +145,6 @@ def get_state_files(collection_name: str) -> Set[str]:
             except Exception as e:
                 print(f"Error reading {state_file}: {e}")
                 continue
-    
-    # Also check project-specific state file
-    project_state_file = Path(__file__).parent / f'.indexer_state_{collection_name}.json'
-    if project_state_file.exists():
-        try:
-            with open(project_state_file) as f:
-                state_data = json.load(f)
-            # Handle both state file formats for project state file too
-            if 'files' in state_data:
-                file_entries = state_data['files']
-            else:
-                file_entries = {k: v for k, v in state_data.items() if not k.startswith('_')}
-            tracked_files.update(file_entries.keys())
-            print(f"Loaded {len(file_entries)} additional files from project state file")
-        except Exception as e:
-            print(f"Error reading project state file: {e}")
-    
     print(f"Total tracked files in state: {len(tracked_files)}")
     return tracked_files
 

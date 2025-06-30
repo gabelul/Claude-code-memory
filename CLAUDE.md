@@ -1,6 +1,6 @@
 # Claude Code Memory Solution
 
-## Current Version: v2.7 - Entity-Specific Graph Filtering ✅ PRODUCTION READY
+## Current Version: v2.7.1 - Project-Local State Files ✅ PRODUCTION READY
 
 Complete memory solution for Claude Code providing context-aware conversations with semantic search across **10+ programming languages** with universal Tree-sitter parsing, enhanced Python file operations, and project-level configuration.
 
@@ -150,9 +150,12 @@ python utils/manual_memory_backup.py restore -f backup.json --dry-run
 
 ## Logs and Debug Information
 
-**Application Logs Location:**
-- Project logs: `{project_path}/logs/{collection_name}.log`
-- Service logs: `~/.claude-indexer/logs/` (fallback when no project path)
+**Project File Organization:**
+- **State files**: `{project_path}/.claude-indexer/{collection_name}.json` (tracks incremental indexing metadata)
+- **Project logs**: `{project_path}/logs/{collection_name}.log`
+- **Project config**: `{project_path}/.claude-indexer/config.json` (optional project-specific settings)
+- **Service logs**: `~/.claude-indexer/logs/` (fallback when no project path)
+- **Service config**: `~/.claude-indexer/config.json` (global service configuration)
 
 **Debug Commands:**
 ```bash

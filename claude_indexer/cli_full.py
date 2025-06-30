@@ -301,17 +301,23 @@ else:
                 click.echo(f"Error: File must be within project directory", err=True)
                 sys.exit(1)
             
-            # Create components
+            # Create components using dynamic provider detection
+            provider = config_obj.embedding_provider
+            api_key = getattr(config_obj, f'{provider}_api_key', None)
+            model = config_obj.voyage_model if provider == "voyage" else "text-embedding-3-small"
+            
             embedder = create_embedder_from_config({
-                "provider": "openai",
-                "api_key": config_obj.openai_api_key,
-                "model": "text-embedding-3-small"
+                "provider": provider,
+                "api_key": api_key,
+                "model": model,
+                "enable_caching": True
             })
             
             vector_store = create_store_from_config({
                 "backend": "qdrant",
                 "url": config_obj.qdrant_url,
-                "api_key": config_obj.qdrant_api_key
+                "api_key": config_obj.qdrant_api_key,
+                "enable_caching": True
             })
             
             # Create indexer and process file
@@ -633,11 +639,16 @@ else:
             # Load configuration
             config_obj = load_config(Path(config) if config else None)
             
-            # Create components
+            # Create components using dynamic provider detection
+            provider = config_obj.embedding_provider
+            api_key = getattr(config_obj, f'{provider}_api_key', None)
+            model = config_obj.voyage_model if provider == "voyage" else "text-embedding-3-small"
+            
             embedder = create_embedder_from_config({
-                "provider": "openai",
-                "api_key": config_obj.openai_api_key,
-                "model": "text-embedding-3-small"
+                "provider": provider,
+                "api_key": api_key,
+                "model": model,
+                "enable_caching": True
             })
             
             vector_store = create_store_from_config({

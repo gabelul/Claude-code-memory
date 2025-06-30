@@ -263,7 +263,7 @@ Direct Qdrant integration with zero manual steps:
 claude-indexer -p /path/to/project -c project-name
 
 # Auto-detection: First run = Full mode, subsequent runs = Incremental mode (15x faster)
-# No flags needed - automatically uses optimal mode based on state file existence
+# No flags needed - automatically uses optimal mode based on project-local state file (.claude-indexer/{collection}.json)
 
 # Clear collection (preserves manually added memories)
 claude-indexer -p /path/to/project -c project-name --clear
@@ -314,7 +314,7 @@ python utils/manual_memory_backup.py restore -f backup-file.json
 
 ## ⚙️ Service Configuration
 
-The background service uses `~/.claude-indexer/config.json` for persistent configuration across multiple projects and file watching behavior.
+The background service uses `~/.claude-indexer/config.json` for persistent configuration across multiple projects and file watching behavior. State files are stored project-locally in `{project}/.claude-indexer/{collection}.json` for better team collaboration and project portability.
 
 ### Default Configuration
 ```json

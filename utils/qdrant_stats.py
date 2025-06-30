@@ -560,32 +560,21 @@ class QdrantStatsCollector:
                         project_path = Path(project.get('path', ''))
                         break
             
-            # Check global state directory first
-            global_state_dir = Path.home() / '.claude-indexer' / 'state'
-            if global_state_dir.exists():
-                # Look for state files with collection name
-                for state_file in global_state_dir.glob(f'{collection_name}.json'):
-                    try:
-                        with open(state_file) as f:
-                            state_data = json.load(f)
-                        # Count file entries (exclude metadata keys)
-                        file_count = len([k for k in state_data.keys() if not k.startswith('_')])
-                        if file_count > 0:
-                            return file_count
-                    except Exception:
-                        continue
-            
-            # Check project-specific state file
+            # Check project-local state directory first
             if project_path and project_path.exists():
-                project_state_file = project_path / f'.indexer_state_{collection_name}.json'
-                if project_state_file.exists():
-                    try:
-                        with open(project_state_file) as f:
-                            state_data = json.load(f)
-                        # Count file entries (exclude metadata keys)
-                        return len([k for k in state_data.keys() if not k.startswith('_')])
-                    except Exception:
-                        pass
+                project_state_dir = project_path / '.claude-indexer'
+                if project_state_dir.exists():
+                    # Look for state files with collection name
+                    for state_file in project_state_dir.glob(f'{collection_name}.json'):
+                        try:
+                            with open(state_file) as f:
+                                state_data = json.load(f)
+                            # Count file entries (exclude metadata keys)
+                            file_count = len([k for k in state_data.keys() if not k.startswith('_')])
+                            if file_count > 0:
+                                return file_count
+                        except Exception:
+                            continue
             
         except Exception:
             pass

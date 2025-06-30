@@ -603,8 +603,8 @@ qdrant_url={base_config.qdrant_url}
         assert no_errors_in_logs(initial_errors, initial_output), \
             f"Should have no errors in initial indexing. Errors: {initial_errors}"
         
-        # Find state file location (CLI uses centralized state directory)
-        state_dir = Path.home() / '.claude-indexer' / 'state'
+        # Find state file location (CLI uses project-local state directory)
+        state_dir = temp_repo / '.claude-indexer'
         state_file = state_dir / "test_custom_new_file.json"
         
         # Verify state file was created after initial index
@@ -725,8 +725,8 @@ DELETABLE_CONSTANT = "to_be_removed"
         assert no_errors_in_logs(initial_errors, initial_output), \
             f"Should have no errors in initial indexing. Errors: {initial_errors}"
         
-        # Find state file location (CLI uses centralized state directory)
-        state_dir = Path.home() / '.claude-indexer' / 'state'
+        # Find state file location (CLI uses project-local state directory)
+        state_dir = temp_repo / '.claude-indexer'
         state_file = state_dir / "test_custom_deletion.json"
         
         # Verify state file was created and contains deletable file
@@ -838,8 +838,8 @@ qdrant_url={base_config.qdrant_url}
         assert no_errors_in_logs(initial_errors, initial_output), \
             f"Should have no errors in initial indexing. Errors: {initial_errors}"
         
-        # Find state file location (CLI uses centralized state directory)
-        state_dir = Path.home() / '.claude-indexer' / 'state'
+        # Find state file location (CLI uses project-local state directory)
+        state_dir = temp_repo / '.claude-indexer'
         state_file = state_dir / "test_custom_three_new.json"
         
         # Verify state file was created after initial index
@@ -981,8 +981,8 @@ class DeletableClass_{i}:
         assert no_errors_in_logs(initial_errors, initial_output), \
             f"Should have no errors in initial indexing. Errors: {initial_errors}"
         
-        # Find state file location (CLI uses centralized state directory)
-        state_dir = Path.home() / '.claude-indexer' / 'state'
+        # Find state file location (CLI uses project-local state directory)
+        state_dir = temp_repo / '.claude-indexer'
         state_file = state_dir / "test_custom_three_deletion.json"
         
         # Verify state file was created and contains all deletable files
