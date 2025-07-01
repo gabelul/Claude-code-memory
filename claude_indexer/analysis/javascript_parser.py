@@ -50,7 +50,7 @@ class JavaScriptParser(TreeSitterParser):
             # Use JavaScript grammar for .js, .jsx, .mjs, .cjs files
             return super().parse_tree(content)
         
-    def parse(self, file_path: Path) -> ParserResult:
+    def parse(self, file_path: Path, batch_callback=None, global_entity_names=None) -> ParserResult:
         """Extract functions, classes, imports with progressive disclosure."""
         start_time = time.time()
         result = ParserResult(file_path=file_path, entities=[], relations=[])
@@ -115,8 +115,8 @@ class JavaScriptParser(TreeSitterParser):
                     relation = RelationFactory.create_contains_relation(file_name, entity.name)
                     relations.append(relation)
             
-            # Create function call relations from semantic metadata (entity-aware to prevent orphans)
-            function_call_relations = self._create_function_call_relations(chunks, file_path, entities)
+            # Create function call relations from semantic metadata
+            function_call_relations = self._create_function_call_relations(chunks, file_path, None)
             relations.extend(function_call_relations)
             
             result.entities = entities
@@ -422,14 +422,9 @@ class JavaScriptParser(TreeSitterParser):
                         return string_value.strip('\'"')
         return None
     
-    def _create_function_call_relations(self, chunks: List[EntityChunk], file_path: Path, entities: List['Entity'] = None) -> List[Relation]:
-        """Create CALLS relations from extracted function calls, only when target entities exist."""
+    def _create_function_call_relations(self, chunks: List[EntityChunk], file_path: Path, entities_or_names) -> List[Relation]:
+        """Create CALLS relations from extracted function calls."""
         relations = []
-        
-        # Build set of available entity names for fast lookup
-        entity_names = set()
-        if entities:
-            entity_names = {entity.name for entity in entities}
         
         for chunk in chunks:
             if chunk.chunk_type == "implementation":
@@ -437,17 +432,13 @@ class JavaScriptParser(TreeSitterParser):
                 calls = semantic_metadata.get("calls", [])
                 
                 for called_function in calls:
-                    # Only create relation if target entity exists (prevents orphans)
-                    if not entities or called_function in entity_names:
-                        relation = RelationFactory.create_calls_relation(
-                            caller=chunk.entity_name,
-                            callee=called_function,
-                            context=f"Function call in {file_path.name}"
-                        )
-                        relations.append(relation)
-                    else:
-                        # Log skipped orphan relation for debugging
-                        logger.debug(f"   🚫 Skipped orphan relation: {chunk.entity_name} -> {called_function} (entity not found)")
+                    # Create relation for all function calls (no filtering)
+                    relation = RelationFactory.create_calls_relation(
+                        caller=chunk.entity_name,
+                        callee=called_function,
+                        context=f"Function call in {file_path.name}"
+                    )
+                    relations.append(relation)
         
         return relations
     

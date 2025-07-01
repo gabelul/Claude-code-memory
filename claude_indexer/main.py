@@ -256,7 +256,7 @@ def run_indexing_with_specific_files(project_path: str, collection_name: str,
                     logger.warning(f"⚠️ Failed to clean existing entities for {file_path}: {e}")
         
         # Process files directly using batch processing
-        entities, relations, implementation_chunks, errors = indexer._process_file_batch(paths_to_process, verbose)
+        entities, relations, implementation_chunks, errors = indexer._process_file_batch(paths_to_process, collection_name, verbose)
         
         # Handle any processing errors
         if errors:

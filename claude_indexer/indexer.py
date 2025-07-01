@@ -130,15 +130,20 @@ class CoreIndexer:
             project_config = config_manager.load()
             
             # Check if content_only is enabled for JSON parsing
+            self.logger.debug(f"🔍 Batch check for {file_path.name}: project_config type = {type(project_config)}")
             if hasattr(project_config, 'indexing') and project_config.indexing:
                 if hasattr(project_config.indexing, 'parser_config') and project_config.indexing.parser_config:
                     json_parser_config = project_config.indexing.parser_config.get('json', None)
+                    self.logger.debug(f"🔍 Found JSON config: {json_parser_config}")
                     if json_parser_config and getattr(json_parser_config, 'content_only', False):
+                        self.logger.debug(f"✅ Batch processing enabled for {file_path.name}")
                         return True
             
+            self.logger.debug(f"❌ Batch processing disabled for {file_path.name}")
             return False
             
-        except Exception:
+        except Exception as e:
+            self.logger.debug(f"❌ Batch processing check failed for {file_path.name}: {e}")
             return False
     
     def _inject_parser_configs(self):
@@ -245,7 +250,7 @@ class CoreIndexer:
                 total_batches = (len(files_to_process) + batch_size - 1) // batch_size
                 self.logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} files)")
                 
-                batch_entities, batch_relations, batch_implementation_chunks, batch_errors = self._process_file_batch(batch, verbose)
+                batch_entities, batch_relations, batch_implementation_chunks, batch_errors = self._process_file_batch(batch, collection_name, verbose)
                 
                 all_entities.extend(batch_entities)
                 all_relations.extend(batch_relations)
@@ -266,6 +271,24 @@ class CoreIndexer:
                 # Update metrics
                 result.files_processed += len([f for f in batch if str(f) not in batch_errors])
                 result.files_failed += len(batch_errors)
+            
+            # Apply in-memory orphan filtering before storage to avoid wasted embeddings
+            if all_relations:
+                # Get global entity names for filtering
+                global_entity_names = self._get_all_entity_names(collection_name)
+                
+                # CRITICAL: Add entities from current batch to avoid filtering legitimate relations
+                current_batch_entity_names = {entity.name for entity in all_entities}
+                combined_entity_names = global_entity_names | current_batch_entity_names
+                
+                if combined_entity_names:
+                    original_count = len(all_relations)
+                    all_relations = self._filter_orphan_relations_in_memory(all_relations, combined_entity_names)
+                    filtered_count = original_count - len(all_relations)
+                    self.logger.info(f"🧹 Pre-storage filtering: {filtered_count} orphan relations removed, {len(all_relations)} valid relations kept")
+                    self.logger.debug(f"   Entity awareness: {len(global_entity_names)} from DB + {len(current_batch_entity_names)} from current batch = {len(combined_entity_names)} total")
+                else:
+                    self.logger.warning("⚠️ No entities available for filtering - proceeding without pre-filtering")
             
             # Store vectors using direct Qdrant automation with progressive disclosure
             if all_entities or all_relations or all_implementation_chunks:
@@ -648,7 +671,90 @@ class CoreIndexer:
         
         return new_vectored, modified_vectored, deleted_vectored
     
-    def _process_file_batch(self, files: List[Path], verbose: bool = False) -> Tuple[List[Entity], List[Relation], List[EntityChunk], List[str]]:
+    def _filter_orphan_relations_in_memory(self, relations: List['Relation'], global_entity_names: set) -> List['Relation']:
+        """Filter orphan relations in-memory before embedding to avoid waste."""
+        if not global_entity_names:
+            self.logger.warning("No global entities available for in-memory filtering - keeping all relations")
+            return relations
+            
+        valid_relations = []
+        orphan_count = 0
+        
+        for relation in relations:
+            # Get the target entity from the relation
+            target_entity = relation.to_entity
+            
+            # Always keep non-calls relations (imports, contains, file operations)
+            if relation.relation_type.value != 'calls':
+                valid_relations.append(relation)
+                continue
+                
+            # For CALLS relations, check if target entity exists in global database
+            if target_entity in global_entity_names:
+                valid_relations.append(relation)
+                self.logger.debug(f"✅ Kept relation: {relation.from_entity} -> {target_entity} (entity exists)")
+            else:
+                orphan_count += 1
+                self.logger.debug(f"🚫 Filtered orphan: {relation.from_entity} -> {target_entity} (entity not found)")
+        
+        self.logger.info(f"🧹 In-memory filtering: {len(valid_relations)} relations kept, {orphan_count} orphans filtered")
+        return valid_relations
+    
+    def _get_all_entity_names(self, collection_name: str) -> set:
+        """Get all entity names from vector store for global entity awareness."""
+        try:
+            # Get Qdrant client from vector store
+            if hasattr(self.vector_store, 'backend') and hasattr(self.vector_store.backend, 'client'):
+                qdrant_client = self.vector_store.backend.client
+            elif hasattr(self.vector_store, 'client'):
+                qdrant_client = self.vector_store.client
+            else:
+                self.logger.warning("Cannot access Qdrant client for global entity awareness")
+                return set()
+            
+            entity_names = set()
+            next_page_offset = None
+            
+            # Scroll through all metadata chunks to get entity names
+            while True:
+                from qdrant_client.models import Filter, FieldCondition, MatchValue
+                
+                scroll_result = qdrant_client.scroll(
+                    collection_name=collection_name,
+                    offset=next_page_offset,
+                    limit=1000,
+                    with_payload=True,
+                    with_vectors=False,
+                    scroll_filter=Filter(
+                        must=[
+                            FieldCondition(key="chunk_type", match=MatchValue(value="metadata"))
+                        ]
+                    )
+                )
+                
+                points, next_page_offset = scroll_result
+                
+                if not points:
+                    break
+                
+                # Extract entity names from payloads
+                for point in points:
+                    payload = point.payload
+                    if payload and "entity_name" in payload:
+                        entity_names.add(payload["entity_name"])
+                
+                # Break if no more pages
+                if next_page_offset is None:
+                    break
+            
+            self.logger.debug(f"🌐 Retrieved {len(entity_names)} global entity names for entity-aware filtering")
+            return entity_names
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to get global entities: {e}")
+            return set()
+    
+    def _process_file_batch(self, files: List[Path], collection_name: str, verbose: bool = False) -> Tuple[List[Entity], List[Relation], List[EntityChunk], List[str]]:
         """Process a batch of files with progressive disclosure support."""
         all_entities = []
         all_relations = []
@@ -661,7 +767,7 @@ class CoreIndexer:
                 
                 # Determine file status using existing changed files logic
                 current_state = self._get_current_state([file_path])
-                previous_state = self._load_state("memory-project")
+                previous_state = self._load_state(collection_name)
                 
                 file_key = str(relative_path)
                 if file_key not in previous_state:
@@ -673,7 +779,19 @@ class CoreIndexer:
                 
                 self.logger.debug(f"Processing file [{file_status}]: {relative_path}")
                 
-                result = self.parser_registry.parse_file(file_path)
+                # Check for batch processing (streaming for large JSON files)
+                batch_callback = None
+                if self._should_use_batch_processing(file_path):
+                    batch_callback = self._create_batch_callback(collection_name)
+                    self.logger.info(f"🚀 Enabling batch processing for large file: {file_path.name}")
+                
+                # Get global entity names for entity-aware filtering (once per batch, cached)
+                if not hasattr(self, '_cached_global_entities'):
+                    self._cached_global_entities = self._get_all_entity_names(collection_name)
+                    if self._cached_global_entities:
+                        self.logger.debug(f"🌐 Cached {len(self._cached_global_entities)} global entities for cross-file relation filtering")
+                
+                result = self.parser_registry.parse_file(file_path, batch_callback, global_entity_names=self._cached_global_entities)
                 
                 if result.success:
                     all_entities.extend(result.entities)

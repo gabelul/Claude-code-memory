@@ -119,7 +119,7 @@ class PythonParser(CodeParser):
         """Get supported extensions."""
         return ['.py']
     
-    def parse(self, file_path: Path) -> ParserResult:
+    def parse(self, file_path: Path, batch_callback=None, global_entity_names=None) -> ParserResult:
         """Parse Python file using Tree-sitter and Jedi."""
         import time
         
@@ -139,6 +139,10 @@ class PythonParser(CodeParser):
                 
                 ts_entities = self._extract_tree_sitter_entities(tree, file_path)
                 result.entities.extend(ts_entities)
+                
+                # Extract Tree-sitter relations (inheritance, imports)
+                ts_relations = self._extract_tree_sitter_relations(tree, file_path)
+                result.relations.extend(ts_relations)
             
             # Analyze with Jedi for semantic information
             jedi_analysis = self._analyze_with_jedi(file_path)
@@ -151,8 +155,8 @@ class PythonParser(CodeParser):
             implementation_chunks = self._extract_implementation_chunks(file_path, tree)
             result.implementation_chunks.extend(implementation_chunks)
             
-            # Create CALLS relations from extracted function calls (entity-aware to prevent orphans)
-            calls_relations = self._create_calls_relations_from_chunks(implementation_chunks, file_path, result.entities)
+            # Create CALLS relations from extracted function calls
+            calls_relations = self._create_calls_relations_from_chunks(implementation_chunks, file_path, None)
             result.relations.extend(calls_relations)
             
             # Extract file operations (open, json.load, etc.)
@@ -235,6 +239,29 @@ class PythonParser(CodeParser):
         traverse_node(tree.root_node)
         return entities
     
+    def _extract_tree_sitter_relations(self, tree: 'tree_sitter.Tree', file_path: Path) -> List['Relation']:
+        """Extract relations from Tree-sitter AST (inheritance, imports)."""
+        
+        relations = []
+        
+        def traverse_node(node, depth=0):
+            # Extract inheritance relations from class definitions
+            if node.type == 'class_definition':
+                inheritance_relations = self._extract_inheritance_relations(node, file_path)
+                relations.extend(inheritance_relations)
+            
+            # Extract import relations
+            elif node.type in ['import_statement', 'import_from_statement']:
+                import_relations = self._extract_import_relations(node, file_path)
+                relations.extend(import_relations)
+            
+            # Recursively traverse children
+            for child in node.children:
+                traverse_node(child, depth + 1)
+        
+        traverse_node(tree.root_node)
+        return relations
+    
     def _extract_named_entity(self, node: 'tree_sitter.Node', entity_type: 'EntityType', 
                              file_path: Path) -> Optional['Entity']:
         """Extract named entity from Tree-sitter node."""
@@ -268,6 +295,100 @@ class PythonParser(CodeParser):
             )
         
         return None
+    
+    def _extract_inheritance_relations(self, class_node: 'tree_sitter.Node', file_path: Path) -> List['Relation']:
+        """Extract inheritance relations from a class definition node."""
+        relations = []
+        
+        # Find class name
+        class_name = None
+        for child in class_node.children:
+            if child.type == 'identifier':
+                class_name = child.text.decode('utf-8')
+                break
+        
+        if not class_name:
+            return relations
+        
+        # Find argument_list (contains parent classes)
+        for child in class_node.children:
+            if child.type == 'argument_list':
+                # Extract parent classes from argument list
+                for arg in child.children:
+                    if arg.type == 'identifier':
+                        parent_name = arg.text.decode('utf-8')
+                        # Create inherits relation
+                        relation = RelationFactory.create_inherits_relation(
+                            subclass=class_name,
+                            superclass=parent_name
+                        )
+                        relations.append(relation)
+                    elif arg.type == 'attribute':
+                        # Handle module.Class inheritance
+                        parent_name = arg.text.decode('utf-8')
+                        relation = RelationFactory.create_inherits_relation(
+                            subclass=class_name,
+                            superclass=parent_name
+                        )
+                        relations.append(relation)
+                break
+        
+        return relations
+    
+    def _extract_import_relations(self, import_node: 'tree_sitter.Node', file_path: Path) -> List['Relation']:
+        """Extract import relations from import statements."""
+        relations = []
+        file_name = str(file_path)
+        
+        if import_node.type == 'import_statement':
+            # Handle: import module1, module2
+            for child in import_node.children:
+                if child.type == 'dotted_name' or child.type == 'aliased_import':
+                    if child.type == 'aliased_import':
+                        # Get the module name before 'as'
+                        for subchild in child.children:
+                            if subchild.type == 'dotted_name':
+                                module_name = subchild.text.decode('utf-8')
+                                break
+                    else:
+                        module_name = child.text.decode('utf-8')
+                    
+                    relation = RelationFactory.create_imports_relation(
+                        importer=file_name,
+                        imported=module_name,
+                        import_type="module"
+                    )
+                    relations.append(relation)
+        
+        elif import_node.type == 'import_from_statement':
+            # Handle: from module import name1, name2
+            module_name = None
+            
+            # Find the module name
+            for i, child in enumerate(import_node.children):
+                if child.type == 'dotted_name':
+                    module_name = child.text.decode('utf-8')
+                    break
+                elif child.type == 'relative_import':
+                    # Handle relative imports like 'from . import' or 'from .. import'
+                    dots = child.text.decode('utf-8')
+                    # Look for module name after dots
+                    if i + 1 < len(import_node.children) and import_node.children[i + 1].type == 'dotted_name':
+                        module_name = dots + import_node.children[i + 1].text.decode('utf-8')
+                    else:
+                        module_name = dots
+                    break
+            
+            if module_name:
+                # Create relation for the module import
+                relation = RelationFactory.create_imports_relation(
+                    importer=file_name,
+                    imported=module_name,
+                    import_type="module"
+                )
+                relations.append(relation)
+        
+        return relations
     
     def _analyze_with_jedi(self, file_path: Path) -> Dict[str, Any]:
         """Analyze file with Jedi for semantic information."""
@@ -680,33 +801,23 @@ class PythonParser(CodeParser):
             logger.debug(f"   By type: {type_counts}")
         return relations
     
-    def _create_calls_relations_from_chunks(self, chunks: List['EntityChunk'], file_path: Path, entities: List['Entity'] = None) -> List['Relation']:
-        """Create CALLS relations from extracted function calls, only when target entities exist."""
+    def _create_calls_relations_from_chunks(self, chunks: List['EntityChunk'], file_path: Path, entities_or_names) -> List['Relation']:
+        """Create CALLS relations from extracted function calls."""
         relations = []
-        
-        # Build set of available entity names for fast lookup
-        entity_names = set()
-        if entities:
-            entity_names = {entity.name for entity in entities}
         
         for chunk in chunks:
             if chunk.chunk_type == "implementation":
                 semantic_metadata = chunk.metadata.get("semantic_metadata", {})
                 calls = semantic_metadata.get("calls", [])
                 
-                
                 for called_function in calls:
-                    # Only create relation if target entity exists (prevents orphans)
-                    if not entities or called_function in entity_names:
-                        relation = RelationFactory.create_calls_relation(
-                            caller=chunk.entity_name,
-                            callee=called_function,
-                            context=f"Function call in {file_path.name}"
-                        )
-                        relations.append(relation)
-                    else:
-                        # Log skipped orphan relation for debugging
-                        logger.debug(f"   🚫 Skipped orphan relation: {chunk.entity_name} -> {called_function} (entity not found)")
+                    # Create relation for all function calls (no filtering)
+                    relation = RelationFactory.create_calls_relation(
+                        caller=chunk.entity_name,
+                        callee=called_function,
+                        context=f"Function call in {file_path.name}"
+                    )
+                    relations.append(relation)
         
         return relations
 
@@ -937,7 +1048,7 @@ class ParserRegistry:
                 return parser
         return None
     
-    def parse_file(self, file_path: Path, batch_callback=None) -> ParserResult:
+    def parse_file(self, file_path: Path, batch_callback=None, global_entity_names=None) -> ParserResult:
         """Parse a file using the appropriate parser."""
         parser = self.get_parser_for_file(file_path)
         
@@ -946,12 +1057,16 @@ class ParserRegistry:
             result.errors.append(f"No parser available for {file_path.suffix}")
             return result
         
-        # Try to pass batch_callback if parser supports it
+        # Try to pass both batch_callback and global_entity_names if parser supports them
         try:
-            return parser.parse(file_path, batch_callback=batch_callback)
+            return parser.parse(file_path, batch_callback=batch_callback, global_entity_names=global_entity_names)
         except TypeError:
-            # Fallback for parsers that don't support batch_callback
-            return parser.parse(file_path)
+            # Fallback for parsers that don't support new parameters
+            try:
+                return parser.parse(file_path, batch_callback=batch_callback)
+            except TypeError:
+                # Final fallback for basic parsers
+                return parser.parse(file_path)
     
     def get_supported_extensions(self) -> List[str]:
         """Get all supported file extensions."""

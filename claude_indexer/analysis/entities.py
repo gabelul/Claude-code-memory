@@ -397,3 +397,13 @@ class RelationFactory:
             relation_type=RelationType.CALLS,
             context=context or f"{caller} calls {callee}"
         )
+    
+    @staticmethod
+    def create_inherits_relation(subclass: str, superclass: str, context: Optional[str] = None) -> Relation:
+        """Create an 'inherits' relationship."""
+        return Relation(
+            from_entity=subclass,
+            to_entity=superclass,
+            relation_type=RelationType.INHERITS,
+            context=context or f"{subclass} inherits from {superclass}"
+        )
