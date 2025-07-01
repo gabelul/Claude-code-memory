@@ -151,8 +151,8 @@ class PythonParser(CodeParser):
             implementation_chunks = self._extract_implementation_chunks(file_path, tree)
             result.implementation_chunks.extend(implementation_chunks)
             
-            # Create CALLS relations from extracted function calls
-            calls_relations = self._create_calls_relations_from_chunks(implementation_chunks, file_path)
+            # Create CALLS relations from extracted function calls (entity-aware to prevent orphans)
+            calls_relations = self._create_calls_relations_from_chunks(implementation_chunks, file_path, result.entities)
             result.relations.extend(calls_relations)
             
             # Extract file operations (open, json.load, etc.)
@@ -471,7 +471,9 @@ class PythonParser(CodeParser):
         # Simple regex to find function calls (name followed by parentheses)
         call_pattern = r'(\w+)\s*\('
         calls = re.findall(call_pattern, source)
-        # Filter out common keywords and duplicates
+        
+        # Filter out only obvious keywords that should never be function calls
+        # Let entity-aware filtering handle library methods
         keywords = {'if', 'for', 'while', 'try', 'except', 'with', 'def', 'class', 'return', 'print'}
         return list(set([call for call in calls if call not in keywords]))
     
@@ -584,7 +586,8 @@ class PythonParser(CodeParser):
                                         relations.append(relation)
                                         # Truncate long content for cleaner logs
                                         display_ref = file_ref[:50] + "..." if len(file_ref) > 50 else file_ref
-                                        logger.debug(f"   ✅ Created {op_type} relation: {display_ref}")
+                                        logger.debug(f"   ✅ Created {op_type} relation: {file_path} -> {display_ref}")
+                                        logger.debug(f"      Relation has import_type: {relation.metadata.get('import_type', 'MISSING')}")
                                         break
                     
                     # Handle method calls on objects (e.g., df.to_json())
@@ -604,6 +607,8 @@ class PythonParser(CodeParser):
                                                 import_type=FILE_OPERATIONS[method_name]
                                             )
                                             relations.append(relation)
+                                            logger.debug(f"   ✅ Created DataFrame {FILE_OPERATIONS[method_name]} relation: {file_path} -> {file_ref}")
+                                            logger.debug(f"      Method: {method_name}, import_type: {relation.metadata.get('import_type', 'MISSING')}")
                                             break
                     
                     # Special handling for open() built-in
@@ -664,25 +669,44 @@ class PythonParser(CodeParser):
         if tree and tree.root_node:
             find_file_operations(tree.root_node)
         
+        # Count by type for debugging
+        type_counts = {}
+        for rel in relations:
+            imp_type = rel.metadata.get('import_type', 'unknown')
+            type_counts[imp_type] = type_counts.get(imp_type, 0) + 1
+        
         logger.debug(f"🔍 _extract_file_operations found {len(relations)} file operations")
+        if type_counts:
+            logger.debug(f"   By type: {type_counts}")
         return relations
     
-    def _create_calls_relations_from_chunks(self, chunks: List['EntityChunk'], file_path: Path) -> List['Relation']:
-        """Create CALLS relations from extracted function calls in implementation chunks."""
+    def _create_calls_relations_from_chunks(self, chunks: List['EntityChunk'], file_path: Path, entities: List['Entity'] = None) -> List['Relation']:
+        """Create CALLS relations from extracted function calls, only when target entities exist."""
         relations = []
+        
+        # Build set of available entity names for fast lookup
+        entity_names = set()
+        if entities:
+            entity_names = {entity.name for entity in entities}
         
         for chunk in chunks:
             if chunk.chunk_type == "implementation":
                 semantic_metadata = chunk.metadata.get("semantic_metadata", {})
                 calls = semantic_metadata.get("calls", [])
                 
+                
                 for called_function in calls:
-                    relation = RelationFactory.create_calls_relation(
-                        caller=chunk.entity_name,
-                        callee=called_function,
-                        context=f"Function call in {file_path.name}"
-                    )
-                    relations.append(relation)
+                    # Only create relation if target entity exists (prevents orphans)
+                    if not entities or called_function in entity_names:
+                        relation = RelationFactory.create_calls_relation(
+                            caller=chunk.entity_name,
+                            callee=called_function,
+                            context=f"Function call in {file_path.name}"
+                        )
+                        relations.append(relation)
+                    else:
+                        # Log skipped orphan relation for debugging
+                        logger.debug(f"   🚫 Skipped orphan relation: {chunk.entity_name} -> {called_function} (entity not found)")
         
         return relations
 
@@ -834,7 +858,23 @@ class ParserRegistry:
     def __init__(self, project_path: Path):
         self.project_path = project_path
         self._parsers: List[CodeParser] = []
+        
+        # Load project config for parser initialization
+        self.project_config = self._load_project_config()
+        
         self._register_default_parsers()
+    
+    def _load_project_config(self) -> Dict[str, Any]:
+        """Load project-specific configuration."""
+        try:
+            from ..config.project_config import ProjectConfigManager
+            config_manager = ProjectConfigManager(self.project_path)
+            if config_manager.exists:
+                return config_manager.load()
+            return {}
+        except Exception as e:
+            logger.debug(f"Failed to load project config: {e}")
+            return {}
     
     def _register_default_parsers(self):
         """Register default parsers."""
@@ -849,8 +889,29 @@ class ParserRegistry:
         self.register(PythonParser(self.project_path))
         self.register(JavaScriptParser())
         
-        # Data format parsers  
-        self.register(JSONParser())
+        # Data format parsers with project config
+        json_config = {}
+        try:
+            # Extract JSON config from project config (handling ProjectConfig objects)
+            if hasattr(self.project_config, 'indexing') and self.project_config.indexing:
+                if hasattr(self.project_config.indexing, 'parser_config') and self.project_config.indexing.parser_config:
+                    json_parser_config = self.project_config.indexing.parser_config.get('json', None)
+                    if json_parser_config:
+                        # Convert ParserConfig object to dict
+                        json_config = {
+                            'content_only': getattr(json_parser_config, 'content_only', False),
+                            'max_content_items': getattr(json_parser_config, 'max_content_items', 0),
+                            'special_files': getattr(json_parser_config, 'special_files', ['package.json', 'tsconfig.json', 'composer.json'])
+                        }
+                        logger.debug(f"Extracted JSON parser config: {json_config}")
+            elif isinstance(self.project_config, dict):
+                # Fallback for dict-based config
+                json_config = self.project_config.get('indexing', {}).get('parser_config', {}).get('json', {})
+        except Exception as e:
+            logger.debug(f"Failed to extract JSON parser config: {e}")
+            json_config = {}
+        
+        self.register(JSONParser(json_config))
         self.register(YAMLParser())
         
         # Web parsers
@@ -876,7 +937,7 @@ class ParserRegistry:
                 return parser
         return None
     
-    def parse_file(self, file_path: Path) -> ParserResult:
+    def parse_file(self, file_path: Path, batch_callback=None) -> ParserResult:
         """Parse a file using the appropriate parser."""
         parser = self.get_parser_for_file(file_path)
         
@@ -885,7 +946,12 @@ class ParserRegistry:
             result.errors.append(f"No parser available for {file_path.suffix}")
             return result
         
-        return parser.parse(file_path)
+        # Try to pass batch_callback if parser supports it
+        try:
+            return parser.parse(file_path, batch_callback=batch_callback)
+        except TypeError:
+            # Fallback for parsers that don't support batch_callback
+            return parser.parse(file_path)
     
     def get_supported_extensions(self) -> List[str]:
         """Get all supported file extensions."""

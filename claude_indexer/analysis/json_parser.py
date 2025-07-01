@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 import time
 import re
+import os
 from tree_sitter import Node
 from .base_parsers import TreeSitterParser
 from .parser import ParserResult
@@ -26,13 +27,45 @@ class JSONParser(TreeSitterParser):
         """Return list of supported file extensions."""
         return self.SUPPORTED_EXTENSIONS
         
-    def parse(self, file_path: Path) -> ParserResult:
+    def parse(self, file_path: Path, batch_callback=None) -> ParserResult:
         """Extract JSON structure as entities and relations."""
         start_time = time.time()
         result = ParserResult(file_path=file_path, entities=[], relations=[])
         
         try:
-            # Read and parse JSON
+            # Check file size for streaming decision
+            file_size = os.path.getsize(file_path)
+            # Use content extraction for all files in content_only mode
+            # Use streaming (batch processing) when batch_callback is provided
+            use_content_extraction = self.config.get('content_only', False)
+            use_streaming = (use_content_extraction and batch_callback is not None)
+            
+            if use_content_extraction:
+                if use_streaming:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"🚀 Using STREAMING parser for {file_path.name} ({file_size / 1024 / 1024:.1f} MB)")
+                    # Use streaming parser for large files
+                    return self._extract_content_items_streaming(file_path, batch_callback)
+                else:
+                    # Read and parse JSON for smaller files with content extraction
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    result.file_hash = self._get_file_hash(file_path)
+                    tree = self.parse_tree(content)
+                    
+                    # Check for syntax errors
+                    if self._has_syntax_errors(tree):
+                        result.errors.append(f"JSON syntax errors in {file_path.name}")
+                    
+                    # Use traditional content extraction for smaller files
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"📄 Using CONTENT extraction for {file_path.name} ({file_size / 1024 / 1024:.1f} MB)")
+                    return self._extract_content_items(file_path, tree, content)
+            
+            # Read and parse JSON normally for smaller files (non-content mode)
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
@@ -42,10 +75,6 @@ class JSONParser(TreeSitterParser):
             # Check for syntax errors
             if self._has_syntax_errors(tree):
                 result.errors.append(f"JSON syntax errors in {file_path.name}")
-            
-            # Enhanced content_only mode: extract individual content items
-            if self.config.get('content_only', False):
-                return self._extract_content_items(file_path, tree, content)
             
             entities = []
             relations = []
@@ -504,3 +533,193 @@ class JSONParser(TreeSitterParser):
         text = re.sub(r'\n +', '\n', text)  # Remove leading spaces on lines
         
         return text.strip()
+    
+    def _extract_content_items_streaming(self, file_path: Path, batch_callback=None, batch_size=1000) -> ParserResult:
+        """Extract content items using streaming JSON parser for large files."""
+        start_time = time.time()
+        result = ParserResult(file_path=file_path, entities=[], relations=[])
+        result.file_hash = self._get_file_hash(file_path)
+        
+        try:
+            import ijson
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            # Batch processing variables
+            current_batch_entities = []
+            current_batch_chunks = []
+            total_entities_processed = 0
+            total_chunks_processed = 0
+            processed_count = 0
+            max_items = self.config.get('max_content_items', 0)  # 0 means no limit
+            
+            # Create file entity (processed immediately, not batched)
+            file_entity = self._create_file_entity(file_path, content_type="content_collection")
+            
+            # Process file entity immediately if callback available
+            if batch_callback:
+                batch_result = batch_callback([file_entity], [], [])
+                if batch_result:
+                    total_entities_processed += 1
+                    logger.info(f"📁 Processed file entity for {file_path.name}")
+            else:
+                # Fallback: accumulate for traditional return
+                current_batch_entities.append(file_entity)
+            
+            # Arrays to check for content
+            content_arrays = ["topics", "posts", "articles", "comments", 
+                            "messages", "threads", "forums", "site_pages"]
+            
+            # Process each content array
+            for array_key in content_arrays:
+                with open(file_path, 'rb') as f:
+                    try:
+                        # Stream items from the specific array
+                        parser = ijson.items(f, f'{array_key}.item')
+                        
+                        for i, item in enumerate(parser):
+                            if not isinstance(item, dict):
+                                continue
+                            
+                            # Check item limit
+                            if max_items > 0 and processed_count >= max_items:
+                                break
+                            
+                            # Process individual item into current batch
+                            self._process_streamed_item(
+                                item, array_key, i, file_path, current_batch_entities, current_batch_chunks
+                            )
+                            processed_count += 1
+                            
+                            # Check if batch is ready for processing
+                            if len(current_batch_chunks) >= batch_size:
+                                if batch_callback:
+                                    # Process batch immediately
+                                    batch_result = batch_callback(current_batch_entities, [], current_batch_chunks)
+                                    if batch_result:
+                                        total_entities_processed += len(current_batch_entities)
+                                        total_chunks_processed += len(current_batch_chunks)
+                                        logger.info(f"✅ Processed batch: {len(current_batch_chunks)} chunks from {file_path.name} (Total: {total_chunks_processed})")
+                                    
+                                    # Clear batch memory
+                                    current_batch_entities.clear()
+                                    current_batch_chunks.clear()
+                                else:
+                                    # Fallback: accumulate (this shouldn't happen in streaming mode)
+                                    logger.warning(f"⚠️ No batch callback provided, accumulating {len(current_batch_chunks)} chunks")
+                            
+                            # Log progress for large files
+                            if processed_count % 100 == 0:
+                                logger.debug(f"Parsed {processed_count} items from {file_path.name} (Memory: {len(current_batch_chunks)} chunks)")
+                        
+                    except ijson.JSONError:
+                        # Array doesn't exist or parsing error, continue to next
+                        continue
+                    except Exception as e:
+                        # Log specific array error but continue processing
+                        result.errors.append(f"Error processing {array_key}: {str(e)[:100]}")
+                        continue
+                
+                # Check if we've hit the limit
+                if max_items > 0 and processed_count >= max_items:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"Reached max_content_items limit ({max_items}) for {file_path.name}")
+                    break
+            
+            # Process final partial batch if any items remain
+            if current_batch_entities or current_batch_chunks:
+                if batch_callback:
+                    batch_result = batch_callback(current_batch_entities, [], current_batch_chunks)
+                    if batch_result:
+                        total_entities_processed += len(current_batch_entities)
+                        total_chunks_processed += len(current_batch_chunks)
+                        logger.info(f"✅ Processed final batch: {len(current_batch_chunks)} chunks from {file_path.name}")
+                    # Clear final batch
+                    current_batch_entities.clear()
+                    current_batch_chunks.clear()
+            
+            # Handle case where no content items were found
+            if processed_count == 0:
+                result.errors.append("No content items found in any expected arrays")
+                if not batch_callback:
+                    # Only create placeholder chunk if not using callback (traditional mode)
+                    chunk = EntityChunk(
+                        id=self._create_chunk_id(file_path, "no_content", "implementation"),
+                        entity_name=file_path.name,
+                        chunk_type="implementation",
+                        content="Large JSON file with no extractable content items",
+                        metadata={
+                            "entity_type": "json_content",
+                            "file_path": str(file_path),
+                            "has_implementation": False
+                        }
+                    )
+                    current_batch_chunks.append(chunk)
+            
+            # Set result based on processing mode
+            if batch_callback:
+                # Streaming mode: return minimal result with counts
+                result.entities = []  # Already processed via callback
+                result.relations = []  # No structural relations in content_only mode
+                result.implementation_chunks = []  # Already processed via callback
+                # Store metadata for reporting
+                result.entities_created = total_entities_processed
+                result.implementation_chunks_created = total_chunks_processed
+                logger.info(f"🚀 Streaming completed: {processed_count} items → {total_chunks_processed} chunks processed from {file_path.name}")
+            else:
+                # Traditional mode: return accumulated results
+                result.entities = current_batch_entities
+                result.relations = []  # No structural relations in content_only mode  
+                result.implementation_chunks = current_batch_chunks
+                logger.info(f"📄 Traditional processing: {processed_count} items from {file_path.name}")
+            
+        except Exception as e:
+            result.errors.append(f"Streaming JSON parsing failed: {str(e)[:200]}")
+            # Return minimal result on error
+            file_entity = self._create_file_entity(file_path, content_type="error")
+            result.entities = [file_entity]
+            result.implementation_chunks = []
+        
+        result.parsing_time = time.time() - start_time
+        return result
+    
+    def _process_streamed_item(self, item: dict, array_key: str, index: int, 
+                              file_path: Path, entities: list, chunks: list):
+        """Process a single streamed item."""
+        # Create meaningful entity name
+        entity_name = self._create_content_entity_name(array_key, item, index)
+        
+        # Extract text content from the item
+        content_text = self._extract_item_content(item)
+        
+        if content_text:
+            # Create entity
+            entity = Entity(
+                name=entity_name,
+                entity_type=EntityType.DOCUMENTATION,
+                observations=[f"{array_key.rstrip('s').title()}: {entity_name}"],
+                file_path=file_path,
+                line_number=1,  # JSON items don't have line numbers
+                metadata={
+                    "content_type": array_key.rstrip('s'),
+                    "item_index": index,
+                    "source_array": array_key
+                }
+            )
+            entities.append(entity)
+            
+            # Create content chunk
+            chunk = EntityChunk(
+                id=self._create_chunk_id(file_path, entity_name, "implementation"),
+                entity_name=entity_name,
+                chunk_type="implementation",
+                content=content_text,
+                metadata={
+                    "entity_type": f"{array_key.rstrip('s')}_content",
+                    "file_path": str(file_path),
+                    "has_implementation": True,
+                    "item_index": index
+                }
+            )
+            chunks.append(chunk)

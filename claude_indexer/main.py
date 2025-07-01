@@ -492,8 +492,13 @@ def run_indexing(project_path: str, collection_name: str,
         logger = setup_logging(quiet=quiet, verbose=verbose, collection_name=collection_name, project_path=project)
         
         # Load configuration to create indexer for file discovery
-        config_path = Path(config_file) if config_file else None
-        config = load_config(config_path)
+        # Use project path for project-specific configuration, fall back to explicit config file
+        if config_file:
+            config_path = Path(config_file)
+            config = load_config(config_path)
+        else:
+            # Use project path to load project-specific configuration
+            config = load_config(project)
         
         # Create components for file discovery
         # Get the appropriate API key based on provider

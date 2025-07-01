@@ -1,5 +1,7 @@
 # Claude Code Memory Solution
 
+**⚠️ IMPORTANT: This project uses `claude-memory-test` as its memory collection/database. Always use `mcp__claude-memory-test-memory__` prefix for all memory operations (search, read_graph, etc.) when working on this project.**
+
 ## Current Version: v2.7.1 - Project-Local State Files ✅ PRODUCTION READY
 
 Complete memory solution for Claude Code providing context-aware conversations with semantic search across **10+ programming languages** with universal Tree-sitter parsing, enhanced Python file operations, and project-level configuration.

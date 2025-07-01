@@ -30,6 +30,7 @@ class JSONParserConfig(ParserConfig):
     ])
     max_depth: int = 10
     content_only: bool = False   # Extract individual content items (posts/articles) when True
+    max_content_items: int = 0   # Maximum items to extract per file (0 = no limit)
 
 
 class TextParserConfig(ParserConfig):

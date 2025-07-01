@@ -738,7 +738,9 @@ else:
                     score = result.get('score', 0)
                     payload = result.get('payload', {})
                     
-                    click.echo(f"{i}. {payload.get('name', 'Unknown')} (score: {score:.3f})")
+                    # Try both 'name' and 'entity_name' fields for compatibility
+                    entity_name = payload.get('name') or payload.get('entity_name', 'Unknown')
+                    click.echo(f"{i}. {entity_name} (score: {score:.3f})")
                     
                     if verbose:
                         entity_type = payload.get('entity_type', payload.get('type', 'unknown'))

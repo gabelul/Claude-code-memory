@@ -115,8 +115,8 @@ class JavaScriptParser(TreeSitterParser):
                     relation = RelationFactory.create_contains_relation(file_name, entity.name)
                     relations.append(relation)
             
-            # Create function call relations from semantic metadata
-            function_call_relations = self._create_function_call_relations(chunks, file_path)
+            # Create function call relations from semantic metadata (entity-aware to prevent orphans)
+            function_call_relations = self._create_function_call_relations(chunks, file_path, entities)
             relations.extend(function_call_relations)
             
             result.entities = entities
@@ -422,9 +422,14 @@ class JavaScriptParser(TreeSitterParser):
                         return string_value.strip('\'"')
         return None
     
-    def _create_function_call_relations(self, chunks: List[EntityChunk], file_path: Path) -> List[Relation]:
-        """Create CALLS relations from extracted function calls in implementation chunks."""
+    def _create_function_call_relations(self, chunks: List[EntityChunk], file_path: Path, entities: List['Entity'] = None) -> List[Relation]:
+        """Create CALLS relations from extracted function calls, only when target entities exist."""
         relations = []
+        
+        # Build set of available entity names for fast lookup
+        entity_names = set()
+        if entities:
+            entity_names = {entity.name for entity in entities}
         
         for chunk in chunks:
             if chunk.chunk_type == "implementation":
@@ -432,12 +437,17 @@ class JavaScriptParser(TreeSitterParser):
                 calls = semantic_metadata.get("calls", [])
                 
                 for called_function in calls:
-                    relation = RelationFactory.create_calls_relation(
-                        caller=chunk.entity_name,
-                        callee=called_function,
-                        context=f"Function call in {file_path.name}"
-                    )
-                    relations.append(relation)
+                    # Only create relation if target entity exists (prevents orphans)
+                    if not entities or called_function in entity_names:
+                        relation = RelationFactory.create_calls_relation(
+                            caller=chunk.entity_name,
+                            callee=called_function,
+                            context=f"Function call in {file_path.name}"
+                        )
+                        relations.append(relation)
+                    else:
+                        # Log skipped orphan relation for debugging
+                        logger.debug(f"   🚫 Skipped orphan relation: {chunk.entity_name} -> {called_function} (entity not found)")
         
         return relations
     

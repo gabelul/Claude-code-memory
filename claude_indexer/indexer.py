@@ -98,19 +98,48 @@ class CoreIndexer:
         
         # Initialize parser registry
         self.parser_registry = ParserRegistry(project_path)
+    
+    def _create_batch_callback(self, collection_name: str):
+        """Create a callback function for batch processing during streaming."""
+        def batch_callback(entities, relations, chunks):
+            """Process a batch of entities, relations, and chunks immediately."""
+            try:
+                # Use existing _store_vectors method for immediate processing
+                success = self._store_vectors(collection_name, entities, relations, chunks)
+                return success
+            except Exception as e:
+                self.logger.error(f"❌ Batch processing failed: {e}")
+                return False
         
-        # Load project configuration if available
-        from .config.config_loader import ConfigLoader
-        self.config_loader = ConfigLoader(project_path)
+        return batch_callback
+    
+    def _should_use_batch_processing(self, file_path: Path) -> bool:
+        """Determine if a file should use batch processing during parsing."""
         try:
-            # Update config with project-specific settings
-            self.config = self.config_loader.load()
+            # Only JSON files with content_only mode should use batch processing
+            if file_path.suffix != '.json':
+                return False
+            
+            # Check if this is a project that uses content_only mode for JSON
+            # Use the same config loading approach as ParserRegistry
+            from .config.project_config import ProjectConfigManager
+            config_manager = ProjectConfigManager(self.project_path)
+            if not config_manager.exists:
+                return False
+            
+            project_config = config_manager.load()
+            
+            # Check if content_only is enabled for JSON parsing
+            if hasattr(project_config, 'indexing') and project_config.indexing:
+                if hasattr(project_config.indexing, 'parser_config') and project_config.indexing.parser_config:
+                    json_parser_config = project_config.indexing.parser_config.get('json', None)
+                    if json_parser_config and getattr(json_parser_config, 'content_only', False):
+                        return True
+            
+            return False
+            
         except Exception:
-            # Continue with existing config if project config fails
-            pass
-        
-        # Inject parser-specific configurations
-        self._inject_parser_configs()
+            return False
     
     def _inject_parser_configs(self):
         """Inject project-specific parser configurations."""
@@ -169,6 +198,13 @@ class CoreIndexer:
         # Auto-detect incremental mode based on state file existence (like watcher pattern)
         state_file = self._get_state_file(collection_name)
         incremental = state_file.exists()
+        
+        if verbose:
+            logger.info(f"🔍 === INDEXING MODE DETECTION ===")
+            logger.info(f"   Collection: {collection_name}")
+            logger.info(f"   State file exists: {incremental}")
+            logger.info(f"   Mode: {'INCREMENTAL' if incremental else 'FULL'}")
+            logger.info(f"   Orphan cleanup will run: {'YES' if incremental else 'NO (full mode)'}")
         
         result = IndexingResult(success=True, operation="incremental" if incremental else "full")
         
@@ -252,13 +288,20 @@ class CoreIndexer:
                 
                 # Clean up orphaned relations after processing modified files
                 if incremental and successfully_processed:
-                    if verbose:
-                        logger.info(f"🔍 Cleaning up orphaned relations after processing {len(successfully_processed)} modified files")
+                    logger.info(f"🧹 === ORPHAN CLEANUP TRIGGERED ===")
+                    logger.info(f"   Mode: INCREMENTAL")
+                    logger.info(f"   Files processed: {len(successfully_processed)}")
+                    logger.info(f"   Starting orphan cleanup...")
                     orphaned_deleted = self.vector_store._cleanup_orphaned_relations(collection_name, verbose)
-                    if verbose and orphaned_deleted > 0:
+                    if orphaned_deleted > 0:
                         logger.info(f"✅ Cleanup complete: {orphaned_deleted} orphaned relations removed")
-                    elif verbose:
+                    else:
                         logger.info("✅ No orphaned relations found")
+                else:
+                    logger.info(f"🚫 === ORPHAN CLEANUP SKIPPED ===")
+                    logger.info(f"   Incremental: {incremental}")
+                    logger.info(f"   Successfully processed: {len(successfully_processed) if successfully_processed else 0}")
+                    logger.info(f"   Reason: {'Not incremental mode' if not incremental else 'No files processed'}")
             elif verbose:
                 logger.warning(f"⚠️  No files to save state for (all {len(files_to_process)} files failed)")
             
@@ -314,8 +357,13 @@ class CoreIndexer:
                 import traceback
                 logger.warning(f"⚠️ Traceback: {traceback.format_exc()}")
             
-            # Parse file
-            parse_result = self.parser_registry.parse_file(file_path)
+            # Parse file with batch processing for large JSON files
+            batch_callback = None
+            if self._should_use_batch_processing(file_path):
+                batch_callback = self._create_batch_callback(collection_name)
+                self.logger.info(f"🚀 Enabling batch processing for large file: {file_path.name}")
+            
+            parse_result = self.parser_registry.parse_file(file_path, batch_callback)
             
             if not parse_result.success:
                 result.success = False
@@ -323,19 +371,30 @@ class CoreIndexer:
                 result.errors.extend(parse_result.errors)
                 return result
             
-            # Use batch processing like the project indexer with progressive disclosure
-            storage_success = self._store_vectors(collection_name, parse_result.entities, parse_result.relations, parse_result.implementation_chunks)
-            
-            if storage_success:
+            # Handle storage based on whether batch processing was used
+            if batch_callback:
+                # Batch processing was used - data already stored via callback
+                storage_success = True
                 result.files_processed = 1
-                result.entities_created = len(parse_result.entities)
-                result.relations_created = len(parse_result.relations)
-                result.implementation_chunks_created = len(parse_result.implementation_chunks)
+                result.entities_created = getattr(parse_result, 'entities_created', 0)
+                result.relations_created = 0  # Relations not used in content_only mode
+                result.implementation_chunks_created = getattr(parse_result, 'implementation_chunks_created', 0)
                 result.processed_files = [str(file_path)]
+                self.logger.info(f"✅ Streaming batch processing completed for {file_path.name}")
             else:
-                result.success = False
-                result.files_failed = 1
-                result.errors.append("Failed to store vectors")
+                # Traditional processing - store accumulated results
+                storage_success = self._store_vectors(collection_name, parse_result.entities, parse_result.relations, parse_result.implementation_chunks)
+                
+                if storage_success:
+                    result.files_processed = 1
+                    result.entities_created = len(parse_result.entities)
+                    result.relations_created = len(parse_result.relations)
+                    result.implementation_chunks_created = len(parse_result.implementation_chunks)
+                    result.processed_files = [str(file_path)]
+                else:
+                    result.success = False
+                    result.files_failed = 1
+                    result.errors.append("Failed to store vectors")
             
         except Exception as e:
             result.success = False
@@ -698,20 +757,34 @@ class CoreIndexer:
                 seen_relation_keys = set()
                 unique_relations = []
                 duplicate_count = 0
+                duplicate_details = {}
+                
+                logger.debug(f"🔍 === RELATION DEDUPLICATION ===")
+                logger.debug(f"   Total relations to process: {len(relations)}")
                 
                 for relation in relations:
                     # Generate the same key that will be used for storage
                     relation_chunk = RelationChunk.from_relation(relation)
                     relation_key = relation_chunk.id
+                    import_type = relation.metadata.get('import_type', 'none') if relation.metadata else 'none'
                     
                     if relation_key not in seen_relation_keys:
                         seen_relation_keys.add(relation_key)
                         unique_relations.append(relation)
+                        if logger and len(unique_relations) <= 5:
+                            logger.debug(f"   ✅ Unique: {relation_key} [import_type: {import_type}]")
                     else:
                         duplicate_count += 1
+                        if import_type not in duplicate_details:
+                            duplicate_details[import_type] = 0
+                        duplicate_details[import_type] += 1
+                        if logger and duplicate_count <= 5:
+                            logger.debug(f"   ❌ Duplicate: {relation_key} [import_type: {import_type}]")
                 
-                if logger and duplicate_count > 0:
-                    logger.debug(f"🔍 Deduplicated {duplicate_count} relations before embedding (saved {duplicate_count} API calls)")
+                logger.debug(f"   Unique relations: {len(unique_relations)}")
+                logger.debug(f"   Duplicates removed: {duplicate_count}")
+                if duplicate_details:
+                    logger.debug(f"   Duplicates by type: {duplicate_details}")
                     
                 relation_texts = [self._relation_to_text(relation) for relation in unique_relations]
                 if logger:
@@ -773,7 +846,20 @@ class CoreIndexer:
             # Batch store all points
             if all_points:
                 if logger:
-                    logger.debug(f"💾 Storing {len(all_points)} points to Qdrant collection '{collection_name}'")
+                    logger.debug(f"💾 === FINAL STORAGE SUMMARY ===")
+                    logger.debug(f"   Collection: {collection_name}")
+                    logger.debug(f"   Total points to store: {len(all_points)}")
+                    
+                    # Count different types of points
+                    entity_points = sum(1 for p in all_points if p.payload.get('chunk_type') == 'metadata' and p.payload.get('entity_type') != 'relation')
+                    relation_points = sum(1 for p in all_points if p.payload.get('chunk_type') == 'relation')
+                    impl_points = sum(1 for p in all_points if p.payload.get('chunk_type') == 'implementation')
+                    
+                    logger.debug(f"   - Entity metadata: {entity_points}")
+                    logger.debug(f"   - Relations: {relation_points}")
+                    logger.debug(f"   - Implementations: {impl_points}")
+                    logger.debug(f"   API calls made: {total_requests}")
+                    logger.debug(f"   Tokens used: {total_tokens:,}")
                 
                 result = self.vector_store.batch_upsert(collection_name, all_points)
                 

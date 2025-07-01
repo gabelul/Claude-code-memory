@@ -296,6 +296,11 @@ class EntityFactory:
         if file_path.stat().st_size:
             observations.append(f"Size: {file_path.stat().st_size} bytes")
         
+        # Log file entity creation for debugging
+        from ..indexer_logging import get_logger
+        logger = get_logger()
+        logger.debug(f"📁 Creating FILE entity: name='{str(file_path)}' (absolute path)")
+        
         return Entity(
             name=str(file_path),
             entity_type=EntityType.FILE,

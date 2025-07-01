@@ -637,10 +637,13 @@ class QdrantStore(ManagedVectorStore):
         import_type = relation.metadata.get('import_type', '') if relation.metadata else ''
         if import_type:
             relation_key = f"{relation.from_entity}-{relation.relation_type.value}-{relation.to_entity}-{import_type}"
+            logger.debug(f"🔗 Creating relation WITH import_type: {relation_key}")
         else:
             # Fallback for relations without import_type
             relation_key = f"{relation.from_entity}-{relation.relation_type.value}-{relation.to_entity}"
+            logger.debug(f"🔗 Creating relation WITHOUT import_type: {relation_key}")
         point_id = self.generate_deterministic_id(relation_key)
+        logger.debug(f"   → Generated ID: {point_id}")
         
         # Create payload - v2.4 format matching RelationChunk
         payload = {
@@ -898,6 +901,7 @@ class QdrantStore(ManagedVectorStore):
             # Check each relation for orphaned references with consistent snapshot
             orphaned_relations = []
             valid_relations = 0
+            file_ref_relations = 0
             
             # Debug: Log first few relations to understand the data
             if verbose and len(relations) > 0:
@@ -905,7 +909,10 @@ class QdrantStore(ManagedVectorStore):
                 for i, rel in enumerate(relations[:3]):
                     from_e = rel.payload.get('entity_name', '')
                     to_e = rel.payload.get('relation_target', '')
-                    logger.debug(f"      Relation {i}: {from_e} -> {to_e}")
+                    imp_type = rel.payload.get('import_type', 'none')
+                    logger.debug(f"      Relation {i}: {from_e} -> {to_e} [import_type: {imp_type}]")
+            
+            logger.debug(f"🔍 DEBUG: Checking {len(relations)} relations against {len(entity_names)} entities")
             
             for relation in relations:
                 # v2.4 relation format only
@@ -933,17 +940,27 @@ class QdrantStore(ManagedVectorStore):
                 # 2. Target is missing AND it's an internal entity (not external file)
                 if from_missing:
                     orphaned_relations.append(relation)
-                    if verbose:
-                        logger.debug(f"   🔍 ORPHAN (source missing): {from_entity} -> {to_entity}")
+                    # ALWAYS log orphan deletions for investigation
+                    logger.info(f"   🔍 ORPHAN (source missing): {from_entity} -> {to_entity}")
                 elif to_missing and not is_file_reference:
                     orphaned_relations.append(relation)
-                    if verbose:
-                        logger.debug(f"   🔍 ORPHAN (target missing): {from_entity} -> {to_entity}")
+                    # ALWAYS log orphan deletions for investigation
+                    imp_type = relation.payload.get('import_type', 'none')
+                    logger.info(f"   🔍 ORPHAN (target missing): {from_entity} -> {to_entity} [import_type: {imp_type}]")
                 else:
                     valid_relations += 1
+                    if is_file_reference:
+                        file_ref_relations += 1
+                        if verbose and file_ref_relations <= 5:  # Log first few file refs
+                            imp_type = relation.payload.get('import_type', 'none')
+                            logger.debug(f"   ✅ VALID file ref: {from_entity} -> {to_entity} [import_type: {imp_type}]")
             
             if verbose:
-                logger.debug(f"   🧹 Orphan cleanup: {len(relations)} relations checked, {len(orphaned_relations)} orphans found")
+                logger.debug(f"   🧹 Orphan cleanup summary:")
+                logger.debug(f"      Total relations: {len(relations)}")
+                logger.debug(f"      Valid relations: {valid_relations}")
+                logger.debug(f"      File references: {file_ref_relations}")
+                logger.debug(f"      Orphans found: {len(orphaned_relations)}")
             
             # Batch delete orphaned relations if found
             if orphaned_relations:
