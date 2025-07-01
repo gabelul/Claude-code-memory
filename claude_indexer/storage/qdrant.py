@@ -635,6 +635,9 @@ class QdrantStore(ManagedVectorStore):
         # Generate deterministic ID - include import_type to prevent deduplication
         # Check if relation has import_type in metadata
         import_type = relation.metadata.get('import_type', '') if relation.metadata else ''
+        logger.debug(f"🔗 Relation metadata: {relation.metadata}")
+        logger.debug(f"🔗 Import type extracted: '{import_type}'")
+        
         if import_type:
             relation_key = f"{relation.from_entity}-{relation.relation_type.value}-{relation.to_entity}-{import_type}"
             logger.debug(f"🔗 Creating relation WITH import_type: {relation_key}")

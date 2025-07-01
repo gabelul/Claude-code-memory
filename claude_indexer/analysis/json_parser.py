@@ -323,6 +323,7 @@ class JSONParser(TreeSitterParser):
             content_count += self._extract_array_items(data, "threads", file_path, entities, chunks)
             content_count += self._extract_array_items(data, "forums", file_path, entities, chunks)
             content_count += self._extract_array_items(data, "site_pages", file_path, entities, chunks)
+            content_count += self._extract_array_items(data, "items", file_path, entities, chunks)
             
             # If no content items found, fallback to full content chunk
             if content_count == 0:
@@ -568,7 +569,7 @@ class JSONParser(TreeSitterParser):
             
             # Arrays to check for content
             content_arrays = ["topics", "posts", "articles", "comments", 
-                            "messages", "threads", "forums", "site_pages"]
+                            "messages", "threads", "forums", "site_pages", "items"]
             
             # Process each content array
             for array_key in content_arrays:

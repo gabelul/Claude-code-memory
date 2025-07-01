@@ -262,6 +262,7 @@ class PythonParser(CodeParser):
         traverse_node(tree.root_node)
         return relations
     
+
     def _extract_named_entity(self, node: 'tree_sitter.Node', entity_type: 'EntityType', 
                              file_path: Path) -> Optional['Entity']:
         """Extract named entity from Tree-sitter node."""
@@ -284,14 +285,16 @@ class PythonParser(CodeParser):
                 name=entity_name,
                 file_path=file_path,
                 line_number=line_number,
-                metadata={"end_line": end_line, "source": "tree-sitter"}
+                end_line=end_line,
+                source="tree-sitter"
             )
         elif entity_type == EntityType.CLASS:
             return EntityFactory.create_class_entity(
                 name=entity_name,
                 file_path=file_path,
                 line_number=line_number,
-                metadata={"end_line": end_line, "source": "tree-sitter"}
+                end_line=end_line,
+                source="tree-sitter"
             )
         
         return None
@@ -340,6 +343,9 @@ class PythonParser(CodeParser):
         relations = []
         file_name = str(file_path)
         
+        # Get project root for internal import checking
+        project_root = self._project.path if hasattr(self, '_project') and self._project else file_path.parent
+        
         if import_node.type == 'import_statement':
             # Handle: import module1, module2
             for child in import_node.children:
@@ -353,12 +359,14 @@ class PythonParser(CodeParser):
                     else:
                         module_name = child.text.decode('utf-8')
                     
-                    relation = RelationFactory.create_imports_relation(
-                        importer=file_name,
-                        imported=module_name,
-                        import_type="module"
-                    )
-                    relations.append(relation)
+                    # Only create relations for relative imports or project-internal modules
+                    if module_name.startswith('.') or self._is_internal_import(module_name, file_path, project_root):
+                        relation = RelationFactory.create_imports_relation(
+                            importer=file_name,
+                            imported=module_name,
+                            import_type="module"
+                        )
+                        relations.append(relation)
         
         elif import_node.type == 'import_from_statement':
             # Handle: from module import name1, name2
@@ -380,15 +388,56 @@ class PythonParser(CodeParser):
                     break
             
             if module_name:
-                # Create relation for the module import
-                relation = RelationFactory.create_imports_relation(
-                    importer=file_name,
-                    imported=module_name,
-                    import_type="module"
-                )
-                relations.append(relation)
+                # Only create relations for relative imports or project-internal modules
+                if module_name.startswith('.') or self._is_internal_import(module_name, file_path, project_root):
+                    relation = RelationFactory.create_imports_relation(
+                        importer=file_name,
+                        imported=module_name,
+                        import_type="module"
+                    )
+                    relations.append(relation)
         
         return relations
+    
+    def _is_internal_import(self, module_name: str, current_file: Path, project_root: Path) -> bool:
+        """Check if an import is internal to the project by checking if the module file exists."""
+        # Common external module prefixes to exclude
+        if module_name.startswith(('_', '__')):  # Private/magic modules
+            return False
+            
+        # Check if module file exists in project
+        try:
+            # Convert module name to potential file paths
+            module_parts = module_name.split('.')
+            base_module = module_parts[0]
+            
+            # Quick check: if first part doesn't exist as file/dir in project, it's external
+            base_path = project_root / base_module
+            base_file = project_root / f"{base_module}.py"
+            
+            if not base_path.exists() and not base_file.exists():
+                return False
+                
+            # For deeper modules, verify the path exists
+            if len(module_parts) > 1:
+                # Check as module file
+                module_path = project_root / Path(*module_parts[:-1]) / f"{module_parts[-1]}.py"
+                if module_path.exists():
+                    return True
+                    
+                # Check as package
+                package_path = project_root / Path(*module_parts) / "__init__.py"
+                if package_path.exists():
+                    return True
+            else:
+                # Single module name already checked above
+                return True
+                
+        except Exception:
+            # If we can't determine, assume it's external to avoid orphans
+            return False
+            
+        return False
     
     def _analyze_with_jedi(self, file_path: Path) -> Dict[str, Any]:
         """Analyze file with Jedi for semantic information."""
@@ -459,15 +508,20 @@ class PythonParser(CodeParser):
                 )
                 entities.append(entity)
         
-        # Process imports
+        # Process imports with filtering
         file_name = str(file_path)
+        project_root = self.project_path if hasattr(self, 'project_path') else file_path.parent
+        
         for imp in analysis['imports']:
-            relation = RelationFactory.create_imports_relation(
-                importer=file_name,
-                imported=imp['name'],
-                import_type="module"
-            )
-            relations.append(relation)
+            module_name = imp['name']
+            # Only create relations for relative imports or project-internal modules
+            if module_name.startswith('.') or self._is_internal_import(module_name, file_path, project_root):
+                relation = RelationFactory.create_imports_relation(
+                    importer=file_name,
+                    imported=module_name,
+                    import_type="module"
+                )
+                relations.append(relation)
         
         return entities, relations
     

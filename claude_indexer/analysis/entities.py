@@ -60,20 +60,19 @@ class EntityChunk:
     
     def to_vector_payload(self) -> Dict[str, Any]:
         """Convert to Qdrant payload format with progressive disclosure support."""
-        return {
+        payload = {
             "entity_name": self.entity_name,
             "chunk_type": self.chunk_type,
             "content": self.content,
             **self.metadata
         }
+        return payload
     
     @classmethod
     def create_metadata_chunk(cls, entity: 'Entity', has_implementation: bool = False) -> 'EntityChunk':
         """Create metadata chunk from existing Entity for progressive disclosure."""
-        # Build content from entity observations and signature
+        # Build content from entity observations
         content_parts = []
-        if entity.signature:
-            content_parts.append(f"Signature: {entity.signature}")
         if entity.docstring:
             content_parts.append(f"Description: {entity.docstring}")
         
@@ -107,6 +106,7 @@ class RelationChunk:
     content: str  # Human-readable description
     context: Optional[str] = None
     confidence: float = 1.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
     
     def __post_init__(self) -> None:
         """Validate relation chunk after creation."""
@@ -132,7 +132,8 @@ class RelationChunk:
             relation_type=relation.relation_type,
             content=content,
             context=relation.context,
-            confidence=relation.confidence
+            confidence=relation.confidence,
+            metadata=relation.metadata.copy() if relation.metadata else {}
         )
     
     def to_vector_payload(self) -> Dict[str, Any]:
@@ -150,6 +151,12 @@ class RelationChunk:
             payload["context"] = self.context
         if self.confidence != 1.0:
             payload["confidence"] = self.confidence
+        
+        # Include metadata fields (especially import_type for import relations)
+        if self.metadata:
+            for key, value in self.metadata.items():
+                if key not in payload:  # Don't override existing fields
+                    payload[key] = value
             
         return payload
 
@@ -333,7 +340,7 @@ class EntityFactory:
             line_number=line_number,
             signature=signature,
             docstring=docstring,
-            metadata=metadata
+            metadata=metadata if isinstance(metadata, dict) else dict(metadata)
         )
     
     @staticmethod
