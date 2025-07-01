@@ -868,6 +868,8 @@ class QdrantStore(ManagedVectorStore):
             # Process in-memory to ensure consistency
             entity_names = set()
             relations = []
+            entity_count = 0
+            other_count = 0
             
             for point in all_points:
                 # v2.4 format only: "type": "chunk", "chunk_type": "relation"
@@ -877,7 +879,15 @@ class QdrantStore(ManagedVectorStore):
                     name = point.payload.get('entity_name', point.payload.get('name', ''))
                     if name:
                         entity_names.add(name)
+                        entity_count += 1
+                    else:
+                        other_count += 1
+                        if verbose:
+                            logger.debug(f"   ⚠️ Point without name: type={point.payload.get('type')}, chunk_type={point.payload.get('chunk_type')}, keys={list(point.payload.keys())[:5]}")
             
+            if verbose:
+                logger.debug(f"   📊 Found {entity_count} entities, {len(relations)} relations, {other_count} other points")
+                logger.debug(f"   📊 Sample entity names: {list(entity_names)[:5]}...")
             
             if not relations:
                 if verbose:
@@ -888,6 +898,14 @@ class QdrantStore(ManagedVectorStore):
             # Check each relation for orphaned references with consistent snapshot
             orphaned_relations = []
             valid_relations = 0
+            
+            # Debug: Log first few relations to understand the data
+            if verbose and len(relations) > 0:
+                logger.debug("   📊 Sample relations being checked:")
+                for i, rel in enumerate(relations[:3]):
+                    from_e = rel.payload.get('entity_name', '')
+                    to_e = rel.payload.get('relation_target', '')
+                    logger.debug(f"      Relation {i}: {from_e} -> {to_e}")
             
             for relation in relations:
                 # v2.4 relation format only
@@ -915,8 +933,12 @@ class QdrantStore(ManagedVectorStore):
                 # 2. Target is missing AND it's an internal entity (not external file)
                 if from_missing:
                     orphaned_relations.append(relation)
+                    if verbose:
+                        logger.debug(f"   🔍 ORPHAN (source missing): {from_entity} -> {to_entity}")
                 elif to_missing and not is_file_reference:
                     orphaned_relations.append(relation)
+                    if verbose:
+                        logger.debug(f"   🔍 ORPHAN (target missing): {from_entity} -> {to_entity}")
                 else:
                     valid_relations += 1
             

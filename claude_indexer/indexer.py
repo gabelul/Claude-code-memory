@@ -404,7 +404,7 @@ class CoreIndexer:
     
     def _find_all_files(self, include_tests: bool = False) -> List[Path]:
         """Find all files matching project patterns."""
-        files = []
+        files = set()  # Use set to prevent duplicates
         
         # Use project-specific patterns
         include_patterns = self.config.include_patterns
@@ -416,8 +416,14 @@ class CoreIndexer:
         
         # Find files matching include patterns
         for pattern in include_patterns:
-            found = list(self.project_path.glob(f"**/{pattern}"))
-            files.extend(found)
+            # Handle patterns that already include ** vs those that don't
+            if pattern.startswith('**/'):
+                glob_pattern = pattern
+            else:
+                glob_pattern = f"**/{pattern}"
+            
+            found = list(self.project_path.glob(glob_pattern))
+            files.update(found)  # Use update instead of extend to prevent duplicates
         
         # Filter files
         filtered_files = []
@@ -438,7 +444,7 @@ class CoreIndexer:
             
             filtered_files.append(file_path)
         
-        return filtered_files
+        return list(filtered_files)  # Convert back to list for return type consistency
     
     def _get_files_needing_processing(self, include_tests: bool = False, collection_name: str = None) -> List[Path]:
         """Get files that need processing for incremental indexing."""

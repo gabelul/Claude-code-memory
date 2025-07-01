@@ -29,6 +29,7 @@ class JSONParserConfig(ParserConfig):
         "package.json", "tsconfig.json", "composer.json"
     ])
     max_depth: int = 10
+    content_only: bool = False   # Extract individual content items (posts/articles) when True
 
 
 class TextParserConfig(ParserConfig):

@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 import time
+import re
 from tree_sitter import Node
 from .base_parsers import TreeSitterParser
 from .parser import ParserResult
@@ -41,6 +42,10 @@ class JSONParser(TreeSitterParser):
             # Check for syntax errors
             if self._has_syntax_errors(tree):
                 result.errors.append(f"JSON syntax errors in {file_path.name}")
+            
+            # Enhanced content_only mode: extract individual content items
+            if self.config.get('content_only', False):
+                return self._extract_content_items(file_path, tree, content)
             
             entities = []
             relations = []
@@ -236,3 +241,266 @@ class JSONParser(TreeSitterParser):
         ))
         
         return chunks
+    
+    def _create_content_only_result(self, file_path: Path, content: str) -> ParserResult:
+        """Create a content-only result without structural parsing."""
+        result = ParserResult(file_path=file_path, entities=[], relations=[])
+        result.file_hash = self._get_file_hash(file_path)
+        
+        # Create only the file entity
+        file_entity = self._create_file_entity(file_path, content_type="content")
+        result.entities = [file_entity]
+        
+        # Create content chunk for searchability
+        chunk = EntityChunk(
+            id=self._create_chunk_id(file_path, "content", "implementation"),
+            entity_name=file_path.name,
+            chunk_type="implementation",
+            content=content,
+            metadata={
+                "entity_type": "json_content",
+                "file_path": str(file_path),
+                "has_implementation": True
+            }
+        )
+        result.implementation_chunks = [chunk]
+        
+        return result
+    
+    def _extract_content_items(self, file_path: Path, tree, content: str) -> ParserResult:
+        """Enhanced content extraction: extract individual posts/articles as separate entities."""
+        start_time = time.time()
+        result = ParserResult(file_path=file_path, entities=[], relations=[])
+        result.file_hash = self._get_file_hash(file_path)
+        
+        try:
+            import json
+            data = json.loads(content)
+            
+            entities = []
+            chunks = []
+            
+            # Create file entity
+            file_entity = self._create_file_entity(file_path, content_type="content_collection")
+            entities.append(file_entity)
+            
+            # Extract content items from arrays
+            content_count = 0
+            content_count += self._extract_array_items(data, "topics", file_path, entities, chunks)
+            content_count += self._extract_array_items(data, "posts", file_path, entities, chunks)
+            content_count += self._extract_array_items(data, "articles", file_path, entities, chunks)
+            content_count += self._extract_array_items(data, "comments", file_path, entities, chunks)
+            content_count += self._extract_array_items(data, "messages", file_path, entities, chunks)
+            content_count += self._extract_array_items(data, "threads", file_path, entities, chunks)
+            content_count += self._extract_array_items(data, "forums", file_path, entities, chunks)
+            content_count += self._extract_array_items(data, "site_pages", file_path, entities, chunks)
+            
+            # If no content items found, fallback to full content chunk
+            if content_count == 0:
+                chunk = EntityChunk(
+                    id=self._create_chunk_id(file_path, "content", "implementation"),
+                    entity_name=file_path.name,
+                    chunk_type="implementation",
+                    content=content,
+                    metadata={
+                        "entity_type": "json_content",
+                        "file_path": str(file_path),
+                        "has_implementation": True
+                    }
+                )
+                chunks.append(chunk)
+            
+            result.entities = entities
+            result.relations = []  # No structural relations in content_only mode
+            result.implementation_chunks = chunks
+            
+        except json.JSONDecodeError as e:
+            result.errors.append(f"JSON parsing failed: {e}")
+            # Fallback to simple content result
+            return self._create_content_only_result(file_path, content)
+        except Exception as e:
+            result.errors.append(f"Content extraction failed: {e}")
+            return self._create_content_only_result(file_path, content)
+        
+        result.parsing_time = time.time() - start_time
+        return result
+    
+    def _extract_array_items(self, data: dict, array_key: str, file_path: Path, 
+                           entities: list, chunks: list) -> int:
+        """Extract individual items from a content array."""
+        if array_key not in data or not isinstance(data[array_key], list):
+            return 0
+        
+        items = data[array_key]
+        count = 0
+        
+        for i, item in enumerate(items):
+            if not isinstance(item, dict):
+                continue
+                
+            # Create meaningful entity name
+            entity_name = self._create_content_entity_name(array_key, item, i)
+            
+            # Extract text content from the item
+            content_text = self._extract_item_content(item)
+            
+            if content_text:
+                # Create entity
+                entity = Entity(
+                    name=entity_name,
+                    entity_type=EntityType.DOCUMENTATION,
+                    observations=[f"{array_key.rstrip('s').title()}: {entity_name}"],
+                    file_path=file_path,
+                    line_number=1,  # JSON items don't have line numbers
+                    metadata={
+                        "content_type": array_key.rstrip('s'),
+                        "item_index": i,
+                        "source_array": array_key
+                    }
+                )
+                entities.append(entity)
+                
+                # Create content chunk
+                chunk = EntityChunk(
+                    id=self._create_chunk_id(file_path, entity_name, "implementation"),
+                    entity_name=entity_name,
+                    chunk_type="implementation",
+                    content=content_text,
+                    metadata={
+                        "entity_type": f"{array_key.rstrip('s')}_content",
+                        "file_path": str(file_path),
+                        "has_implementation": True,
+                        "item_index": i
+                    }
+                )
+                chunks.append(chunk)
+                count += 1
+        
+        return count
+    
+    def _create_content_entity_name(self, array_key: str, item: dict, index: int) -> str:
+        """Create a meaningful name for a content entity."""
+        # Try to use title, subject, or name fields
+        for field in ['title', 'subject', 'name', 'headline']:
+            if field in item and isinstance(item[field], str):
+                title = item[field].strip()
+                if title:
+                    # Clean and truncate title
+                    title = title.replace('\n', ' ').replace('\r', '')[:100]
+                    return f"{array_key.rstrip('s')}_{index+1}_{title}"
+        
+        # Try to use ID fields
+        for field in ['id', '_id', 'post_id', 'article_id']:
+            if field in item:
+                return f"{array_key.rstrip('s')}_{item[field]}"
+        
+        # Fallback to index
+        return f"{array_key.rstrip('s')}_{index+1}"
+    
+    def _extract_item_content(self, item: dict) -> str:
+        """Extract meaningful text content from a content item."""
+        content_parts = []
+        
+        # Primary content fields
+        for field in ['content', 'body', 'text', 'message', 'description']:
+            if field in item and isinstance(item[field], str):
+                content_text = item[field].strip()
+                # Strip HTML/JS/CSS if content_only mode is enabled
+                if self.config.get('content_only', False):
+                    content_text = self._strip_html_js_css(content_text)
+                content_parts.append(content_text)
+        
+        # Metadata fields
+        for field in ['title', 'subject', 'name', 'headline']:
+            if field in item and isinstance(item[field], str):
+                title = item[field].strip()
+                # Strip HTML from titles too
+                if self.config.get('content_only', False):
+                    title = self._strip_html_js_css(title)
+                if title:
+                    content_parts.insert(0, f"Title: {title}")
+        
+        # Author information
+        author_info = self._extract_author_info(item)
+        if author_info:
+            content_parts.append(f"Author: {author_info}")
+        
+        # Join all content
+        full_content = '\n\n'.join(content_parts)
+        
+        # Include nested content (replies, comments)
+        nested_content = self._extract_nested_content(item)
+        if nested_content:
+            full_content += '\n\n--- Replies/Comments ---\n' + nested_content
+        
+        return full_content if full_content.strip() else str(item)
+    
+    def _extract_author_info(self, item: dict) -> str:
+        """Extract author information from an item."""
+        for field in ['author', 'user', 'username', 'created_by', 'poster']:
+            if field in item:
+                author = item[field]
+                if isinstance(author, str):
+                    return author
+                elif isinstance(author, dict) and 'name' in author:
+                    return author['name']
+        return ""
+    
+    def _extract_nested_content(self, item: dict) -> str:
+        """Extract content from nested arrays (replies, comments)."""
+        nested_parts = []
+        
+        for field in ['replies', 'comments', 'responses']:
+            if field in item and isinstance(item[field], list):
+                for i, nested_item in enumerate(item[field]):
+                    if isinstance(nested_item, dict):
+                        nested_content = self._extract_item_content(nested_item)
+                        if nested_content.strip():
+                            nested_parts.append(f"Reply {i+1}: {nested_content}")
+        
+        return '\n\n'.join(nested_parts)
+    
+    def _strip_html_js_css(self, text: str) -> str:
+        """Remove HTML tags, JavaScript, and CSS from text while preserving readable content."""
+        if not text:
+            return text
+            
+        # Remove PHP code blocks (common in הפיקאפר data)
+        text = re.sub(r'<\?php.*?\?>', '', text, flags=re.DOTALL)
+        
+        # Remove JavaScript blocks
+        text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<script[^>]*>', '', text, flags=re.IGNORECASE)
+        
+        # Remove CSS/style blocks
+        text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'style\s*=\s*["\'].*?["\']', '', text, flags=re.IGNORECASE)
+        
+        # Convert line break tags to actual line breaks
+        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</p>', '\n\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'<p[^>]*>', '', text, flags=re.IGNORECASE)
+        
+        # Convert list items to structured text
+        text = re.sub(r'<li[^>]*>', '• ', text, flags=re.IGNORECASE)
+        text = re.sub(r'</li>', '\n', text, flags=re.IGNORECASE)
+        
+        # Remove all remaining HTML tags
+        text = re.sub(r'<[^>]+>', '', text)
+        
+        # Decode HTML entities
+        text = text.replace('&nbsp;', ' ')
+        text = text.replace('&amp;', '&')
+        text = text.replace('&lt;', '<')
+        text = text.replace('&gt;', '>')
+        text = text.replace('&quot;', '"')
+        text = text.replace('&#39;', "'")
+        
+        # Clean up excessive whitespace
+        text = re.sub(r'\r\n', '\n', text)  # Normalize line endings
+        text = re.sub(r'\n{3,}', '\n\n', text)  # Max 2 consecutive newlines
+        text = re.sub(r'[ \t]+', ' ', text)  # Collapse multiple spaces/tabs
+        text = re.sub(r' +\n', '\n', text)  # Remove trailing spaces
+        text = re.sub(r'\n +', '\n', text)  # Remove leading spaces on lines
+        
+        return text.strip()
