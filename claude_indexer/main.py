@@ -311,7 +311,7 @@ def run_indexing_with_specific_files(project_path: str, collection_name: str,
                 # Now get the accurate vectored file changes after all operations
                 if 'before_vectored_files' in locals():
                     vectored_changes_for_display = indexer._categorize_vectored_file_changes(
-                        collection_name, before_vectored_files
+                        collection_name, before_vectored_files, set(successfully_processed)
                     )
                     if verbose:
                         logger.debug(f"DEBUG: Updated vectored_changes_for_display: {vectored_changes_for_display}")

@@ -412,8 +412,10 @@ else:
     @common_options
     @click.option('--debounce', type=float, default=2.0, 
                   help='Debounce delay in seconds (default: 2.0)')
+    @click.option('--clear', is_flag=True, help='Clear code-indexed memories before watching (preserves manual memories)')
+    @click.option('--clear-all', is_flag=True, help='Clear ALL memories before watching (including manual ones)')
     @click.pass_context
-    def start(ctx, project, collection, verbose, quiet, config, debounce):
+    def start(ctx, project, collection, verbose, quiet, config, debounce, clear, clear_all):
         """Start file watching for real-time indexing."""
         
         try:
@@ -432,6 +434,39 @@ else:
             
             # Load configuration
             config_obj = load_config(Path(config) if config else None)
+            
+            # Handle clearing if requested
+            if clear or clear_all:
+                if clear and clear_all:
+                    click.echo("Error: --clear and --clear-all are mutually exclusive", err=True)
+                    sys.exit(1)
+                
+                # Create components for clearing
+                embedder = create_embedder_from_config(config_obj)
+                vector_store = create_store_from_config({
+                    "backend": "qdrant",
+                    "url": config_obj.qdrant_url,
+                    "api_key": config_obj.qdrant_api_key,
+                    "enable_caching": True
+                })
+                indexer = CoreIndexer(config_obj, embedder, vector_store, project_path)
+                
+                preserve_manual = not clear_all  # clear preserves manual, clear_all doesn't
+                if not quiet:
+                    if clear_all:
+                        click.echo(f"🗑️ Clearing ALL memories in collection: {collection}")
+                    else:
+                        click.echo(f"🗑️ Clearing code-indexed memories in collection: {collection}")
+                
+                success = indexer.clear_collection(collection, preserve_manual=preserve_manual)
+                if not success:
+                    click.echo("❌ Failed to clear collection", err=True)
+                    sys.exit(1)
+                elif not quiet:
+                    if clear_all:
+                        click.echo("✅ All memories cleared")
+                    else:
+                        click.echo("✅ Code-indexed memories cleared (manual memories preserved)")
             
             # Load service configuration for watch patterns and settings
             service = IndexingService()

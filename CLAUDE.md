@@ -1,6 +1,10 @@
 # Claude Code Memory Solution
 
+**🚨 ACTIVE ISSUES: To check current active issues, use:** `mcp__claude-memory-test-memory__read_graph(entityTypes=["active_issue"], mode="entities", limit=20)` or search with `active_issue` category.
+
 **🧪 TESTING: For running tests, use `test-relations-full-memory` MCP. Always use `mcp__test-relations-full-memory__` prefix for test operations.**
+
+**🔧 MCP DEBUG: For debugging the MCP server used in Claude Code, use `mcp-debug-memory` MCP. Always use `mcp__mcp-debug-memory__` prefix for MCP server debugging operations (troubleshooting vectorization, MCP functionality issues).**
 
 **⚠️ IMPORTANT: This project uses `claude-memory-test` as its memory collection/database. Always use `mcp__claude-memory-test-memory__` prefix for all memory operations (search, read_graph, etc.) when working on this project.**
 

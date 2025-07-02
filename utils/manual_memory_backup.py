@@ -20,6 +20,7 @@ from claude_indexer.storage.qdrant import QdrantStore
 from claude_indexer.config import IndexerConfig
 from claude_indexer.embeddings.voyage import VoyageEmbedder
 from claude_indexer.embeddings.openai import OpenAIEmbedder
+from claude_indexer.indexer_logging import setup_logging
 
 def load_config():
     """Load configuration from settings.txt"""
@@ -548,6 +549,8 @@ Examples:
     # Global options
     parser.add_argument("--list-types", action="store_true",
                        help="List manual and code entity types and exit")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                       help="Enable verbose logging")
     
     args = parser.parse_args()
     
@@ -570,8 +573,20 @@ Examples:
         return
     
     try:
+        # Setup proper logging to logs/ directory
+        project_path = Path.cwd()
+        verbose = getattr(args, 'verbose', False)
+        logger = setup_logging(
+            level="DEBUG" if verbose else "INFO",
+            verbose=verbose,
+            collection_name=f"backup-{args.command}",
+            project_path=project_path
+        )
+        logger.info(f"Starting {args.command} operation")
+        
         if args.command == 'backup':
             backup_file, count = backup_manual_entries(args.collection, args.output)
+            logger.info(f"Backup complete: {count} entries saved to {backup_file}")
             print(f"\n🎉 Backup complete! {count} manual entries saved to {backup_file}")
             
         elif args.command == 'restore':
@@ -584,12 +599,16 @@ Examples:
             )
             
             if result:
+                logger.info("Restoration completed successfully")
                 print(f"\n🎉 Restoration successful!")
             else:
+                logger.error("Restoration failed")
                 print(f"\n❌ Restoration failed")
                 sys.exit(1)
                 
     except Exception as e:
+        if 'logger' in locals():
+            logger.error(f"Operation failed: {e}")
         print(f"\n❌ Operation failed: {e}")
         sys.exit(1)
 

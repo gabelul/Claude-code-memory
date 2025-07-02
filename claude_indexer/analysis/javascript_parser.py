@@ -104,6 +104,18 @@ class JavaScriptParser(TreeSitterParser):
             json_relations = self._extract_json_loading_patterns(tree.root_node, file_path, content)
             relations.extend(json_relations)
             
+            # Extract inheritance relations (extends/implements)
+            inheritance_relations = self._extract_inheritance_relations(tree.root_node, file_path, content)
+            relations.extend(inheritance_relations)
+            
+            # Extract exception handling relations (try/catch/throw)
+            exception_relations = self._extract_exception_relations(tree.root_node, file_path, content)
+            relations.extend(exception_relations)
+            
+            # Extract decorator relations (TypeScript)
+            decorator_relations = self._extract_decorator_relations(tree.root_node, file_path, content)
+            relations.extend(decorator_relations)
+            
             # Create file entity
             file_entity = self._create_file_entity(file_path, len(entities), "javascript")
             entities.insert(0, file_entity)
@@ -442,6 +454,177 @@ class JavaScriptParser(TreeSitterParser):
         
         return relations
     
+    def _extract_inheritance_relations(self, root: Node, file_path: Path, content: str) -> List[Relation]:
+        """Extract class inheritance relations (extends/implements)."""
+        relations = []
+        
+        for class_node in self._find_nodes_by_type(root, ['class_declaration']):
+            class_name = self._get_class_name(class_node, content)
+            if not class_name:
+                continue
+                
+            # Look for class heritage (extends/implements)
+            for child in class_node.children:
+                if child.type == 'class_heritage':
+                    for heritage_child in child.children:
+                        # Handle TypeScript extends_clause and implements_clause
+                        if heritage_child.type == 'extends_clause':
+                            # Find parent class name inside extends_clause
+                            for extends_child in heritage_child.children:
+                                if extends_child.type in ['identifier', 'type_identifier']:
+                                    parent_name = self.extract_node_text(extends_child, content)
+                                    relation = RelationFactory.create_inherits_relation(
+                                        subclass=class_name,
+                                        superclass=parent_name,
+                                        context=f"{class_name} extends {parent_name}"
+                                    )
+                                    relations.append(relation)
+                        
+                        elif heritage_child.type == 'implements_clause':
+                            # Find interface name inside implements_clause
+                            for implements_child in heritage_child.children:
+                                if implements_child.type in ['identifier', 'type_identifier']:
+                                    interface_name = self.extract_node_text(implements_child, content)
+                                    relation = RelationFactory.create_inherits_relation(
+                                        subclass=class_name,
+                                        superclass=interface_name,
+                                        context=f"{class_name} implements {interface_name}"
+                                    )
+                                    relations.append(relation)
+                        
+        
+        return relations
+    
+    def _extract_exception_relations(self, root: Node, file_path: Path, content: str) -> List[Relation]:
+        """Extract exception handling relations (try/catch/throw)."""
+        relations = []
+        
+        # Extract try statements - focus on meaningful exception relations
+        # Note: try/catch blocks are captured via throw statement relations to exception classes
+        
+        # Extract throw statements
+        for throw_node in self._find_nodes_by_type(root, ['throw_statement']):
+            containing_function = self._find_containing_function(throw_node, content)
+            if containing_function:
+                # Extract exception type from throw statement
+                exception_type = self._extract_exception_type(throw_node, content)
+                relation = RelationFactory.create_calls_relation(
+                    caller=containing_function,
+                    callee=exception_type,  # Point to actual exception class
+                    context=f"{containing_function} throws {exception_type}"
+                )
+                relations.append(relation)
+        
+        return relations
+    
+    def _extract_decorator_relations(self, root: Node, file_path: Path, content: str) -> List[Relation]:
+        """Extract TypeScript decorator relations."""
+        relations = []
+        
+        for decorator_node in self._find_nodes_by_type(root, ['decorator']):
+            # Extract decorator name
+            decorator_name = self._extract_decorator_name(decorator_node, content)
+            if not decorator_name:
+                continue
+            
+            # Find what the decorator applies to
+            target = self._find_decorator_target(decorator_node, content)
+            if target:
+                relation = RelationFactory.create_calls_relation(
+                    caller=target,
+                    callee=decorator_name,  # Point to decorator function name without @
+                    context=f"{target} uses decorator @{decorator_name}"
+                )
+                relations.append(relation)
+        
+        return relations
+    
+    def _get_class_name(self, class_node: Node, content: str) -> Optional[str]:
+        """Extract class name from class declaration."""
+        for child in class_node.children:
+            if child.type in ['type_identifier', 'identifier']:
+                return self.extract_node_text(child, content)
+        return None
+    
+    def _find_containing_function(self, node: Node, content: str) -> Optional[str]:
+        """Find the function that contains the given node."""
+        current = node.parent
+        while current:
+            if current.type in ['function_declaration', 'arrow_function', 'method_definition']:
+                return self._extract_function_name(current, content)
+            current = current.parent
+        return None
+    
+    def _get_catch_parameter(self, catch_node: Node, content: str) -> str:
+        """Extract parameter name from catch clause."""
+        for child in catch_node.children:
+            if child.type == 'identifier':
+                return self.extract_node_text(child, content)
+        return "error"
+    
+    def _extract_exception_type(self, throw_node: Node, content: str) -> str:
+        """Extract exception type from throw statement."""
+        for child in throw_node.children:
+            if child.type == 'new_expression':
+                # Look for constructor name
+                for new_child in child.children:
+                    if new_child.type == 'identifier':
+                        return self.extract_node_text(new_child, content)
+            elif child.type == 'identifier':
+                return self.extract_node_text(child, content)
+        return "Error"
+    
+    def _extract_decorator_name(self, decorator_node: Node, content: str) -> Optional[str]:
+        """Extract decorator name from decorator node."""
+        for child in decorator_node.children:
+            if child.type == 'identifier':
+                return self.extract_node_text(child, content)
+            elif child.type == 'call_expression':
+                # Handle decorators with parameters like @Component()
+                for call_child in child.children:
+                    if call_child.type == 'identifier':
+                        return self.extract_node_text(call_child, content)
+        return None
+    
+    def _find_decorator_target(self, decorator_node: Node, content: str) -> Optional[str]:
+        """Find what the decorator applies to (class, method, property)."""
+        parent = decorator_node.parent
+        if not parent:
+            return None
+            
+        # Handle direct parent types
+        if parent.type == 'class_declaration':
+            return self._get_class_name(parent, content)
+        elif parent.type == 'method_definition':
+            return self._extract_function_name(parent, content)
+        elif parent.type in ['property_definition', 'field_definition', 'public_field_definition']:
+            return self._get_property_name(parent, content)
+        
+        # Handle TypeScript method decorators (parent is class_body)
+        elif parent.type == 'class_body':
+            # Find the next sibling that is a method_definition
+            decorator_index = None
+            for i, child in enumerate(parent.children):
+                if child == decorator_node:
+                    decorator_index = i
+                    break
+            
+            if decorator_index is not None:
+                # Look for the next method_definition sibling
+                for j in range(decorator_index + 1, len(parent.children)):
+                    sibling = parent.children[j]
+                    if sibling.type == 'method_definition':
+                        return self._extract_function_name(sibling, content)
+        
+        return None
+    
+    def _get_property_name(self, prop_node: Node, content: str) -> Optional[str]:
+        """Extract property name from property definition."""
+        for child in prop_node.children:
+            if child.type in ['property_identifier', 'identifier']:
+                return self.extract_node_text(child, content)
+        return None
+
     def _init_ts_server(self):
         """Initialize TypeScript language server (stub for future implementation)."""
         # Future: Could integrate with tsserver for advanced type inference

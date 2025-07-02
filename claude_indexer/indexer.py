@@ -652,7 +652,7 @@ class CoreIndexer:
             logger.warning(f"Failed to get vectored files: {e}")
             return set()
     
-    def _categorize_vectored_file_changes(self, collection_name: str, before_vectored_files: Set[str] = None) -> Tuple[List[str], List[str], List[str]]:
+    def _categorize_vectored_file_changes(self, collection_name: str, before_vectored_files: Set[str] = None, processed_files: Set[str] = None) -> Tuple[List[str], List[str], List[str]]:
         """Categorize vectored files (files with entities in database) into new, modified, and deleted."""
         current_vectored_files = self._get_vectored_files(collection_name)
         
@@ -664,10 +664,28 @@ class CoreIndexer:
         new_vectored = list(current_vectored_files - before_vectored_files)
         deleted_vectored = list(before_vectored_files - current_vectored_files)
         
-        # Files that exist in both are considered "modified" in the context of this operation
-        # (they may have had entities added/removed/updated)
-        common_files = current_vectored_files & before_vectored_files
-        modified_vectored = list(common_files) if common_files else []
+        # Only show files as modified if they were actually processed AND existed before
+        # This prevents showing all existing files as "modified"
+        if processed_files:
+            # Convert processed_files paths to relative paths for comparison
+            processed_relative = set()
+            for file_path in processed_files:
+                try:
+                    if isinstance(file_path, Path):
+                        rel_path = str(file_path.relative_to(self.project_path))
+                    else:
+                        # Assume it's already a relative path string
+                        rel_path = str(file_path)
+                    processed_relative.add(rel_path)
+                except (ValueError, AttributeError):
+                    # If relative_to fails or file_path is not Path-like
+                    processed_relative.add(str(file_path))
+            
+            # Modified files are those that were processed AND existed in database before
+            modified_vectored = list(processed_relative & before_vectored_files & current_vectored_files)
+        else:
+            # No processed files info - can't determine modified files accurately
+            modified_vectored = []
         
         return new_vectored, modified_vectored, deleted_vectored
     

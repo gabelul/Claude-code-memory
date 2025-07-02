@@ -8,7 +8,7 @@ Tests:
 3. Memory usage comparisons
 4. Cost analysis with different embedding providers
 """
-
+   
 import time
 import asyncio
 import statistics

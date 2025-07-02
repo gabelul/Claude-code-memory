@@ -13,6 +13,10 @@
       "include": [
         "*.py",
         "*.pyi",
+        "*.js",
+        "*.jsx",
+        "*.ts",
+        "*.tsx",
         "*.html",
         "*.htm",
         "*.css",
@@ -52,7 +56,7 @@
   },
   "watcher": {
     "enabled": true,
-    "debounce_seconds": 30.0,
+    "debounce_seconds": 2.0,
     "use_gitignore": true
   }
 }
