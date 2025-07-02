@@ -497,9 +497,23 @@ class JavaScriptParser(TreeSitterParser):
             # Look for class heritage (extends/implements)
             for child in class_node.children:
                 if child.type == 'class_heritage':
+                    # JavaScript AST has direct 'extends' and 'identifier' nodes under class_heritage
+                    extends_found = False
                     for heritage_child in child.children:
-                        # Handle TypeScript extends_clause and implements_clause
-                        if heritage_child.type == 'extends_clause':
+                        if heritage_child.type == 'extends':
+                            extends_found = True
+                        elif heritage_child.type in ['identifier', 'type_identifier'] and extends_found:
+                            parent_name = self.extract_node_text(heritage_child, content)
+                            relation = RelationFactory.create_inherits_relation(
+                                subclass=class_name,
+                                superclass=parent_name,
+                                context=f"{class_name} extends {parent_name}"
+                            )
+                            relations.append(relation)
+                            extends_found = False  # Reset for next potential inheritance
+                        
+                        # Handle TypeScript extends_clause and implements_clause (if they exist)
+                        elif heritage_child.type == 'extends_clause':
                             # Find parent class name inside extends_clause
                             for extends_child in heritage_child.children:
                                 if extends_child.type in ['identifier', 'type_identifier']:
