@@ -468,7 +468,21 @@ else:
                     else:
                         click.echo("✅ Code-indexed memories cleared (manual memories preserved)")
             
-            # Load service configuration for watch patterns and settings
+            # Load project configuration for file patterns
+            from claude_indexer.config.project_config import ProjectConfigManager
+            try:
+                project_manager = ProjectConfigManager(project_path)
+                include_patterns = project_manager.get_include_patterns()
+                exclude_patterns = project_manager.get_exclude_patterns()
+            except Exception as e:
+                logger.debug(f"Could not load project config, using defaults: {e}")
+                include_patterns = [
+                    "*.py", "*.pyi", "*.js", "*.jsx", "*.ts", "*.tsx", "*.mjs", "*.cjs",
+                    "*.html", "*.htm", "*.css", "*.json", "*.yaml", "*.yml", "*.md", "*.txt"
+                ]
+                exclude_patterns = ["*.pyc", "__pycache__", ".git", ".venv", "node_modules", ".env", "*.log", "qdrant_storage"]
+            
+            # Load service configuration for other settings
             service = IndexingService()
             service_config = service.load_config()
             service_settings = service_config.get("settings", {})
@@ -483,14 +497,11 @@ else:
             else:
                 effective_debounce = 2.0
             
-            # Create event handler with service configuration
+            # Create event handler with project and service configuration
             settings = {
                 "debounce_seconds": effective_debounce,
-                "watch_patterns": service_settings.get("watch_patterns", ["*.py", "*.md"]),
-                "ignore_patterns": service_settings.get("ignore_patterns", [
-                    "*.pyc", "__pycache__", ".git", ".venv", 
-                    "node_modules", ".env", "*.log"
-                ]),
+                "watch_patterns": include_patterns,  # Use project config patterns
+                "ignore_patterns": exclude_patterns,  # Use project config patterns
                 "max_file_size": service_settings.get("max_file_size", 1048576),
                 "enable_logging": service_settings.get("enable_logging", True)
             }

@@ -249,9 +249,48 @@ class JavaScriptParser(TreeSitterParser):
         # Simple regex to find function calls
         call_pattern = r'(\w+)\s*\('
         calls = re.findall(call_pattern, implementation)
-        # Filter out keywords
+        # Filter out keywords and JavaScript/TypeScript built-ins
         keywords = {'if', 'for', 'while', 'switch', 'catch', 'function', 'class', 'return'}
-        return list(set([call for call in calls if call not in keywords]))
+        
+        # JavaScript/TypeScript built-in objects and APIs
+        js_builtins = {
+            # Browser APIs
+            'console', 'window', 'document', 'localStorage', 'sessionStorage',
+            'fetch', 'XMLHttpRequest', 'URL', 'URLSearchParams', 'WebSocket',
+            'navigator', 'location', 'history', 'screen', 'performance',
+            
+            # JavaScript built-in objects
+            'Array', 'Object', 'String', 'Number', 'Boolean', 'Date', 'Math',
+            'JSON', 'Promise', 'Error', 'TypeError', 'ReferenceError',
+            'SyntaxError', 'RangeError', 'EvalError', 'URIError', 'RegExp',
+            'Map', 'Set', 'WeakMap', 'WeakSet', 'Symbol', 'BigInt', 'Proxy',
+            'Reflect', 'Intl', 'encodeURI', 'decodeURI', 'escape', 'unescape',
+            
+            # JavaScript built-in methods
+            'forEach', 'map', 'filter', 'reduce', 'find', 'some', 'every',
+            'push', 'pop', 'shift', 'unshift', 'slice', 'splice', 'concat',
+            'join', 'split', 'replace', 'match', 'search', 'indexOf',
+            'substring', 'substr', 'charAt', 'charCodeAt', 'toLowerCase',
+            'toUpperCase', 'trim', 'toString', 'valueOf', 'hasOwnProperty',
+            'isPrototypeOf', 'propertyIsEnumerable', 'call', 'apply', 'bind',
+            'stringify', 'parse', 'keys', 'values', 'entries', 'assign',
+            'create', 'defineProperty', 'getOwnPropertyNames', 'freeze',
+            'seal', 'isArray', 'isNaN', 'isFinite', 'parseInt', 'parseFloat',
+            
+            # Node.js built-ins
+            'require', 'process', 'Buffer', 'global', '__dirname', '__filename',
+            'module', 'exports', 'setTimeout', 'setInterval', 'clearTimeout',
+            'clearInterval', 'setImmediate', 'clearImmediate',
+            
+            # TypeScript utility types and common decorators
+            'Component', 'Injectable', 'Input', 'Output', 'ViewChild',
+            'HostListener', 'Autowired', 'Log', 'Partial', 'Required',
+            'Readonly', 'Pick', 'Record', 'Exclude', 'Extract', 'Omit',
+            'NonNullable', 'Parameters', 'ConstructorParameters', 'ReturnType'
+        }
+        
+        filtered_keywords = keywords | js_builtins
+        return list(set([call for call in calls if call not in filtered_keywords]))
     
     def _calculate_complexity(self, implementation: str) -> int:
         """Calculate cyclomatic complexity (simplified)."""

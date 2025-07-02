@@ -647,10 +647,32 @@ class PythonParser(CodeParser):
         call_pattern = r'(\w+)\s*\('
         calls = re.findall(call_pattern, source)
         
-        # Filter out only obvious keywords that should never be function calls
-        # Let entity-aware filtering handle library methods
+        # Filter out keywords and Python built-ins that should never be function call relations
         keywords = {'if', 'for', 'while', 'try', 'except', 'with', 'def', 'class', 'return', 'print'}
-        return list(set([call for call in calls if call not in keywords]))
+        
+        # Python built-in functions and methods (comprehensive list)
+        python_builtins = {
+            # Type constructors
+            'list', 'dict', 'set', 'tuple', 'str', 'int', 'float', 'bool', 'bytes', 'bytearray',
+            'frozenset', 'complex', 'memoryview', 'range', 'slice', 'object', 'type',
+            
+            # Built-in functions
+            'len', 'sorted', 'reversed', 'map', 'filter', 'zip', 'enumerate', 'sum', 'max', 'min',
+            'abs', 'all', 'any', 'ascii', 'bin', 'chr', 'ord', 'compile', 'delattr', 'dir',
+            'divmod', 'eval', 'exec', 'format', 'getattr', 'globals', 'hasattr', 'hash', 'help',
+            'hex', 'id', 'input', 'isinstance', 'issubclass', 'iter', 'locals', 'next', 'oct',
+            'open', 'pow', 'property', 'repr', 'round', 'setattr', 'vars', 'super', 'callable',
+            
+            # Common methods that appear in function calls
+            'append', 'extend', 'insert', 'remove', 'pop', 'clear', 'copy', 'count', 'index',
+            'reverse', 'sort', 'add', 'discard', 'update', 'union', 'intersection', 'difference',
+            'get', 'items', 'keys', 'values', 'popitem', 'setdefault',
+            'upper', 'lower', 'strip', 'split', 'join', 'replace', 'find', 'startswith', 'endswith',
+            'encode', 'decode', 'capitalize', 'title', 'center', 'ljust', 'rjust'
+        }
+        
+        filtered_keywords = keywords | python_builtins
+        return list(set([call for call in calls if call not in filtered_keywords]))
     
     def _extract_imports_used_in_source(self, source: str) -> List[str]:
         """Extract imports referenced in the source code."""

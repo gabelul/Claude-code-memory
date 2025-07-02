@@ -33,7 +33,7 @@ class IndexingEventHandler(FileSystemEventHandler):
         self.settings = settings or {}
         self.verbose = verbose
         
-        # File filtering
+        # File filtering - use patterns from settings or fallback to defaults
         self.watch_patterns = self.settings.get("watch_patterns", ["*.py", "*.md"])
         self.ignore_patterns = self.settings.get("ignore_patterns", [
             "*.pyc", "__pycache__", ".git", ".venv", "node_modules"
@@ -336,11 +336,30 @@ class Watcher:
         self.collection_name = getattr(config, 'collection_name', 'default')
         self.debounce_seconds = debounce_seconds
         
-        # File filtering from config
-        self.include_patterns = getattr(config, 'include_patterns', ['*.py', '*.md'])
-        self.exclude_patterns = getattr(config, 'exclude_patterns', [
-            '*.pyc', '__pycache__', '.git', '.venv', 'node_modules'
-        ])
+        # File filtering - load from project config first, then config, then defaults
+        try:
+            from claude_indexer.config.project_config import ProjectConfigManager
+            project_manager = ProjectConfigManager(self.repo_path)
+            self.include_patterns = project_manager.get_include_patterns()
+            self.exclude_patterns = project_manager.get_exclude_patterns()
+            print(f"✅ Watcher using PROJECT CONFIG patterns:")
+            print(f"   Include: {self.include_patterns}")
+            print(f"   Exclude: {self.exclude_patterns[:5]}...")  # Show first 5
+        except Exception as e:
+            # Fallback to config or defaults if project config fails
+            import traceback
+            print(f"🐛 ProjectConfig error: {type(e).__name__}: {e}")
+            print(f"🐛 Traceback: {traceback.format_exc()}")
+            self.include_patterns = getattr(config, 'include_patterns', [
+                '*.py', '*.pyi', '*.js', '*.jsx', '*.ts', '*.tsx', '*.mjs', '*.cjs',
+                '*.html', '*.htm', '*.css', '*.json', '*.yaml', '*.yml', '*.md', '*.txt'
+            ])
+            self.exclude_patterns = getattr(config, 'exclude_patterns', [
+                '*.pyc', '__pycache__', '.git', '.venv', 'node_modules', 'qdrant_storage'
+            ])
+            print(f"⚠️  Watcher using FALLBACK patterns:")
+            print(f"   Include: {self.include_patterns}")
+            print(f"   Exclude: {self.exclude_patterns}")
         
         # Observer and async handler
         self.observer = Observer()
