@@ -1,5 +1,7 @@
 # Claude Code Memory Solution
 
+**🧪 TESTING: For running tests, use `test-relations-full-memory` MCP. Always use `mcp__test-relations-full-memory__` prefix for test operations.**
+
 **⚠️ IMPORTANT: This project uses `claude-memory-test` as its memory collection/database. Always use `mcp__claude-memory-test-memory__` prefix for all memory operations (search, read_graph, etc.) when working on this project.**
 
 ## Current Version: v2.7.1 - Project-Local State Files ✅ PRODUCTION READY
@@ -234,175 +236,21 @@ read_graph(entity="handle_request", mode="relationships")
 - Verify target directory contains supported files (Python, JavaScript, TypeScript, JSON, HTML, CSS, YAML, etc.)
 - Use `--verbose` flag for detailed error messages
 
-## 🏗️ NEW in v2.6 - Project Configuration System
+## Multi-Language & Configuration Support
 
-### Project-Level Configuration
+**Supported Languages:** Python, JavaScript/TypeScript, JSON, YAML, HTML, CSS, Text files (24 extensions total)
 
-Each project can now have its own `.claude-indexer/config.json` for custom settings:
+**Project Configuration:** Use `.claude-indexer/config.json` for project-specific settings
 
-```json
-{
-  "indexing": {
-    "file_patterns": {
-      "include": ["*.py", "*.js", "*.ts", "*.json", "*.yaml", "*.html", "*.css"],
-      "exclude": ["node_modules", ".git", "dist", "build", "*.min.js"]
-    },
-    "parser_config": {
-      "javascript": {
-        "use_ts_server": false,
-        "jsx": true,
-        "typescript": true
-      },
-      "json": {
-        "extract_schema": true,
-        "special_files": ["package.json", "tsconfig.json"]
-      },
-      "text": {
-        "chunk_size": 50,
-        "max_line_length": 1000
-      }
-    }
-  }
-}
-```
-
-**Configuration Hierarchy (Priority Order):**
-1. Project Config (`.claude-indexer/config.json`) - Highest priority
-2. Environment Variables - Override specific values
-3. Global Config (`settings.txt`) - Default values
-4. System Defaults - Minimal fallback
-
-### Enhanced Python File Operations v2.6
-
-**20+ New File Operation Patterns:**
-
-```python
-# Pandas operations (auto-detected)
-df = pd.read_csv('sales_data.csv')        # Creates pandas_csv_read relation
-df.to_json('output/results.json')        # Creates pandas_json_write relation
-data = pd.read_excel('inventory.xlsx')    # Creates pandas_excel_read relation
-
-# Pathlib operations
-config = Path('config.txt').read_text()   # Creates path_read_text relation
-Path('output.txt').write_text('results')  # Creates path_write_text relation
-
-# Requests/API operations
-data = requests.get('api/data.json')      # Creates requests_get relation
-response = requests.post('upload.json')   # Creates requests_post relation
-
-# Configuration files
-config = configparser.ConfigParser()
-config.read('settings.ini')              # Creates config_ini_read relation
-settings = toml.load('pyproject.toml')   # Creates toml_read relation
-```
-
-**Semantic Relation Types:** All file operations create semantic relations with specific `import_type` values for precise search and dependency tracking.
-
-## 🚀 Multi-Language Support (v2.5)
-
-### Supported Languages & File Types
-
-**Complete Web Stack Coverage (24 file extensions):**
-
-- **JavaScript/TypeScript**: `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`
-  - Functions, classes, interfaces, imports
-  - Arrow functions, method definitions
-  - Progressive disclosure with metadata/implementation chunks
-
-- **Configuration Files**: `.json`, `.yaml`, `.yml`, `.ini`
-  - JSON: Special handling for `package.json`, `tsconfig.json`
-  - YAML: Smart type detection (GitHub workflows, Docker Compose, Kubernetes)
-  - NPM dependency relations, workflow/job extraction
-
-- **Web Technologies**: `.html`, `.css`
-  - HTML: Components, elements with IDs, class references
-  - CSS: Selectors, variables, @import relations
-  - Cross-language HTML→CSS relations
-
-- **Text & Data**: `.txt`, `.log`, `.csv`, `.md`
-  - Configurable text chunking
-  - CSV column detection, Markdown structure
-  - Log file processing for debugging
-
-- **Python**: `.py` (existing enhanced support)
-  - Functions, classes, imports with Jedi semantic analysis
-  - Full progressive disclosure architecture
-
-### Basic Flows & Architecture
-
-**1. Universal Parser Registry**
-```python
-# Automatic file-to-parser matching
-ParserRegistry.get_parser(file_path) → appropriate TreeSitterParser
-```
-
-**2. Tree-sitter Foundation**
-```python
-# Unified AST parsing across all languages
-TreeSitterParser.parse_tree(content) → consistent entity extraction
-```
-
-**3. Progressive Disclosure (Maintained)**
-```python
-# Metadata chunk (fast search)
-EntityChunk(chunk_type="metadata", content=signature)
-# Implementation chunk (on-demand)  
-EntityChunk(chunk_type="implementation", content=full_code)
-```
-
-**4. Cross-Language Relations**
-```python
-# HTML file imports CSS
-RelationFactory.create_imports_relation("style.css", import_type="stylesheet")
-# JavaScript imports from package.json
-RelationFactory.create_imports_relation("lodash", import_type="npm_dependency")
-```
-
-### Performance Results
-
-**Validated Multi-Language Processing:**
-- **7 test files** processed in **0.40 seconds**
-- **49 entities** + **78 relations** extracted
-- **100% parser detection** accuracy
-- **Zero breaking changes** to existing Python/Markdown functionality
-
-### Implementation Details
-
-**Core Components:**
-- `base_parsers.py`: TreeSitterParser foundation with unified language initialization
-- `javascript_parser.py`: JS/TS with function/class/interface extraction
-- `json_parser.py`: Configuration parsing with special file handling
-- `html_parser.py`: Component detection and CSS relation extraction
-- `css_parser.py`: Selector parsing with @import relation detection
-- `yaml_parser.py`: Smart type detection for workflows/compose/k8s
-- `text_parser.py`: Configurable chunking for text/CSV/INI files
-
-**Key Benefits:**
-- **Zero Configuration**: Automatic parser selection based on file extensions
-- **Consistent Entity Models**: Same Entity/Relation/Chunk patterns across all languages
-- **MCP Compatibility**: Full integration with existing MCP server and progressive disclosure
-- **Extensible Architecture**: Easy addition of new languages via TreeSitterParser base class
+→ **Use §m to search project memory for:** technical specs, parser details, configuration examples
 
 ## Advanced Details → Use §m to search project memory for:
 
-- **v2.6 Project Configuration System** with .claude-indexer/config.json support and hierarchy management
-- **v2.6 Enhanced Python File Operations** with 20+ new patterns (pandas, pathlib, requests, config files)
-- **v2.5 Enhanced Multi-Language Support** with Tree-sitter universal parsing and web stack coverage
-- **Universal Parser Registry** implementation and extensible architecture patterns
-- **Cross-Language Relations** detection and HTML→CSS, JS→JSON dependency tracking
-- **Tree-sitter Integration** technical details and language initialization patterns
-- **v2.4.1 Semantic Scope Enhancement** with contextual code retrieval implementation
-- **v2.4 Progressive Disclosure Architecture** and performance validation results
-- **Enhanced MCP Server Features** with automatic provider detection and scope control
-- **Voyage AI Integration** and cost optimization analysis
-- **Advanced Automation Features** including file watching and service management  
-- **Chat History Processing** with GPT-4.1-mini integration
-- **Service Configuration** hierarchy and management patterns
-- **Manual Memory Backup/Restore** system architecture
-- **Debug Testing Protocol** with dedicated collections
-- **Architecture Overview** and component integration
-- **Logs and Debug Information** management system
-- **Complete troubleshooting guides** for production deployment
+- **Multi-language support technical specs** and parser implementation details
+- **Configuration system patterns** and hierarchy management
+- **Version history and migration guides** (v2.4-v2.7)
+- **Performance validation results** and optimization analysis
+- **Architecture evolution notes** and component integration
 
 ## Benefits Summary
 

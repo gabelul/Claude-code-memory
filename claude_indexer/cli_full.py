@@ -290,14 +290,16 @@ else:
     @cli.command()
     @click.option('-p', '--project', 'project_path', required=True, 
                   type=click.Path(exists=True), help='Project directory path')
-    @click.option('-n', '--name', required=True, help='Project name')
     @click.option('-c', '--collection', required=True, help='Collection name')
     @click.option('--force', is_flag=True, help='Overwrite existing config')
-    def init(project_path: str, name: str, collection: str, force: bool):
+    def init(project_path: str, collection: str, force: bool):
         """Initialize project configuration."""
         from .config.project_config import ProjectConfigManager
         
         manager = ProjectConfigManager(Path(project_path))
+        
+        # Derive project name from path
+        name = Path(project_path).name
         
         # Check if already exists
         if manager.exists and not force:

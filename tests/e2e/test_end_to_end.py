@@ -71,6 +71,14 @@ class TestCLIEndToEnd:
             mock_result.total_cost_estimate = 0.0
             mock_result.embedding_requests = 0
             mock_indexer.index_project.return_value = mock_result
+            # Fix: Mock _categorize_file_changes to return empty lists instead of Mock objects
+            mock_indexer._categorize_file_changes.return_value = ([], [], [])
+            # Fix: Mock other methods that might return iterables
+            mock_indexer.get_files_to_process.return_value = []
+            mock_indexer.get_deleted_entities.return_value = []
+            # Fix: Mock state-related methods
+            mock_indexer._load_state.return_value = {}
+            mock_indexer._load_previous_statistics.return_value = {}
             mock_indexer_class.return_value = mock_indexer
             
             # Mock embedder and store creation

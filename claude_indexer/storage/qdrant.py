@@ -906,6 +906,50 @@ class QdrantStore(ManagedVectorStore):
             valid_relations = 0
             file_ref_relations = 0
             
+            # Module resolution helper - convert module names to possible file paths
+            def resolve_module_name(module_name: str) -> bool:
+                """Check if module name resolves to any existing entity."""
+                if module_name in entity_names:
+                    return True
+                
+                # Handle relative imports (.chat.parser, ..config, etc.)
+                if module_name.startswith('.'):
+                    clean_name = module_name.lstrip('.')
+                    for entity_name in entity_names:
+                        # Direct pattern match first
+                        if entity_name.endswith(f"/{clean_name}.py") or entity_name.endswith(f"\\{clean_name}.py"):
+                            return True
+                        # Handle dot notation (chat.parser -> chat/parser.py)
+                        if '.' in clean_name:
+                            path_version = clean_name.replace('.', '/')
+                            if entity_name.endswith(f"/{path_version}.py") or entity_name.endswith(f"\\{path_version}.py"):
+                                return True
+                        # Fallback: contains check
+                        if clean_name in entity_name and entity_name.endswith('.py'):
+                            return True
+                
+                # Handle absolute module paths (claude_indexer.analysis.entities)
+                elif '.' in module_name:
+                    path_parts = module_name.split('.')
+                    for entity_name in entity_names:
+                        # Check if entity path contains module structure and ends with .py
+                        if (all(part in entity_name for part in path_parts) and 
+                            entity_name.endswith('.py') and path_parts[-1] in entity_name):
+                            return True
+                
+                # Handle package-level imports (claude_indexer -> any /path/claude_indexer/* files)
+                else:
+                    # Single package name without dots
+                    for entity_name in entity_names:
+                        # Check if entity path contains the package name as a directory
+                        if f"/{module_name}/" in entity_name or f"\\{module_name}\\" in entity_name:
+                            return True
+                        # Also check if entity path ends with the package name as a directory
+                        if entity_name.endswith(f"/{module_name}") or entity_name.endswith(f"\\{module_name}"):
+                            return True
+                
+                return False
+            
             # Debug: Log first few relations to understand the data
             if verbose and len(relations) > 0:
                 logger.debug("   📊 Sample relations being checked:")
@@ -923,8 +967,9 @@ class QdrantStore(ManagedVectorStore):
                 to_entity = relation.payload.get('relation_target', '')
                 
                 # Check if either end of the relation references a non-existent entity
-                from_missing = from_entity not in entity_names
-                to_missing = to_entity not in entity_names
+                # Use module resolution for better accuracy
+                from_missing = from_entity not in entity_names and not resolve_module_name(from_entity)
+                to_missing = to_entity not in entity_names and not resolve_module_name(to_entity)
                 
                 # Determine if this is a file operation relation (target is external file)
                 # Check for common file extensions to identify external file references

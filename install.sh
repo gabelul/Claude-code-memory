@@ -85,7 +85,7 @@ fi
 
 # Run the indexer with all passed arguments
 # Smart command detection and routing
-if [[ "\$1" =~ ^(hooks|watch|service|search|file|add-mcp|chat)$ ]]; then
+if [[ "\$1" =~ ^(hooks|watch|service|search|file|add-mcp|chat|init)$ ]]; then
     # Advanced commands - pass through directly
     exec "\$PYTHON_BIN" -m claude_indexer "\$@"
 elif [[ "\$1" == "index" ]]; then

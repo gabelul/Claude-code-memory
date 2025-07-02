@@ -222,7 +222,16 @@ Add to `~/.claude/claude_desktop_config.json`:
 
 ### Step 2: Restart Claude Code
 
-### Step 3: Index Your Project
+### Step 3: Initialize Project Configuration (Optional)
+```bash
+# Create project-specific configuration file with auto-detected name
+claude-indexer init -c my-project -p /path/to/your/project
+
+# For current directory
+claude-indexer init -c my-project -p .
+```
+
+### Step 4: Index Your Project
 ```bash
 # Basic indexing (auto-loads to Qdrant)
 # First run: Full mode (auto-detected), subsequent runs: Incremental mode (auto-detected)
@@ -232,10 +241,10 @@ claude-indexer -p /path/to/your/project -c my-project
 claude-indexer -p /path/to/your/project -c my-project --verbose
 ```
 
-### Step 4: Automatic Knowledge Graph Loading
+### Step 5: Automatic Knowledge Graph Loading
 Knowledge graph is automatically loaded into Qdrant - no manual steps required!
 
-### Step 5: Test Entity-Specific Graph Filtering (NEW v2.7)
+### Step 6: Test Entity-Specific Graph Filtering (NEW v2.7)
 ```bash
 # In Claude Code - Focus on specific entities for targeted debugging
 mcp__my-project-memory__read_graph(entity="AuthService", mode="smart")

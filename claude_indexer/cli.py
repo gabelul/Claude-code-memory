@@ -14,7 +14,7 @@ def cli():
         from . import cli_full
         
         # Backward compatibility: auto-add 'index' if first arg isn't a subcommand
-        if len(sys.argv) > 1 and not sys.argv[1] in ['hooks', 'watch', 'service', 'search', 'file', 'add-mcp', 'chat', 'index', '--help', '-h', '--version']:
+        if len(sys.argv) > 1 and not sys.argv[1] in ['hooks', 'watch', 'service', 'search', 'file', 'add-mcp', 'chat', 'index', 'init', '--help', '-h', '--version']:
             sys.argv.insert(1, 'index')
         
         return cli_full.cli()
