@@ -19,14 +19,6 @@ class JSONParser(TreeSitterParser):
         super().__init__(tsjson, config)
         self.special_files = config.get('special_files', ['package.json', 'tsconfig.json', 'composer.json']) if config else ['package.json', 'tsconfig.json', 'composer.json']
         
-    def can_parse(self, file_path: Path) -> bool:
-        """Check if this parser can handle the file."""
-        return file_path.suffix in self.SUPPORTED_EXTENSIONS
-    
-    def get_supported_extensions(self) -> List[str]:
-        """Return list of supported file extensions."""
-        return self.SUPPORTED_EXTENSIONS
-        
     def parse(self, file_path: Path, batch_callback=None) -> ParserResult:
         """Extract JSON structure as entities and relations."""
         start_time = time.time()

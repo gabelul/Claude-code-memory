@@ -26,14 +26,6 @@ class JavaScriptParser(TreeSitterParser):
             self.ts_language = None
             self.tsx_language = None
         
-    def can_parse(self, file_path: Path) -> bool:
-        """Check if this parser can handle the file."""
-        return file_path.suffix in self.SUPPORTED_EXTENSIONS
-    
-    def get_supported_extensions(self) -> List[str]:
-        """Return list of supported file extensions."""
-        return self.SUPPORTED_EXTENSIONS
-    
     def parse_tree(self, content: str, file_path: Path = None):
         """Parse content with appropriate language based on file extension."""
         if file_path and file_path.suffix in ['.ts'] and self.ts_language:

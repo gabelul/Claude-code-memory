@@ -11,6 +11,9 @@ from .entities import Entity, Relation, EntityChunk, EntityType, RelationType, E
 class TreeSitterParser(CodeParser):
     """Base class for all tree-sitter based parsers with common functionality."""
     
+    # Child classes must define this
+    SUPPORTED_EXTENSIONS: List[str] = []
+    
     def __init__(self, language_module, config: Dict[str, Any] = None):
         from tree_sitter import Language
         
@@ -24,6 +27,14 @@ class TreeSitterParser(CodeParser):
         else:
             # For direct language objects
             self.parser = Parser(language_module)
+    
+    def can_parse(self, file_path: Path) -> bool:
+        """Check if this parser can handle the file."""
+        return file_path.suffix in self.SUPPORTED_EXTENSIONS
+    
+    def get_supported_extensions(self) -> List[str]:
+        """Return list of supported file extensions."""
+        return self.SUPPORTED_EXTENSIONS
     
     def update_config(self, config: Dict[str, Any]) -> None:
         """Update parser configuration."""

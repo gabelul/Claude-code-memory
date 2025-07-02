@@ -16,14 +16,6 @@ class CSSParser(TreeSitterParser):
         import tree_sitter_css as tscss
         super().__init__(tscss, config)
         
-    def can_parse(self, file_path: Path) -> bool:
-        """Check if this parser can handle the file."""
-        return file_path.suffix in self.SUPPORTED_EXTENSIONS
-    
-    def get_supported_extensions(self) -> List[str]:
-        """Return list of supported file extensions."""
-        return self.SUPPORTED_EXTENSIONS
-        
     def parse(self, file_path: Path) -> ParserResult:
         """Extract CSS rules, classes, IDs."""
         start_time = time.time()

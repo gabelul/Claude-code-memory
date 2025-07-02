@@ -17,14 +17,6 @@ class YAMLParser(TreeSitterParser):
         super().__init__(tsyaml, config)
         self.detect_type = config.get('detect_type', True) if config else True
         
-    def can_parse(self, file_path: Path) -> bool:
-        """Check if this parser can handle the file."""
-        return file_path.suffix in self.SUPPORTED_EXTENSIONS
-    
-    def get_supported_extensions(self) -> List[str]:
-        """Return list of supported file extensions."""
-        return self.SUPPORTED_EXTENSIONS
-        
     def parse(self, file_path: Path) -> ParserResult:
         """Extract YAML structure and configuration."""
         start_time = time.time()
