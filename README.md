@@ -58,6 +58,24 @@ You have access to a complete memory of this codebase. Before writing ANY code:
 
 **That's it!** Claude is now in God Mode. Watch it reference your code like a senior dev who's been on your team for years.
 
+### 🤖 Alternative: Let Claude Code Do Everything For You
+
+Simply ask Claude Code to install and set up the memory system:
+
+```
+You: Install Claude Code Memory from https://github.com/Durafen/Claude-code-memory and help me understand how to use it
+
+Claude: I'll help you install the complete Claude Code Memory system...
+[Claude will handle everything: clone repos, install dependencies, configure settings, start services, and explain next steps]
+```
+
+**That's it!** Claude Code will:
+- Install all components and dependencies
+- Configure your settings with API keys
+- Index your project and set up memory
+- Show you how to use its new superpowers
+- Explain best practices and shortcuts
+
 ## 🎯 What Claude Can Do in God Mode
 
 **Smart Code Discovery:**
