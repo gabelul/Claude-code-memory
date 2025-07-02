@@ -814,12 +814,42 @@ class QdrantStatsCollector:
                     
                     file_extensions = file_analysis.get('file_extensions', {})
                     if file_extensions:
-                        py_count = file_extensions.get('.py', 0)
-                        md_count = file_extensions.get('.md', 0)
-                        if py_count > 0:
-                            print(f"    Python (.py):    {py_count:>6}")
-                        if md_count > 0:
-                            print(f"    Markdown (.md):  {md_count:>6}")
+                        # Extension to display name mapping
+                        ext_display_names = {
+                            '.py': 'Python (.py)',
+                            '.js': 'JavaScript (.js)',
+                            '.jsx': 'React (.jsx)',
+                            '.ts': 'TypeScript (.ts)',
+                            '.tsx': 'React TS (.tsx)',
+                            '.mjs': 'ES Module (.mjs)',
+                            '.cjs': 'CommonJS (.cjs)',
+                            '.md': 'Markdown (.md)',
+                            '.markdown': 'Markdown (.markdown)',
+                            '.json': 'JSON (.json)',
+                            '.yaml': 'YAML (.yaml)',
+                            '.yml': 'YAML (.yml)',
+                            '.html': 'HTML (.html)',
+                            '.htm': 'HTML (.htm)',
+                            '.css': 'CSS (.css)',
+                            '.scss': 'Sass (.scss)',
+                            '.sass': 'Sass (.sass)',
+                            '.txt': 'Text (.txt)',
+                            '.log': 'Log (.log)',
+                            '.csv': 'CSV (.csv)',
+                            '.ini': 'Config (.ini)',
+                            '.conf': 'Config (.conf)',
+                            '.cfg': 'Config (.cfg)'
+                        }
+                        
+                        # Sort by count (descending) and then by extension name
+                        sorted_extensions = sorted(
+                            [(ext, count) for ext, count in file_extensions.items() if count > 0],
+                            key=lambda x: (-x[1], x[0])
+                        )
+                        
+                        for ext, count in sorted_extensions:
+                            display_name = ext_display_names.get(ext, f"{ext.upper()[1:]} ({ext})")
+                            print(f"    {display_name:<20} {count:>6}")
                     print()
                 
                 # v2.4 Chunk Types section
