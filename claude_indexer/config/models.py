@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 from pydantic import BaseModel, Field, validator
+from .config_schema import ProjectConfig
 from ..indexer_logging import get_logger
 
 logger = get_logger()
@@ -127,12 +128,4 @@ class ProjectInfo(BaseModel):
         return v.strip()
 
 
-class ProjectConfig(BaseModel):
-    """Complete project configuration."""
-    version: str = Field(default="2.6")
-    project: ProjectInfo
-    indexing: IndexingConfig = Field(default_factory=IndexingConfig)
-    watcher: WatcherConfig = Field(default_factory=WatcherConfig)
-    
-    class Config:
-        validate_assignment = True
+# ProjectConfig is imported from config_schema to avoid duplication

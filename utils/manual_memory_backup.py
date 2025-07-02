@@ -17,33 +17,10 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from claude_indexer.storage.qdrant import QdrantStore
-from claude_indexer.config import IndexerConfig
+from claude_indexer.config import IndexerConfig, load_config
 from claude_indexer.embeddings.voyage import VoyageEmbedder
 from claude_indexer.embeddings.openai import OpenAIEmbedder
 from claude_indexer.indexer_logging import setup_logging
-
-def load_config():
-    """Load configuration from settings.txt"""
-    config_file = Path("settings.txt")
-    if not config_file.exists():
-        raise FileNotFoundError("settings.txt not found. Please create it with your API keys.")
-    
-    config_data = {}
-    with open(config_file, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line and '=' in line and not line.startswith('#'):
-                key, value = line.split('=', 1)
-                config_data[key.strip()] = value.strip()
-    
-    return IndexerConfig(
-        qdrant_url=config_data.get('qdrant_url', 'http://localhost:6333'),
-        qdrant_api_key=config_data.get('qdrant_api_key'),
-        openai_api_key=config_data.get('openai_api_key'),
-        voyage_api_key=config_data.get('voyage_api_key'),
-        embedding_provider=config_data.get('embedding_provider', 'openai'),
-        voyage_model=config_data.get('voyage_model', 'voyage-3-lite')
-    )
 
 def get_manual_entity_types() -> Set[str]:
     """Define manual entity types based on common patterns."""
