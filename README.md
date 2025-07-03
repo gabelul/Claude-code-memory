@@ -6,16 +6,6 @@
 
 Stop treating Claude like a goldfish. Give it the superpower of perfect memory and watch it become the senior developer who never forgets a single line of code.
 
-## 🚧 Work in Progress - Help Us Build the Future!
-
-This project is actively being developed! We're building the most advanced Claude Code memory system ever created.
-
-**Found a bug?** 🐛 [Report it here](https://github.com/Durafen/Claude-code-memory/issues)  
-**Want a feature?** ✨ [Request it here](https://github.com/Durafen/Claude-code-memory/issues)  
-**Have feedback?** 💬 [Start a discussion](https://github.com/Durafen/Claude-code-memory/discussions)
-
-We're moving fast and breaking things (in a good way). Your feedback helps us prioritize what to build next!
-
 ## 🔥 Regular Claude vs God Mode Claude
 
 **Regular Claude Code** (Without Memory):
@@ -32,39 +22,20 @@ We're moving fast and breaking things (in a good way). Your feedback helps us pr
 - ⚡ "Found 5 instances of this pattern. Want me to refactor them all?"
 - 🚀 Starts coding immediately with full context
 
-## ⚡ Activate God Mode Fast
+## ⚡ Activate God Mode in 30 Seconds
 
-Simply ask Claude Code to install and set up the memory system:
-
+**Option 1: Let Claude Install Everything (Recommended)**
 ```
 You: Install Claude Code Memory from https://github.com/Durafen/Claude-code-memory and help me understand how to use it
 
 Claude: I'll help you install the complete Claude Code Memory system...
-[Claude will handle everything: clone repos, install dependencies, configure settings, start services, and explain next steps]
+[Claude handles everything: clones repos, installs dependencies, configures settings, indexes your project]
 ```
 
-**That's it!** Claude Code will:
-- Install all components and dependencies
-- Configure your settings with API keys
-- Index your project and set up memory
-- Show you how to use its new superpowers
-- Explain best practices and shortcuts
+**Option 2: Manual Setup**
+See the [Installation section](#installation) below for step-by-step manual installation.
 
-### 🛠️ Manual Installation (If You Prefer Control)
-
-```bash
-# 1. Clone and install (one time setup - pip coming soon!)
-git clone https://github.com/Durafen/Claude-code-memory.git
-cd Claude-code-memory && ./install.sh
-
-# 2. Index your project (Claude learns your entire codebase)
-claude-indexer -p /your/project -c my-project
-
-# 3. Add MCP server to Claude
-claude-indexer add-mcp -c my-project
-```
-
-Add to your project's `CLAUDE.md` file:
+**After installation**, add to your project's `CLAUDE.md` file:
 ```markdown
 ## Memory Usage Instructions
 You have access to a complete memory of this codebase. Before writing ANY code:
@@ -92,6 +63,16 @@ You have access to a complete memory of this codebase. Before writing ANY code:
 - 🐛 "This error pattern appeared in 3 other places. Here's how you fixed it..."
 - 🔧 "Your error handling typically uses try-catch with custom error classes..."
 - 📊 "Based on your logging patterns, I'll add debug statements here..."
+
+## 🚧 Work in Progress - Help Us Build the Future!
+
+This project is actively being developed! We're building the most advanced Claude Code memory system ever created.
+
+**Found a bug?** 🐛 [Report it here](https://github.com/Durafen/Claude-code-memory/issues)  
+**Want a feature?** ✨ [Request it here](https://github.com/Durafen/Claude-code-memory/issues)  
+**Have feedback?** 💬 [Start a discussion](https://github.com/Durafen/Claude-code-memory/discussions)
+
+We're moving fast and breaking things (in a good way). Your feedback helps us prioritize what to build next!
 
 ## 🏗️ Why We're the Best Claude Code Addon (Technical Excellence)
 
@@ -136,19 +117,20 @@ You have access to a complete memory of this codebase. Before writing ANY code:
 - Qdrant running (Docker recommended)
 
 ### Installation
+
 ```bash
 # 1. Clone and setup
-git clone https://github.com/Durafen/Claude-code-memory.git memory
-cd memory
+git clone https://github.com/Durafen/Claude-code-memory.git
+cd Claude-code-memory
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
 # 2. Configure settings (copy template and add your API keys)
 cp settings.template.txt settings.txt
-# Edit settings.txt with your API keys and choose embedding provider
+# Edit settings.txt with your API keys
 
-# 3. Install our enhanced MCP memory server (NOT the original delorenj version)
+# 3. Install our enhanced MCP memory server
 git clone https://github.com/Durafen/mcp-qdrant-memory.git
 cd mcp-qdrant-memory && npm install && npm run build && cd ..
 
@@ -157,15 +139,14 @@ cd mcp-qdrant-memory && npm install && npm run build && cd ..
 
 # 5. Start Qdrant
 docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_storage:/qdrant/storage:z qdrant/qdrant
+
+# 6. Index your project
+claude-indexer -p /your/project -c my-project
+
+# 7. Add MCP server to Claude
+claude-indexer add-mcp -c my-project
 ```
 
-### 🤖 Alternative: Let Claude Code Install It For You!
-
-```markdown
-You: Install the enhanced MCP memory server from https://github.com/Durafen/mcp-qdrant-memory
-Claude: I'll help you install the enhanced MCP memory server...
-[Claude will clone, build, and set it up automatically]
-```
 
 ## ⚙️ Embedding Provider Configuration
 
