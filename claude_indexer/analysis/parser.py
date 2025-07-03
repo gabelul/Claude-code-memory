@@ -966,6 +966,10 @@ class MarkdownParser(CodeParser):
             headers = self._extract_headers(file_path)
             result.entities.extend(headers)
             
+            # Extract section content as implementation chunks (NEW)
+            implementation_chunks = self._extract_section_content(file_path)
+            result.implementation_chunks = implementation_chunks
+            
             # Create containment relations
             file_name = str(file_path)
             for header in headers:
@@ -1072,6 +1076,92 @@ class MarkdownParser(CodeParser):
             pass  # Ignore errors, return what we could extract
         
         return entities
+    
+    def _extract_section_content(self, file_path: Path) -> List['EntityChunk']:
+        """Extract section content between headers as implementation chunks for searchability."""
+        chunks = []
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                lines = content.split('\n')
+            
+            # Find all headers with their positions
+            headers = []
+            for line_num, line in enumerate(lines):
+                line = line.strip()
+                if line.startswith('#'):
+                    level = len(line) - len(line.lstrip('#'))
+                    header_text = line.lstrip('#').strip()
+                    if header_text:
+                        headers.append({
+                            'text': header_text,
+                            'level': level,
+                            'line_num': line_num
+                        })
+            
+            # Extract content between headers
+            for i, header in enumerate(headers):
+                # Determine section bounds
+                start_line = header['line_num'] + 1
+                end_line = headers[i + 1]['line_num'] if i + 1 < len(headers) else len(lines)
+                
+                # Extract section content
+                section_lines = lines[start_line:end_line]
+                section_content = '\n'.join(section_lines).strip()
+                
+                # Only create chunks for sections with meaningful content
+                if section_content and len(section_content) > 20:
+                    # Create implementation chunk using existing patterns
+                    impl_chunk = EntityChunk(
+                        id=f"{str(file_path)}::{header['text']}::implementation",
+                        entity_name=header['text'],
+                        chunk_type="implementation",
+                        content=section_content,
+                        metadata={
+                            "entity_type": "documentation",
+                            "file_path": str(file_path),
+                            "start_line": start_line + 1,
+                            "end_line": end_line,
+                            "section_type": "markdown_section",
+                            "content_length": len(section_content)
+                        }
+                    )
+                    chunks.append(impl_chunk)
+                    
+                    # Create metadata chunk for fast discovery
+                    preview = section_content[:200]
+                    if len(section_content) > 200:
+                        preview += "..."
+                    
+                    line_count = section_content.count('\n') + 1
+                    word_count = len(section_content.split())
+                    
+                    metadata_content = f"Section: {header['text']} | Preview: {preview} | Lines: {line_count} | Words: {word_count}"
+                    
+                    metadata_chunk = EntityChunk(
+                        id=f"{str(file_path)}::{header['text']}::metadata",
+                        entity_name=header['text'],
+                        chunk_type="metadata",
+                        content=metadata_content,
+                        metadata={
+                            "entity_type": "documentation",
+                            "file_path": str(file_path),
+                            "line_number": header['line_num'] + 1,
+                            "section_type": "markdown_section",
+                            "has_implementation": True,
+                            "content_length": len(section_content),
+                            "word_count": word_count,
+                            "line_count": line_count
+                        }
+                    )
+                    chunks.append(metadata_chunk)
+        
+        except Exception as e:
+            # Graceful fallback - implementation chunks are optional
+            logger.debug(f"Section content extraction failed for {file_path}: {e}")
+        
+        return chunks
 
 
 class ParserRegistry:
