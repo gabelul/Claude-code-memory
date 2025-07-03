@@ -36,14 +36,17 @@ class TestWatcherFlow:
             collection_name=collection_name,
             embedder_type="dummy",
             storage_type="qdrant",
-            watch_debounce=0.1  # Short debounce for testing
+            debounce_seconds=0.1,  # Short debounce for testing
+            include_patterns=["*.py"],  # Required for file discovery
+            exclude_patterns=["*test*", "__pycache__"]
         )
         
         watcher = Watcher(
             repo_path=temp_repo,
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            store=qdrant_store,
+            debounce_seconds=config.debounce_seconds
         )
         
         # Start watching
@@ -67,7 +70,8 @@ class TestWatcherFlow:
             modified_file.write_text(modified_content)
             
             # Wait for watcher to process the change with eventual consistency
-            await asyncio.sleep(0.2)  # Initial processing time
+            # Need sufficient time for: file detection + debounce (0.1s) + async processing + indexing
+            await asyncio.sleep(1.0)  # Allow full async processing chain
             
             # Verify the new function is searchable
             function_found = verify_entity_searchable(
@@ -106,7 +110,8 @@ class TestWatcherFlow:
             repo_path=temp_repo,
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            store=qdrant_store,
+            debounce_seconds=config.debounce_seconds
         )
         
         watch_task = asyncio.create_task(watcher.start())
@@ -163,7 +168,8 @@ class TestWatcherFlow:
             repo_path=temp_repo,
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            store=qdrant_store,
+            debounce_seconds=config.debounce_seconds
         )
         
         watch_task = asyncio.create_task(watcher.start())
@@ -237,7 +243,8 @@ def temp_function():
             repo_path=temp_repo,
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            store=qdrant_store,
+            debounce_seconds=config.debounce_seconds
         )
         
         watch_task = asyncio.create_task(watcher.start())
@@ -357,7 +364,8 @@ def temp_function():
             repo_path=temp_repo,
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            store=qdrant_store,
+            debounce_seconds=config.debounce_seconds
         )
         
         watch_task = asyncio.create_task(watcher.start())
@@ -407,7 +415,8 @@ class TestWatcherConfiguration:
             repo_path=temp_repo,
             config=config,
             embedder=dummy_embedder,
-            store=qdrant_store
+            store=qdrant_store,
+            debounce_seconds=config.debounce_seconds
         )
         
         watch_task = asyncio.create_task(watcher.start())

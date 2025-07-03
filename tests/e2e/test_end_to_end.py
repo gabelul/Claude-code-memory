@@ -64,6 +64,7 @@ class TestCLIEndToEnd:
             mock_result.files_processed = 2
             mock_result.entities_created = 5
             mock_result.relations_created = 3
+            mock_result.implementation_chunks_created = 4  # Add missing attribute
             mock_result.warnings = []
             mock_result.errors = []
             # Add missing cost tracking attributes to prevent Mock comparison errors
@@ -78,29 +79,57 @@ class TestCLIEndToEnd:
             mock_indexer.get_deleted_entities.return_value = []
             # Fix: Mock state-related methods
             mock_indexer._load_state.return_value = {}
-            mock_indexer._load_previous_statistics.return_value = {}
+            # Fix: Mock _load_previous_statistics to return proper numeric values
+            mock_indexer._load_previous_statistics.return_value = {
+                'total_tracked': 0,
+                'entities_created': 0,
+                'relations_created': 0,
+                'implementation_chunks_created': 0
+            }
+            # Fix: Mock additional methods that might be called
+            mock_state_file = Mock()
+            mock_state_file.parent = Mock()
+            mock_state_file.parent.mkdir = Mock()
+            mock_state_file.with_suffix = Mock(return_value=Mock())
+            mock_indexer._get_state_file.return_value = mock_state_file
+            # Fix: Mock the vector store methods with proper count responses
+            mock_indexer.vector_store = Mock()
+            mock_indexer.vector_store.backend = Mock()
+            mock_client = Mock()
+            # Mock count() calls to return proper numeric values
+            mock_count_result = Mock()
+            mock_count_result.count = 0
+            mock_client.count.return_value = mock_count_result
+            mock_indexer.vector_store.backend.client = mock_client
+            mock_indexer.vector_store.client = mock_client
             mock_indexer_class.return_value = mock_indexer
             
             # Mock embedder and store creation
             with patch('claude_indexer.cli_full.create_embedder_from_config') as mock_embedder:
                 with patch('claude_indexer.cli_full.create_store_from_config') as mock_store:
-                    mock_embedder.return_value = Mock()
-                    mock_store.return_value = Mock()
-                    
-                    # Test index command
-                    result = runner.invoke(cli.cli, [
-                        'index',
-                        '--project', str(temp_repo),
-                        '--collection', 'test-collection'
-                    ])
-                    
-                    # Should succeed and call indexer
-                    if result.exit_code != 0:
-                        print(f"Exit code: {result.exit_code}")
-                        print(f"Output: {result.output}")
-                        print(f"Exception: {result.exception}")
-                    assert result.exit_code == 0
-                    assert mock_indexer.index_project.called
+                    # Mock file operations to prevent path errors
+                    mock_file = Mock()
+                    mock_file.__enter__ = Mock(return_value=mock_file)
+                    mock_file.__exit__ = Mock(return_value=None)
+                    with patch('builtins.open', Mock(return_value=mock_file)):
+                        with patch('json.dump', Mock()):
+                            mock_embedder.return_value = Mock()
+                            mock_store.return_value = Mock()
+                            
+                            # Test index command
+                            result = runner.invoke(cli.cli, [
+                                'index',
+                                '--project', str(temp_repo),
+                                '--collection', 'test-collection'
+                            ])
+                            
+                            # Should succeed and call indexer
+                            if result.exit_code != 0:
+                                print(f"Exit code: {result.exit_code}")
+                                print(f"Output: {result.output}")
+                                print(f"Exception: {result.exception}")
+                            assert result.exit_code == 0
+                            assert mock_indexer.index_project.called
     
     def test_cli_search_command(self, temp_repo):
         """Test CLI search functionality."""
@@ -412,6 +441,7 @@ class TestCLIIntegrationScenarios:
             mock_result.files_processed = 2
             mock_result.entities_created = 5
             mock_result.relations_created = 3
+            mock_result.implementation_chunks_created = 4  # Add missing attribute
             mock_result.warnings = []
             mock_result.errors = []
             # Add missing cost tracking attributes to prevent Mock comparison errors
@@ -450,6 +480,7 @@ class TestCLIIntegrationScenarios:
             mock_result.files_processed = 2
             mock_result.entities_created = 5
             mock_result.relations_created = 3
+            mock_result.implementation_chunks_created = 4  # Add missing attribute
             mock_result.warnings = []
             mock_result.errors = []
             # Add missing cost tracking attributes to prevent Mock comparison errors

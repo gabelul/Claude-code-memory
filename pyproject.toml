@@ -63,6 +63,9 @@ markers = [
     "asyncio: Async test marker for asyncio tests",
 ]
 
+[tool.pytest_asyncio]
+asyncio_mode = "auto"
+
 [tool.coverage.run]
 source = ["claude_indexer"]
 branch = true

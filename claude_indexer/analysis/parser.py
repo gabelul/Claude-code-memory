@@ -156,7 +156,21 @@ class PythonParser(CodeParser):
             result.implementation_chunks.extend(implementation_chunks)
             
             # Create CALLS relations from extracted function calls (entity-aware to prevent orphans)
-            calls_relations = self._create_calls_relations_from_chunks(implementation_chunks, file_path, result.entities)
+            # Combine current file entities with global entities for comprehensive validation
+            all_entity_names = set()
+            
+            # Add current file entities
+            for entity in result.entities:
+                all_entity_names.add(entity.name)
+            
+            # Add global entities if available
+            if global_entity_names:
+                all_entity_names.update(global_entity_names)
+            
+            # Convert to pseudo-entities for compatibility with existing method signature
+            entity_list_for_calls = [type('Entity', (), {'name': name})() for name in all_entity_names]
+            
+            calls_relations = self._create_calls_relations_from_chunks(implementation_chunks, file_path, entity_list_for_calls)
             result.relations.extend(calls_relations)
             
             # Extract file operations (open, json.load, etc.)
@@ -587,10 +601,9 @@ class PythonParser(CodeParser):
                 definitions = script.goto(start_line + 1, node.start_point[1])
                 if definitions:
                     definition = definitions[0]
-                    calls = self._extract_function_calls_from_source(implementation)
                     semantic_metadata = {
                         "inferred_types": self._get_type_hints(definition),
-                        "calls": calls,
+                        "calls": self._extract_function_calls_from_source(implementation),
                         "imports_used": self._extract_imports_used_in_source(implementation),
                         "exceptions_handled": self._extract_exceptions_from_source(implementation),
                         "complexity": self._calculate_complexity_from_source(implementation)
@@ -643,36 +656,27 @@ class PythonParser(CodeParser):
     def _extract_function_calls_from_source(self, source: str) -> List[str]:
         """Extract function calls from source code using regex."""
         import re
+        
+        # Split source into lines to filter out function definitions
+        lines = source.split('\n')
+        
+        # Filter out function definition lines that start with 'def '
+        filtered_lines = []
+        for line in lines:
+            stripped = line.strip()
+            # Skip lines that are function definitions
+            if not stripped.startswith('def '):
+                filtered_lines.append(line)
+        
+        # Rejoin the filtered source
+        filtered_source = '\n'.join(filtered_lines)
+        
         # Simple regex to find function calls (name followed by parentheses)
         call_pattern = r'(\w+)\s*\('
-        calls = re.findall(call_pattern, source)
+        calls = re.findall(call_pattern, filtered_source)
         
-        # Filter out keywords and Python built-ins that should never be function call relations
-        keywords = {'if', 'for', 'while', 'try', 'except', 'with', 'def', 'class', 'return', 'print'}
-        
-        # Python built-in functions and methods (comprehensive list)
-        python_builtins = {
-            # Type constructors
-            'list', 'dict', 'set', 'tuple', 'str', 'int', 'float', 'bool', 'bytes', 'bytearray',
-            'frozenset', 'complex', 'memoryview', 'range', 'slice', 'object', 'type',
-            
-            # Built-in functions
-            'len', 'sorted', 'reversed', 'map', 'filter', 'zip', 'enumerate', 'sum', 'max', 'min',
-            'abs', 'all', 'any', 'ascii', 'bin', 'chr', 'ord', 'compile', 'delattr', 'dir',
-            'divmod', 'eval', 'exec', 'format', 'getattr', 'globals', 'hasattr', 'hash', 'help',
-            'hex', 'id', 'input', 'isinstance', 'issubclass', 'iter', 'locals', 'next', 'oct',
-            'open', 'pow', 'property', 'repr', 'round', 'setattr', 'vars', 'super', 'callable',
-            
-            # Common methods that appear in function calls
-            'append', 'extend', 'insert', 'remove', 'pop', 'clear', 'copy', 'count', 'index',
-            'reverse', 'sort', 'add', 'discard', 'update', 'union', 'intersection', 'difference',
-            'get', 'items', 'keys', 'values', 'popitem', 'setdefault',
-            'upper', 'lower', 'strip', 'split', 'join', 'replace', 'find', 'startswith', 'endswith',
-            'encode', 'decode', 'capitalize', 'title', 'center', 'ljust', 'rjust'
-        }
-        
-        filtered_keywords = keywords | python_builtins
-        return list(set([call for call in calls if call not in filtered_keywords]))
+        # No filtering for built-ins - let entity validation handle it
+        return list(set(calls))
     
     def _extract_imports_used_in_source(self, source: str) -> List[str]:
         """Extract imports referenced in the source code."""
@@ -697,6 +701,22 @@ class PythonParser(CodeParser):
         for keyword in complexity_keywords:
             complexity += source.count(f' {keyword} ') + source.count(f'\n{keyword} ')
         return complexity
+    
+    
+    
+    
+    def _find_nodes_by_type(self, root: 'tree_sitter.Node', node_types: List[str]) -> List['tree_sitter.Node']:
+        """Recursively find all nodes matching given types."""
+        nodes = []
+        
+        def walk(node):
+            if node.type in node_types:
+                nodes.append(node)
+            for child in node.children:
+                walk(child)
+                
+        walk(root)
+        return nodes
     
     def _extract_file_operations(self, tree: 'tree_sitter.Tree', file_path: Path, content: str) -> List['Relation']:
         """Extract file operations from Python AST using tree-sitter."""
@@ -810,17 +830,23 @@ class PythonParser(CodeParser):
                     
                     # Special handling for open() built-in
                     if func_text == 'open':
-                        # Get first string argument
+                        # Get first string argument only (filename, not mode)
+                        # Only process the first string literal found to avoid mode arguments
+                        first_string_found = False
                         for arg in args_node.children:
-                            if arg.type == 'string':
+                            if arg.type == 'string' and not first_string_found:
                                 file_ref = extract_string_literal(arg)
                                 if file_ref:
-                                    relation = RelationFactory.create_imports_relation(
-                                        importer=str(file_path),
-                                        imported=file_ref,
-                                        import_type='file_open'
-                                    )
-                                    relations.append(relation)
+                                    # Filter out file modes that shouldn't be relation targets
+                                    file_modes = {'r', 'w', 'a', 'x', 'b', 't', 'rb', 'wb', 'ab', 'rt', 'wt', 'at', 'r+', 'w+', 'a+', 'x+'}
+                                    if file_ref not in file_modes:
+                                        relation = RelationFactory.create_imports_relation(
+                                            importer=str(file_path),
+                                            imported=file_ref,
+                                            import_type='file_open'
+                                        )
+                                        relations.append(relation)
+                                    first_string_found = True  # Ensure we only process the first string
                                     break
                     
                     # Handle Path().open() pattern
@@ -878,31 +904,31 @@ class PythonParser(CodeParser):
         return relations
     
     def _create_calls_relations_from_chunks(self, chunks: List['EntityChunk'], file_path: Path, entities: List['Entity'] = None) -> List['Relation']:
-        """Create CALLS relations from extracted function calls, only when target entities exist."""
+        """Create CALLS relations only for project-defined entities."""
         relations = []
         
-        # Build set of available entity names for fast lookup
-        entity_names = set()
-        if entities:
-            entity_names = {entity.name for entity in entities}
+        # Get entity names from current batch for validation
+        entity_names = {entity.name for entity in entities} if entities else set()
         
         for chunk in chunks:
             if chunk.chunk_type == "implementation":
-                semantic_metadata = chunk.metadata.get("semantic_metadata", {})
-                calls = semantic_metadata.get("calls", [])
+                # Only process function calls from semantic metadata
+                calls = chunk.metadata.get('semantic_metadata', {}).get('calls', [])
                 
-                for called_function in calls:
-                    # Only create relation if target entity exists (prevents orphans)
-                    if not entities or called_function in entity_names:
-                        relation = RelationFactory.create_calls_relation(
-                            caller=chunk.entity_name,
-                            callee=called_function,
-                            context=f"Function call in {file_path.name}"
+                for called_name in calls:
+                    # Only create relations to entities we actually indexed
+                    if called_name in entity_names:
+                        relation = Relation(
+                            from_entity=chunk.entity_name,
+                            to_entity=called_name,
+                            relation_type=RelationType.CALLS,
+                            context=f"Function call in {file_path.name}",
+                            metadata={}
                         )
                         relations.append(relation)
+                        logger.debug(f"Created CALLS relation: {chunk.entity_name} -> {called_name}")
                     else:
-                        # Log skipped orphan relation for debugging
-                        logger.debug(f"   🚫 Skipped orphan relation: {chunk.entity_name} -> {called_function} (entity not found)")
+                        logger.debug(f"Skipped non-entity call: {chunk.entity_name} -> {called_name}")
         
         return relations
 

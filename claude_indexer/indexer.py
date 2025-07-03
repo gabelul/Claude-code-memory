@@ -386,7 +386,13 @@ class CoreIndexer:
                 batch_callback = self._create_batch_callback(collection_name)
                 self.logger.info(f"🚀 Enabling batch processing for large file: {file_path.name}")
             
-            parse_result = self.parser_registry.parse_file(file_path, batch_callback)
+            # Get global entity names for relation validation (same as batch processing)
+            if not hasattr(self, '_cached_global_entities'):
+                self._cached_global_entities = self._get_all_entity_names(collection_name)
+                if self._cached_global_entities:
+                    self.logger.debug(f"🌐 Cached {len(self._cached_global_entities)} global entities for cross-file relation filtering")
+            
+            parse_result = self.parser_registry.parse_file(file_path, batch_callback, global_entity_names=self._cached_global_entities)
             
             if not parse_result.success:
                 result.success = False
@@ -690,32 +696,28 @@ class CoreIndexer:
         return new_vectored, modified_vectored, deleted_vectored
     
     def _filter_orphan_relations_in_memory(self, relations: List['Relation'], global_entity_names: set) -> List['Relation']:
-        """Filter orphan relations in-memory before embedding to avoid waste."""
+        """Filter out relations pointing to non-existent entities."""
         if not global_entity_names:
-            self.logger.warning("No global entities available for in-memory filtering - keeping all relations")
+            self.logger.warning("No global entities available - keeping all relations")
             return relations
             
         valid_relations = []
         orphan_count = 0
         
         for relation in relations:
-            # Get the target entity from the relation
-            target_entity = relation.to_entity
-            
-            # Always keep non-calls relations (imports, contains, file operations)
-            if relation.relation_type.value != 'calls':
-                valid_relations.append(relation)
-                continue
-                
-            # For CALLS relations, check if target entity exists in global database
-            if target_entity in global_entity_names:
-                valid_relations.append(relation)
-                self.logger.debug(f"✅ Kept relation: {relation.from_entity} -> {target_entity} (entity exists)")
+            # For CALLS relations, check if target entity exists
+            if relation.relation_type.value == 'calls':
+                if relation.to_entity in global_entity_names:
+                    valid_relations.append(relation)
+                    self.logger.debug(f"✅ Kept relation: {relation.from_entity} -> {relation.to_entity}")
+                else:
+                    orphan_count += 1
+                    self.logger.debug(f"🚫 Filtered orphan: {relation.from_entity} -> {relation.to_entity}")
             else:
-                orphan_count += 1
-                self.logger.debug(f"🚫 Filtered orphan: {relation.from_entity} -> {target_entity} (entity not found)")
+                # Keep all non-CALLS relations (imports, contains, etc.)
+                valid_relations.append(relation)
         
-        self.logger.info(f"🧹 In-memory filtering: {len(valid_relations)} relations kept, {orphan_count} orphans filtered")
+        self.logger.info(f"Filtered {orphan_count} orphan CALLS relations")
         return valid_relations
     
     def _get_all_entity_names(self, collection_name: str) -> set:
@@ -733,7 +735,7 @@ class CoreIndexer:
             entity_names = set()
             next_page_offset = None
             
-            # Scroll through all metadata chunks to get entity names
+            # Scroll through all entity points (not relations) to get entity names
             while True:
                 from qdrant_client.models import Filter, FieldCondition, MatchValue
                 
@@ -744,8 +746,8 @@ class CoreIndexer:
                     with_payload=True,
                     with_vectors=False,
                     scroll_filter=Filter(
-                        must=[
-                            FieldCondition(key="chunk_type", match=MatchValue(value="metadata"))
+                        must_not=[
+                            FieldCondition(key="type", match=MatchValue(value="relation"))
                         ]
                     )
                 )
@@ -755,11 +757,14 @@ class CoreIndexer:
                 if not points:
                     break
                 
-                # Extract entity names from payloads
+                # Extract entity names from payloads (both chunks and entities)
                 for point in points:
                     payload = point.payload
-                    if payload and "entity_name" in payload:
-                        entity_names.add(payload["entity_name"])
+                    if payload:
+                        # Try entity_name first (chunks), then name (legacy entities)
+                        entity_name = payload.get("entity_name") or payload.get("name")
+                        if entity_name:
+                            entity_names.add(entity_name)
                 
                 # Break if no more pages
                 if next_page_offset is None:

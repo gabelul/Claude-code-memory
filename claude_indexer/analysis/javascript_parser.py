@@ -120,7 +120,21 @@ class JavaScriptParser(TreeSitterParser):
                     relations.append(relation)
             
             # Create function call relations from semantic metadata
-            function_call_relations = self._create_function_call_relations(chunks, file_path, None)
+            # Combine current file entities with global entities for comprehensive validation
+            all_entity_names = set()
+            
+            # Add current file entities
+            for entity in entities:
+                all_entity_names.add(entity.name)
+            
+            # Add global entities if available
+            if global_entity_names:
+                all_entity_names.update(global_entity_names)
+            
+            # Convert to list for compatibility with existing method signature
+            entity_names_list = list(all_entity_names)
+            
+            function_call_relations = self._create_function_call_relations(chunks, file_path, entity_names_list)
             relations.extend(function_call_relations)
             
             result.entities = entities
@@ -236,53 +250,14 @@ class JavaScriptParser(TreeSitterParser):
             return f"function {name}{params}{return_type}"
     
     def _extract_function_calls(self, implementation: str) -> List[str]:
-        """Extract function calls from implementation (simple heuristic)."""
+        """Extract function calls using simple pattern matching."""
         import re
         # Simple regex to find function calls
         call_pattern = r'(\w+)\s*\('
         calls = re.findall(call_pattern, implementation)
-        # Filter out keywords and JavaScript/TypeScript built-ins
-        keywords = {'if', 'for', 'while', 'switch', 'catch', 'function', 'class', 'return'}
         
-        # JavaScript/TypeScript built-in objects and APIs
-        js_builtins = {
-            # Browser APIs
-            'console', 'window', 'document', 'localStorage', 'sessionStorage',
-            'fetch', 'XMLHttpRequest', 'URL', 'URLSearchParams', 'WebSocket',
-            'navigator', 'location', 'history', 'screen', 'performance',
-            
-            # JavaScript built-in objects
-            'Array', 'Object', 'String', 'Number', 'Boolean', 'Date', 'Math',
-            'JSON', 'Promise', 'Error', 'TypeError', 'ReferenceError',
-            'SyntaxError', 'RangeError', 'EvalError', 'URIError', 'RegExp',
-            'Map', 'Set', 'WeakMap', 'WeakSet', 'Symbol', 'BigInt', 'Proxy',
-            'Reflect', 'Intl', 'encodeURI', 'decodeURI', 'escape', 'unescape',
-            
-            # JavaScript built-in methods
-            'forEach', 'map', 'filter', 'reduce', 'find', 'some', 'every',
-            'push', 'pop', 'shift', 'unshift', 'slice', 'splice', 'concat',
-            'join', 'split', 'replace', 'match', 'search', 'indexOf',
-            'substring', 'substr', 'charAt', 'charCodeAt', 'toLowerCase',
-            'toUpperCase', 'trim', 'toString', 'valueOf', 'hasOwnProperty',
-            'isPrototypeOf', 'propertyIsEnumerable', 'call', 'apply', 'bind',
-            'stringify', 'parse', 'keys', 'values', 'entries', 'assign',
-            'create', 'defineProperty', 'getOwnPropertyNames', 'freeze',
-            'seal', 'isArray', 'isNaN', 'isFinite', 'parseInt', 'parseFloat',
-            
-            # Node.js built-ins
-            'require', 'process', 'Buffer', 'global', '__dirname', '__filename',
-            'module', 'exports', 'setTimeout', 'setInterval', 'clearTimeout',
-            'clearInterval', 'setImmediate', 'clearImmediate',
-            
-            # TypeScript utility types and common decorators
-            'Component', 'Injectable', 'Input', 'Output', 'ViewChild',
-            'HostListener', 'Autowired', 'Log', 'Partial', 'Required',
-            'Readonly', 'Pick', 'Record', 'Exclude', 'Extract', 'Omit',
-            'NonNullable', 'Parameters', 'ConstructorParameters', 'ReturnType'
-        }
-        
-        filtered_keywords = keywords | js_builtins
-        return list(set([call for call in calls if call not in filtered_keywords]))
+        # No filtering for built-ins - let entity validation handle it
+        return list(set(calls))
     
     def _calculate_complexity(self, implementation: str) -> int:
         """Calculate cyclomatic complexity (simplified)."""
@@ -395,6 +370,16 @@ class JavaScriptParser(TreeSitterParser):
         # Extract module name, removing quotes
         module_name = self.extract_node_text(source_node, content).strip('"\'')
         
+        # Skip external modules to avoid orphan relations
+        # Relative imports (starting with ./ or ../) are always internal
+        if not module_name.startswith('./') and not module_name.startswith('../'):
+            # Skip common Node.js built-in modules and npm packages
+            if (module_name.startswith('@') or  # Scoped npm packages
+                '/' not in module_name or  # Top-level npm packages  
+                module_name in {'fs', 'path', 'os', 'crypto', 'http', 'https', 'url',
+                               'child_process', 'dotenv', 'express', 'react', 'vue'}):
+                return None
+        
         return RelationFactory.create_imports_relation(
             importer=str(file_path),
             imported=module_name,
@@ -466,22 +451,33 @@ class JavaScriptParser(TreeSitterParser):
         return None
     
     def _create_function_call_relations(self, chunks: List[EntityChunk], file_path: Path, entities_or_names) -> List[Relation]:
-        """Create CALLS relations from extracted function calls."""
+        """Create CALLS relations only for project-defined entities."""
         relations = []
+        
+        # Build set of available entity names for validation
+        if isinstance(entities_or_names, list) and entities_or_names:
+            if hasattr(entities_or_names[0], 'name'):
+                # It's a list of Entity objects
+                entity_names = {entity.name for entity in entities_or_names}
+            else:
+                # It's already a list of names
+                entity_names = set(entities_or_names)
+        else:
+            entity_names = set()
         
         for chunk in chunks:
             if chunk.chunk_type == "implementation":
-                semantic_metadata = chunk.metadata.get("semantic_metadata", {})
-                calls = semantic_metadata.get("calls", [])
+                calls = chunk.metadata.get("semantic_metadata", {}).get("calls", [])
                 
                 for called_function in calls:
-                    # Create relation for all function calls (no filtering)
-                    relation = RelationFactory.create_calls_relation(
-                        caller=chunk.entity_name,
-                        callee=called_function,
-                        context=f"Function call in {file_path.name}"
-                    )
-                    relations.append(relation)
+                    # Only create relations to entities we actually indexed
+                    if called_function in entity_names:
+                        relation = RelationFactory.create_calls_relation(
+                            caller=chunk.entity_name,
+                            callee=called_function,
+                            context=f"Function call in {file_path.name}"
+                        )
+                        relations.append(relation)
         
         return relations
     

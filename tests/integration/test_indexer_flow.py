@@ -589,7 +589,7 @@ qdrant_url={base_config.qdrant_url}
             "--project", str(temp_repo),
             "--collection", "test_custom_new_file",
             "--verbose"
-        ], capture_output=True, text=True, cwd=temp_repo)
+        ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
         
         initial_output = result1.stdout
         initial_errors = result1.stderr
@@ -631,7 +631,7 @@ NEW_CONSTANT = "test_value"
             "--project", str(temp_repo),
             "--collection", "test_custom_new_file",
             "--verbose"
-        ], capture_output=True, text=True, cwd=temp_repo)
+        ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
         
         incremental_output = result2.stdout
         incremental_errors = result2.stderr
@@ -677,7 +677,7 @@ NEW_CONSTANT = "test_value"
             "python", "-m", "claude_indexer", "search", "new_function",
             "--project", str(temp_repo),
             "--collection", "test_custom_new_file"
-        ], capture_output=True, text=True, cwd=temp_repo)
+        ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
         
         assert search_result.returncode == 0, f"Search failed: {search_result.stderr}"
         assert "new_function" in search_result.stdout, "Should find new_function in search results"
@@ -711,7 +711,7 @@ DELETABLE_CONSTANT = "to_be_removed"
             "--project", str(temp_repo),
             "--collection", "test_custom_deletion",
             "--verbose"
-        ], capture_output=True, text=True, cwd=temp_repo)
+        ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
         
         initial_output = result1.stdout
         initial_errors = result1.stderr
@@ -746,7 +746,7 @@ DELETABLE_CONSTANT = "to_be_removed"
             "--project", str(temp_repo),
             "--collection", "test_custom_deletion",
             "--verbose"
-        ], capture_output=True, text=True, cwd=temp_repo)
+        ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
         
         deletion_output = result2.stdout
         deletion_errors = result2.stderr
@@ -786,7 +786,7 @@ DELETABLE_CONSTANT = "to_be_removed"
             "python", "-m", "claude_indexer", "search", "deletable_function",
             "--project", str(temp_repo),
             "--collection", "test_custom_deletion"
-        ], capture_output=True, text=True, cwd=temp_repo)
+        ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
         
         assert search_result.returncode == 0, f"Search failed: {search_result.stderr}"
         # The search output will show "Found X results for: deletable_function" 
@@ -824,7 +824,7 @@ qdrant_url={base_config.qdrant_url}
             "--project", str(temp_repo),
             "--collection", "test_custom_three_new",
             "--verbose"
-        ], capture_output=True, text=True, cwd=temp_repo)
+        ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
         
         initial_output = result1.stdout
         initial_errors = result1.stderr
@@ -874,7 +874,7 @@ class NewClass_{i}:
             "--project", str(temp_repo),
             "--collection", "test_custom_three_new",
             "--verbose"
-        ], capture_output=True, text=True, cwd=temp_repo)
+        ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
         
         incremental_output = result2.stdout
         incremental_errors = result2.stderr
@@ -925,7 +925,7 @@ class NewClass_{i}:
                 "python", "-m", "claude_indexer", "search", f"new_function_{i}",
                 "--project", str(temp_repo),
                 "--collection", "test_custom_three_new"
-            ], capture_output=True, text=True, cwd=temp_repo)
+            ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
             
             assert search_result.returncode == 0, f"Search failed for new_function_{i}: {search_result.stderr}"
             assert f"new_function_{i}" in search_result.stdout, f"Should find new_function_{i} in search results"
@@ -967,7 +967,7 @@ class DeletableClass_{i}:
             "--project", str(temp_repo),
             "--collection", "test_custom_three_deletion",
             "--verbose"
-        ], capture_output=True, text=True, cwd=temp_repo)
+        ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
         
         initial_output = result1.stdout
         initial_errors = result1.stderr
@@ -1006,7 +1006,7 @@ class DeletableClass_{i}:
             "--project", str(temp_repo),
             "--collection", "test_custom_three_deletion",
             "--verbose"
-        ], capture_output=True, text=True, cwd=temp_repo)
+        ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
         
         deletion_output = result2.stdout
         deletion_errors = result2.stderr
@@ -1055,7 +1055,7 @@ class DeletableClass_{i}:
                 "python", "-m", "claude_indexer", "search", f"deletable_function_{i}",
                 "--project", str(temp_repo),
                 "--collection", "test_custom_three_deletion"
-            ], capture_output=True, text=True, cwd=temp_repo)
+            ], capture_output=True, text=True, cwd=temp_repo, timeout=120)
             
             assert search_result.returncode == 0, f"Search failed for deletable_function_{i}: {search_result.stderr}"
             # Check that no line starts with a number and contains "deletable_function_X" as the entity name

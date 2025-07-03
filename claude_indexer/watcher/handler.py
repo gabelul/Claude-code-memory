@@ -281,7 +281,7 @@ class AsyncIndexingEventHandler:
         """Run indexing for a batch of files."""
         try:
             # Run in executor to avoid blocking the event loop
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             
             def run_indexing():
                 from ..main import run_indexing
@@ -391,7 +391,7 @@ class Watcher:
                 async_handler=self.async_handler,
                 include_patterns=self.include_patterns,
                 exclude_patterns=self.exclude_patterns,
-                loop=asyncio.get_event_loop()
+                loop=asyncio.get_running_loop()
             )
             
             # Start async processing
@@ -412,7 +412,7 @@ class Watcher:
         """Run initial indexing to ensure collection exists and project is indexed."""
         try:
             # Check if state file exists to determine if initial indexing is needed
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             
             def check_and_run_indexing():
                 from ..indexer import CoreIndexer
@@ -615,7 +615,7 @@ class AsyncWatcherHandler:
         """Index the given files using the provided embedder and store."""
         try:
             # Run indexing in executor to avoid blocking
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             
             def run_indexing():
                 # Import here to avoid circular imports

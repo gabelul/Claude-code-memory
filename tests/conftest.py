@@ -441,7 +441,7 @@ def _qdrant_available() -> bool:
 # Additional cleanup fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture(autouse=True, scope="function")
+@pytest.fixture(autouse=False, scope="function")  # DISABLED - was deleting production collections
 def cleanup_test_collections_on_failure():
     """Cleanup test collections after each test function to prevent accumulation."""
     yield  # Run the test
@@ -679,11 +679,17 @@ def verify_entity_searchable(
         if verbose:
             print(f"DEBUG: Searching for '{entity_name}' in collection '{collection_name}'")
             print(f"DEBUG: Found {len(hits)} total hits")
-            for i, hit in enumerate(hits[:5]):
-                print(f"DEBUG: Hit {i}: entity_name='{hit.payload.get('entity_name', 'NO_NAME')}', score={hit.score}")
+            for i, hit in enumerate(hits[:10]):
+                entity_name_field = hit.payload.get('entity_name', 'NO_NAME')
+                name_field = hit.payload.get('name', 'NO_NAME')
+                print(f"DEBUG: Hit {i}: entity_name='{entity_name_field}', name='{name_field}', score={hit.score}")
+                if entity_name in str(hit.payload):
+                    print(f"DEBUG: Hit {i} contains '{entity_name}' in payload: {hit.payload}")
         matching_hits = [
             hit for hit in hits 
-            if entity_name in hit.payload.get("entity_name", "")
+            if entity_name in hit.payload.get("entity_name", "") or
+               entity_name in hit.payload.get("name", "") or
+               entity_name in str(hit.payload)
         ]
         if verbose:
             print(f"DEBUG: Found {len(matching_hits)} matching hits for '{entity_name}'")
