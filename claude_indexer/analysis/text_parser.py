@@ -85,8 +85,7 @@ class TextParser(CodeParser):
                             "file_path": str(file_path),
                             "chunk_index": i,
                             "start_line": i * self.chunk_size + 1,
-                            "end_line": (i + 1) * self.chunk_size,
-                            "has_implementation": False
+                            "end_line": (i + 1) * self.chunk_size
                         }
                     )
                     chunks.append(chunk)

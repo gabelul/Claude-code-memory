@@ -644,8 +644,7 @@ class JSONParser(TreeSitterParser):
                         content="Large JSON file with no extractable content items",
                         metadata={
                             "entity_type": "json_content",
-                            "file_path": str(file_path),
-                            "has_implementation": False
+                            "file_path": str(file_path)
                         }
                     )
                     current_batch_chunks.append(chunk)
