@@ -11,6 +11,18 @@ def load_legacy_settings(settings_file: Path) -> Dict[str, Any]:
     """Load configuration from legacy settings.txt format."""
     settings = {}
     
+    # Key mapping from uppercase settings.txt format to lowercase config fields
+    key_mapping = {
+        'VOYAGE_API_KEY': 'voyage_api_key',
+        'EMBEDDING_PROVIDER': 'embedding_provider',
+        'EMBEDDING_MODEL': 'voyage_model',  # Map EMBEDDING_MODEL to voyage_model for voyage provider
+        'OPENAI_API_KEY': 'openai_api_key',
+        'QDRANT_API_KEY': 'qdrant_api_key',
+        'QDRANT_URL': 'qdrant_url',
+        'CHAT_MODEL': 'chat_model',
+        'VOYAGE_MODEL': 'voyage_model',
+    }
+    
     if not settings_file.exists():
         return settings
         
@@ -38,7 +50,9 @@ def load_legacy_settings(settings_file: Path) -> Dict[str, Any]:
                             # Keep as string if conversion fails
                             pass
                     
-                    settings[key] = value
+                    # Map uppercase keys to lowercase field names
+                    mapped_key = key_mapping.get(key, key)
+                    settings[mapped_key] = value
     except Exception as e:
         logger.warning(f"Failed to load settings.txt: {e}")
     

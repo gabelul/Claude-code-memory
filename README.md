@@ -317,6 +317,9 @@ Add to `~/.claude/claude_desktop_config.json`:
 
 ### Your First God Mode Experience
 ```bash
+# Initialize project configuration (creates .claude-indexer/config.json)
+claude-indexer init -p /your/project -c my-project
+
 # Index your project (30 seconds for most codebases)
 claude-indexer -p /your/project -c my-project
 

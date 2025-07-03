@@ -247,9 +247,23 @@ class JSONParser(TreeSitterParser):
         """Create searchable chunks from JSON content."""
         chunks = []
         
-        # For now, create a single chunk with the entire JSON
-        # Future: Could chunk by top-level keys for large files
-        chunks.append(EntityChunk(
+        # Create implementation chunk with full JSON content
+        impl_chunk = EntityChunk(
+            id=self._create_chunk_id(file_path, "content", "implementation"),
+            entity_name=file_path.name,
+            chunk_type="implementation",
+            content=content,  # Full JSON content
+            metadata={
+                "entity_type": "json_file",
+                "file_path": str(file_path),
+                "start_line": 1,
+                "end_line": len(content.split('\n'))
+            }
+        )
+        chunks.append(impl_chunk)
+        
+        # Create metadata chunk with preview for search
+        metadata_chunk = EntityChunk(
             id=self._create_chunk_id(file_path, "content", "metadata"),
             entity_name=file_path.name,
             chunk_type="metadata",
@@ -257,9 +271,10 @@ class JSONParser(TreeSitterParser):
             metadata={
                 "entity_type": "json_file",
                 "file_path": str(file_path),
-                "has_implementation": False
+                "has_implementation": len([impl_chunk]) > 0  # Truth-based: we created implementation chunk
             }
-        ))
+        )
+        chunks.append(metadata_chunk)
         
         return chunks
     

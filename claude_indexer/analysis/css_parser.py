@@ -29,9 +29,8 @@ class CSSParser(TreeSitterParser):
             result.file_hash = self._get_file_hash(file_path)
             tree = self.parse_tree(content)
             
-            # Check for syntax errors
-            if self._has_syntax_errors(tree):
-                result.errors.append(f"CSS syntax errors in {file_path.name}")
+            # Skip strict syntax checking for CSS - tree-sitter-css has false positives with valid CSS
+            # (keyframe percentages, calc() expressions, etc. trigger ERROR nodes but are valid CSS)
             
             entities = []
             relations = []
@@ -223,8 +222,23 @@ class CSSParser(TreeSitterParser):
         """Create searchable chunks from CSS content."""
         chunks = []
         
-        # Create a chunk with the CSS content for search
-        chunks.append(EntityChunk(
+        # Create implementation chunk with full CSS content
+        impl_chunk = EntityChunk(
+            id=self._create_chunk_id(file_path, "content", "implementation"),
+            entity_name=file_path.name,
+            chunk_type="implementation",
+            content=content,  # Full CSS content
+            metadata={
+                "entity_type": "css_file",
+                "file_path": str(file_path),
+                "start_line": 1,
+                "end_line": len(content.split('\n'))
+            }
+        )
+        chunks.append(impl_chunk)
+        
+        # Create metadata chunk with preview for search
+        metadata_chunk = EntityChunk(
             id=self._create_chunk_id(file_path, "content", "metadata"),
             entity_name=file_path.name,
             chunk_type="metadata",
@@ -232,8 +246,9 @@ class CSSParser(TreeSitterParser):
             metadata={
                 "entity_type": "css_file",
                 "file_path": str(file_path),
-                "has_implementation": False
+                "has_implementation": len([impl_chunk]) > 0  # Truth-based: we created implementation chunk
             }
-        ))
+        )
+        chunks.append(metadata_chunk)
         
         return chunks

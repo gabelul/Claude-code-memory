@@ -272,8 +272,23 @@ class HTMLParser(TreeSitterParser):
         """Create searchable chunks from HTML content."""
         chunks = []
         
-        # Create a chunk with the HTML content for search
-        chunks.append(EntityChunk(
+        # Create implementation chunk with full HTML content
+        impl_chunk = EntityChunk(
+            id=self._create_chunk_id(file_path, "content", "implementation"),
+            entity_name=file_path.name,
+            chunk_type="implementation",
+            content=content,  # Full HTML content
+            metadata={
+                "entity_type": "html_file",
+                "file_path": str(file_path),
+                "start_line": 1,
+                "end_line": len(content.split('\n'))
+            }
+        )
+        chunks.append(impl_chunk)
+        
+        # Create metadata chunk with preview for search
+        metadata_chunk = EntityChunk(
             id=self._create_chunk_id(file_path, "content", "metadata"),
             entity_name=file_path.name,
             chunk_type="metadata",
@@ -281,9 +296,10 @@ class HTMLParser(TreeSitterParser):
             metadata={
                 "entity_type": "html_file",
                 "file_path": str(file_path),
-                "has_implementation": False
+                "has_implementation": len([impl_chunk]) > 0  # Truth-based: we created implementation chunk
             }
-        ))
+        )
+        chunks.append(metadata_chunk)
         
         return chunks
     

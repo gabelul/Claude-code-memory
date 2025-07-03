@@ -1111,7 +1111,7 @@ class MarkdownParser(CodeParser):
                 section_content = '\n'.join(section_lines).strip()
                 
                 # Only create chunks for sections with meaningful content
-                if section_content and len(section_content) > 20:
+                if section_content and len(section_content.strip()) > 5:
                     # Create implementation chunk using existing patterns
                     impl_chunk = EntityChunk(
                         id=f"{str(file_path)}::{header['text']}::implementation",

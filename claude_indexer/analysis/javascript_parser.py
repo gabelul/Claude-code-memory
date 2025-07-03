@@ -168,24 +168,9 @@ class JavaScriptParser(TreeSitterParser):
         # Create chunks
         chunks = []
         
-        # Metadata chunk
-        signature = self._extract_function_signature(node, content)
-        chunks.append(EntityChunk(
-            id=self._create_chunk_id(file_path, name, "metadata"),
-            entity_name=name,
-            chunk_type="metadata",
-            content=signature,
-            metadata={
-                "entity_type": "function",
-                "file_path": str(file_path),
-                "line_number": node.start_point[0] + 1,
-                "has_implementation": True
-            }
-        ))
-        
-        # Implementation chunk
+        # Implementation chunk first
         implementation = self.extract_node_text(node, content)
-        chunks.append(EntityChunk(
+        impl_chunk = EntityChunk(
             id=self._create_chunk_id(file_path, name, "implementation"),
             entity_name=name,
             chunk_type="implementation",
@@ -199,6 +184,22 @@ class JavaScriptParser(TreeSitterParser):
                     "calls": self._extract_function_calls(implementation),
                     "complexity": self._calculate_complexity(implementation)
                 }
+            }
+        )
+        chunks.append(impl_chunk)
+        
+        # Metadata chunk with truth-based has_implementation
+        signature = self._extract_function_signature(node, content)
+        chunks.append(EntityChunk(
+            id=self._create_chunk_id(file_path, name, "metadata"),
+            entity_name=name,
+            chunk_type="metadata",
+            content=signature,
+            metadata={
+                "entity_type": "function",
+                "file_path": str(file_path),
+                "line_number": node.start_point[0] + 1,
+                "has_implementation": len([impl_chunk]) > 0  # Truth-based: we created implementation chunk
             }
         ))
         
@@ -289,22 +290,8 @@ class JavaScriptParser(TreeSitterParser):
         # Create chunks
         chunks = []
         
-        # Metadata chunk
-        chunks.append(EntityChunk(
-            id=self._create_chunk_id(file_path, name, "metadata"),
-            entity_name=name,
-            chunk_type="metadata",
-            content=f"class {name}",
-            metadata={
-                "entity_type": "class",
-                "file_path": str(file_path),
-                "line_number": node.start_point[0] + 1,
-                "has_implementation": True
-            }
-        ))
-        
-        # Implementation chunk
-        chunks.append(EntityChunk(
+        # Implementation chunk first
+        impl_chunk = EntityChunk(
             id=self._create_chunk_id(file_path, name, "implementation"),
             entity_name=name,
             chunk_type="implementation",
@@ -314,6 +301,21 @@ class JavaScriptParser(TreeSitterParser):
                 "file_path": str(file_path),
                 "start_line": node.start_point[0] + 1,
                 "end_line": node.end_point[0] + 1
+            }
+        )
+        chunks.append(impl_chunk)
+        
+        # Metadata chunk with truth-based has_implementation
+        chunks.append(EntityChunk(
+            id=self._create_chunk_id(file_path, name, "metadata"),
+            entity_name=name,
+            chunk_type="metadata",
+            content=f"class {name}",
+            metadata={
+                "entity_type": "class",
+                "file_path": str(file_path),
+                "line_number": node.start_point[0] + 1,
+                "has_implementation": len([impl_chunk]) > 0  # Truth-based: we created implementation chunk
             }
         ))
         
@@ -337,19 +339,38 @@ class JavaScriptParser(TreeSitterParser):
             end_line_number=node.end_point[0] + 1
         )
         
-        # Create metadata chunk only (interfaces have no implementation)
-        chunks = [EntityChunk(
+        # Create chunks for interface
+        chunks = []
+        
+        # Implementation chunk with interface definition
+        interface_content = self.extract_node_text(node, content)
+        impl_chunk = EntityChunk(
+            id=self._create_chunk_id(file_path, name, "implementation"),
+            entity_name=name,
+            chunk_type="implementation",
+            content=interface_content,
+            metadata={
+                "entity_type": "interface",
+                "file_path": str(file_path),
+                "start_line": node.start_point[0] + 1,
+                "end_line": node.end_point[0] + 1
+            }
+        )
+        chunks.append(impl_chunk)
+        
+        # Metadata chunk with truth-based has_implementation
+        chunks.append(EntityChunk(
             id=self._create_chunk_id(file_path, name, "metadata"),
             entity_name=name,
             chunk_type="metadata",
-            content=self.extract_node_text(node, content),
+            content=f"interface {name}",
             metadata={
                 "entity_type": "interface",
                 "file_path": str(file_path),
                 "line_number": node.start_point[0] + 1,
-                "has_implementation": False
+                "has_implementation": len([impl_chunk]) > 0  # Truth-based: we created implementation chunk
             }
-        )]
+        ))
         
         return entity, chunks
     

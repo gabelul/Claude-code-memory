@@ -74,21 +74,39 @@ class TextParser(CodeParser):
                     )
                     entities.append(entity)
                     
-                    # Create chunk for search
-                    chunk = EntityChunk(
-                        id=f"{str(file_path)}::{chunk_name}::content",
+                    # Create implementation chunk with full text content
+                    impl_chunk = EntityChunk(
+                        id=f"{str(file_path)}::{chunk_name}::implementation",
                         entity_name=chunk_name,
-                        chunk_type="metadata",  # For text files, metadata and content are the same
+                        chunk_type="implementation",
                         content=chunk_content,
+                        metadata={
+                            "entity_type": "text_chunk",
+                            "file_path": str(file_path),
+                            "start_line": i * self.chunk_size + 1,
+                            "end_line": (i + 1) * self.chunk_size,
+                            "chunk_index": i
+                        }
+                    )
+                    chunks.append(impl_chunk)
+                    
+                    # Create metadata chunk with preview
+                    preview = chunk_content[:200] + "..." if len(chunk_content) > 200 else chunk_content
+                    metadata_chunk = EntityChunk(
+                        id=f"{str(file_path)}::{chunk_name}::metadata",
+                        entity_name=chunk_name,
+                        chunk_type="metadata",
+                        content=preview,
                         metadata={
                             "entity_type": "text_chunk",
                             "file_path": str(file_path),
                             "chunk_index": i,
                             "start_line": i * self.chunk_size + 1,
-                            "end_line": (i + 1) * self.chunk_size
+                            "end_line": (i + 1) * self.chunk_size,
+                            "has_implementation": True  # Truth-based: we created implementation chunk
                         }
                     )
-                    chunks.append(chunk)
+                    chunks.append(metadata_chunk)
             
             # Create containment relations
             file_name = str(file_path)

@@ -1,13 +1,35 @@
 # Claude Code Memory Solution
 
 
-**🧪 TESTING: For running tests, use `test-relations-full-memory` MCP. Always use `mcp__test-relations-full-memory__` prefix for test operations.**
+**🧪 COMPREHENSIVE TESTING: Use `parser-test-memory` MCP for complete indexer and parser validation. Always use `mcp__parser-test-memory__` prefix for test operations.**
 
-**⚠️ IMPORTANT: This project uses `claude-memory-test` as its memory collection/database. Always use `mcp__claude-memory-test-memory__` prefix for all memory operations (search, read_graph, etc.) when working on this project.**
+### Parser-Test-Memory MCP Testing Environment
+
+**Dedicated testing database for comprehensive validation:**
+- **MCP Server**: `parser-test-memory` 
+- **Database Collection**: `parser-test`
+- **Purpose**: Isolated vector database testing without contaminating production collections
+- **Scope**: Indexer testing, parser validation, relation verification, incremental updates, chunk processing
+- **Access Pattern**: `mcp__parser-test-memory__` prefix for all test operations
+
+**Testing Workflow:**
+```bash
+# 1. Index test files into parser-test collection
+claude-indexer -p /path/to/test-files -c parser-test --verbose
+
+# 2. Validate via MCP tools
+mcp__parser-test-memory__search_similar("test pattern", entityTypes=["metadata"])
+mcp__parser-test-memory__read_graph(mode="entities", limit=50)
+
+# 3. Test specific components
+mcp__parser-test-memory__get_implementation("test_function", scope="logical")
+```
+
+**⚠️ IMPORTANT: This project uses `claude-memory` as its memory collection/database. Always use `mcp__claude-memory-memory__` prefix for all memory operations (search, read_graph, etc.) when working on this project.**
 
 **🐛 DEBUGGING: When testing indexer changes, create a test subdirectory (e.g., test_builtin_debug/) with minimal test files to avoid re-indexing the entire project. This speeds up debugging by 100x.**
 
-**🚨 ACTIVE ISSUES: To check current active issues, use:** `mcp__claude-memory-test-memory__read_graph(entityTypes=["active_issue"], mode="entities", limit=20)` or search with `active_issue` category.
+**🚨 ACTIVE ISSUES: To check current active issues, use:** `mcp__claude-memory-memory__read_graph(entityTypes=["active_issue"], mode="entities", limit=20)` or search with `active_issue` category.
 
 ## Current Version: v2.8 - Unified EntityTypes Filtering ✅ PRODUCTION READY
 
