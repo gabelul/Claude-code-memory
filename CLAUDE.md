@@ -9,7 +9,7 @@
 
 **🚨 ACTIVE ISSUES: To check current active issues, use:** `mcp__claude-memory-test-memory__read_graph(entityTypes=["active_issue"], mode="entities", limit=20)` or search with `active_issue` category.
 
-## Current Version: v2.7.1 - Project-Local State Files ✅ PRODUCTION READY
+## Current Version: v2.8 - Unified EntityTypes Filtering ✅ PRODUCTION READY
 
 Complete memory solution for Claude Code providing context-aware conversations with semantic search across **10+ programming languages** with universal Tree-sitter parsing, enhanced Python file operations, and project-level configuration.
 

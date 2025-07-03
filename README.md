@@ -501,7 +501,7 @@ claude-indexer -p /path/to/your/project -c my-project --verbose
 ### Step 5: Automatic Knowledge Graph Loading
 Knowledge graph is automatically loaded into Qdrant - no manual steps required!
 
-### Step 6: Test Entity-Specific Graph Filtering (NEW v2.7)
+### Step 6: Test Entity-Specific Graph Filtering (NEW v2.8)
 ```bash
 # In Claude Code - Focus on specific entities for targeted debugging
 mcp__my-project-memory__read_graph(entity="AuthService", mode="smart")
@@ -750,7 +750,7 @@ claude-indexer service status
 
 ## ✨ Features
 
-### 🎯 NEW v2.7 Features
+### 🎯 NEW v2.8 Features
 - **Entity-Specific Graph Filtering**: Focus on individual entities instead of massive project graphs
 - **Smart Entity Analysis**: AI-powered summaries with connection statistics and relationship breakdowns
 - **4 Targeted Modes**: smart (AI summary), entities (connections), relationships (only relations), raw (complete data)
