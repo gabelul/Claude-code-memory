@@ -93,6 +93,14 @@ class ProjectConfigManager:
         # Always include common formats
         include_patterns.extend(['*.json', '*.yaml', '*.yml', '*.md', '*.txt'])
         
+        # Standard exclude patterns for all projects
+        exclude_patterns = [
+            "*.pyc", "__pycache__", ".git", ".venv", "node_modules",
+            "dist", "build", "*.min.js", ".env", "*.log", ".mypy_cache",
+            "qdrant_storage", "backups", "*.egg-info", "settings.txt",
+            ".claude-indexer", "package-lock.json"
+        ]
+        
         config = ProjectConfig(
             project=ProjectInfo(
                 name=project_name,
@@ -100,7 +108,10 @@ class ProjectConfigManager:
                 description=f"Configuration for {project_name}"
             ),
             indexing=IndexingConfig(
-                file_patterns=FilePatterns(include=include_patterns)
+                file_patterns=FilePatterns(
+                    include=include_patterns,
+                    exclude=exclude_patterns
+                )
             )
         )
         

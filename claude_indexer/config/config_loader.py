@@ -58,6 +58,14 @@ class ConfigLoader:
         
         # 3. Apply project config overrides
         try:
+            # Auto-create config on first run (like init command)
+            if not self.project_manager.exists:
+                project_name = self.project_path.name
+                collection_name = config_dict.get('collection_name', project_name)
+                project_config = self.project_manager.create_default(project_name, collection_name)
+                self.project_manager.save(project_config)
+                logger.info(f"Created default project config at {self.project_manager.config_path}")
+            
             if self.project_manager.exists:
                 project_config = self.project_manager.load()
                 project_overrides = self._extract_overrides(project_config)
