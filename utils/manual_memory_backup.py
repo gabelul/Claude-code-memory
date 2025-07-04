@@ -44,7 +44,10 @@ def get_manual_entity_types() -> Set[str]:
         'documentation', 'manual_test', 'user_note', 'comment', 'annotation',
         'summary', 'guide', 'tutorial', 'example', 'template', 'specification',
         'requirement', 'design_document', 'meeting_notes', 'decision', 'changelog',
-        'release_notes', 'troubleshooting', 'faq', 'howto', 'tips', 'tricks'
+        'release_notes', 'troubleshooting', 'faq', 'howto', 'tips', 'tricks',
+        
+        # New category types
+        'active_issue', 'ideas'
     }
 
 def get_code_entity_types() -> Set[str]:

@@ -116,7 +116,7 @@ claude-indexer search "database connection" -p /path -c name --type entity
 
 ## Memory Integration
 
-### Enhanced 8-Category System for Manual Entries
+### Enhanced 9-Category System for Manual Entries
 
 **Research-backed categorization with semantic content analysis:**
 
@@ -128,6 +128,7 @@ claude-indexer search "database connection" -p /path -c name --type entity
 - **`performance_pattern` (8% target)**: Optimization, caching, bottlenecks
 - **`knowledge_insight`**: Research findings, lessons learned, methodology
 - **`active_issue`**: Current bugs/problems requiring attention (delete when fixed)
+- **`ideas`**: Project ideas, feature suggestions, future enhancements, brainstorming
 
 **Classification Approach**: Analyze content semantics, not format. Identify 3 strongest indicators, then categorize based on actual problem domain rather than documentation style.
 

@@ -55,7 +55,7 @@ class SummaryResult:
 class ChatSummarizer:
     """Summarizes Claude Code conversations using OpenAI API."""
     
-    # 7-category mapping based on CLAUDE.md instructions
+    # 9-category mapping based on CLAUDE.md instructions
     CATEGORY_PATTERNS = {
         "debugging_pattern": [
             "error", "exception", "bug", "fix", "debug", "traceback", "stack trace",
@@ -84,6 +84,14 @@ class ChatSummarizer:
         "knowledge_insight": [
             "research", "learning", "methodology", "strategy", "analysis", "insight",
             "findings", "discovery", "understanding", "lesson"
+        ],
+        "active_issue": [
+            "active", "issue", "bug", "problem", "todo", "fixme", "hack", "workaround",
+            "blocked", "investigate", "urgent", "critical", "blocker", "regression"
+        ],
+        "ideas": [
+            "idea", "feature", "suggestion", "enhancement", "brainstorm", "concept",
+            "proposal", "future", "roadmap", "vision", "inspiration", "innovation"
         ]
     }
     
