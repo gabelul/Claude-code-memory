@@ -21,7 +21,8 @@
         "*.htm",
         "*.css",
         "*.md",
-        "*.txt"
+        "*.txt",
+        "*,json"
       ],
       "exclude": [
         "*.pyc",

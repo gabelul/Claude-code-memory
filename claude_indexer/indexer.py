@@ -434,8 +434,17 @@ class CoreIndexer:
         return result
     
     def search_similar(self, collection_name: str, query: str, 
-                      limit: int = 10, filter_type: str = None) -> List[Dict[str, Any]]:
-        """Search for similar entities/relations."""
+                      limit: int = 10, filter_type: str = None, 
+                      chunk_type: str = None) -> List[Dict[str, Any]]:
+        """Search for similar entities/relations.
+        
+        Args:
+            collection_name: Name of the collection to search
+            query: Search query text
+            limit: Maximum number of results
+            filter_type: Filter by entity type (e.g., 'function', 'class')
+            chunk_type: Filter by chunk type (e.g., 'implementation', 'metadata')
+        """
         try:
             # Check if collection exists before searching
             if not self.vector_store.collection_exists(collection_name):
@@ -451,6 +460,8 @@ class CoreIndexer:
             filter_conditions = {}
             if filter_type:
                 filter_conditions["type"] = filter_type
+            if chunk_type:
+                filter_conditions["chunk_type"] = chunk_type
             
             # Search vector store
             search_result = self.vector_store.search_similar(

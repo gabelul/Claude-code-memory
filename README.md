@@ -366,12 +366,19 @@ You have access to a complete memory of this codebase. ALWAYS:
 
 ## Enhanced Memory Graph Functions
 
-### 🎯 Unified Search with entityTypes Filtering
+### 🎯 Unified Search with entityTypes Filtering (MCP Only)
 - search_similar("query", entityTypes=["metadata"]) - 90% faster overview search
 - search_similar("query", entityTypes=["function", "class"]) - Find specific code elements
 - search_similar("query", entityTypes=["debugging_pattern"]) - Find past error solutions
 - search_similar("query", entityTypes=["documentation"]) - Search docs only
 - search_similar("query", entityTypes=["function", "metadata"]) - Mixed search with OR logic
+
+### 🔍 CLI Search Parameters
+**Note**: CLI search has limited filtering compared to MCP unified entityTypes approach:
+- **--type entity**: Filter by code entities (functions, classes, variables)
+- **--type relation**: Filter by relationships between entities  
+- **--type all**: Search all types (default behavior)
+- **Missing**: No chunk_type filtering at CLI level (metadata vs implementation)
 
 ### 📊 Codebase Mapping (with safe limits)
 **General Analysis:**
@@ -583,8 +590,10 @@ claude-indexer hooks install -p /path/to/project -c project-name
 claude-indexer hooks status -p /path/to/project -c project-name
 claude-indexer hooks uninstall -p /path/to/project -c project-name
 
-# Search existing collections
-claude-indexer search "function authentication" -p /path -c project-name
+# Search existing collections with type filtering
+claude-indexer search "function authentication" -p /path -c project-name --type entity
+claude-indexer search "database relation" -p /path -c project-name --type relation
+claude-indexer search "all patterns" -p /path -c project-name --type all
 
 # Index single file
 claude-indexer file /path/to/file.py -p /path/to/project -c project-name
