@@ -274,7 +274,7 @@ class YAMLParser(TreeSitterParser):
         # Create implementation chunk with full YAML content
         impl_chunk = EntityChunk(
             id=self._create_chunk_id(file_path, "content", "implementation"),
-            entity_name=file_path.name,
+            entity_name=str(file_path),
             chunk_type="implementation",
             content=content,  # Full YAML content
             metadata={
@@ -289,7 +289,7 @@ class YAMLParser(TreeSitterParser):
         # Create metadata chunk with preview for search
         metadata_chunk = EntityChunk(
             id=self._create_chunk_id(file_path, "content", "metadata"),
-            entity_name=file_path.name,
+            entity_name=str(file_path),
             chunk_type="metadata",
             content=content[:1000],  # First 1000 chars for search
             metadata={

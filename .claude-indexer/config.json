@@ -37,6 +37,7 @@
         ".mypy_cache",
         "qdrant_storage",
         "backups",
+        "chat_reports",
         "*.egg-info",
         "settings.txt",
         ".claude-indexer"

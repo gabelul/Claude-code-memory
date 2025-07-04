@@ -250,7 +250,7 @@ class JSONParser(TreeSitterParser):
         # Create implementation chunk with full JSON content
         impl_chunk = EntityChunk(
             id=self._create_chunk_id(file_path, "content", "implementation"),
-            entity_name=file_path.name,
+            entity_name=str(file_path),
             chunk_type="implementation",
             content=content,  # Full JSON content
             metadata={
@@ -265,7 +265,7 @@ class JSONParser(TreeSitterParser):
         # Create metadata chunk with preview for search
         metadata_chunk = EntityChunk(
             id=self._create_chunk_id(file_path, "content", "metadata"),
-            entity_name=file_path.name,
+            entity_name=str(file_path),
             chunk_type="metadata",
             content=content[:1000],  # First 1000 chars for search
             metadata={
@@ -290,7 +290,7 @@ class JSONParser(TreeSitterParser):
         # Create content chunk for searchability
         chunk = EntityChunk(
             id=self._create_chunk_id(file_path, "content", "implementation"),
-            entity_name=file_path.name,
+            entity_name=str(file_path),
             chunk_type="implementation",
             content=content,
             metadata={
@@ -336,7 +336,7 @@ class JSONParser(TreeSitterParser):
             if content_count == 0:
                 chunk = EntityChunk(
                     id=self._create_chunk_id(file_path, "content", "implementation"),
-                    entity_name=file_path.name,
+                    entity_name=str(file_path),
                     chunk_type="implementation",
                     content=content,
                     metadata={
@@ -654,7 +654,7 @@ class JSONParser(TreeSitterParser):
                     # Only create placeholder chunk if not using callback (traditional mode)
                     chunk = EntityChunk(
                         id=self._create_chunk_id(file_path, "no_content", "implementation"),
-                        entity_name=file_path.name,
+                        entity_name=str(file_path),
                         chunk_type="implementation",
                         content="Large JSON file with no extractable content items",
                         metadata={
