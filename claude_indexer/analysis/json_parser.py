@@ -417,6 +417,22 @@ class JSONParser(TreeSitterParser):
     
     def _create_content_entity_name(self, array_key: str, item: dict, index: int) -> str:
         """Create a meaningful name for a content entity."""
+        # Use chunk_number from JSON if available (for book files)
+        if 'chunk_number' in item:
+            chunk_num = item['chunk_number']
+            
+            # Try to use title, subject, or name fields with chunk number
+            for field in ['title', 'subject', 'name', 'headline']:
+                if field in item and isinstance(item[field], str):
+                    title = item[field].strip()
+                    if title:
+                        # Clean and truncate title
+                        title = title.replace('\n', ' ').replace('\r', '')[:100]
+                        return f"{array_key.rstrip('s')}_{chunk_num}_{title}"
+            
+            # Use chunk number from JSON
+            return f"{array_key.rstrip('s')}_{chunk_num}"
+        
         # Try to use title, subject, or name fields
         for field in ['title', 'subject', 'name', 'headline']:
             if field in item and isinstance(item[field], str):
@@ -576,7 +592,7 @@ class JSONParser(TreeSitterParser):
             
             # Arrays to check for content
             content_arrays = ["topics", "posts", "articles", "comments", 
-                            "messages", "threads", "forums", "site_pages", "items"]
+                            "messages", "threads", "forums", "site_pages", "items", "content", "chunks"]
             
             # Process each content array
             for array_key in content_arrays:
