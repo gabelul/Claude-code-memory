@@ -32,6 +32,8 @@ settings.txt
 test_*.py
 debug_*.py
 cleanup_*.py
+test_*/
+prompts/
 
 # Chat reports
 chat_reports/

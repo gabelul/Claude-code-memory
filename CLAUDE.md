@@ -1,118 +1,106 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Claude Code Memory Solution
 
+## Architecture Overview
 
-**🧪 COMPREHENSIVE TESTING: Use `parser-test-memory` MCP for complete indexer and parser validation. Always use `mcp__parser-test-memory__` prefix for test operations.**
+This is a **dual-component semantic code memory system** for Claude Code:
 
-### Parser-Test-Memory MCP Testing Environment
+**Components:**
+- **Python Indexer** (`claude_indexer/`) - Universal AST parsing and vector indexing
+- **Node.js MCP Server** (`mcp-qdrant-memory/`) - Memory retrieval interface for Claude
+- **Qdrant Vector Database** - Semantic search and storage backend
 
-**Dedicated testing database for comprehensive validation:**
-- **MCP Server**: `parser-test-memory` 
-- **Database Collection**: `parser-test`
-- **Purpose**: Isolated vector database testing without contaminating production collections
-- **Scope**: Indexer testing, parser validation, relation verification, incremental updates, chunk processing
-- **Access Pattern**: `mcp__parser-test-memory__` prefix for all test operations
-
-**Testing Workflow:**
-```bash
-# 1. Index test files into parser-test collection
-claude-indexer -p /path/to/test-files -c parser-test --verbose
-
-# 2. Validate via MCP tools
-mcp__parser-test-memory__search_similar("test pattern", entityTypes=["metadata"])
-mcp__parser-test-memory__read_graph(mode="entities", limit=50)
-
-# 3. Test specific components
-mcp__parser-test-memory__get_implementation("test_function", scope="logical")
+**Core Architecture:**
+```
+Claude Code ◄──► MCP Server ◄──► Qdrant Database
+                      ▲
+              Python Indexer
+                (Tree-sitter + Jedi)
 ```
 
-**⚠️ IMPORTANT: This project uses `claude-memory` as its memory collection/database. Always use `mcp__claude-memory-memory__` prefix for all memory operations (search, read_graph, etc.) when working on this project.**
+## Essential Commands
 
-**🐛 DEBUGGING: When testing indexer changes, create a test subdirectory (e.g., test_builtin_debug/) with minimal test files to avoid re-indexing the entire project. This speeds up debugging by 100x.**
-
-**🚨 ACTIVE ISSUES: To check current active issues, use:** `mcp__claude-memory-memory__read_graph(entityTypes=["active_issue"], mode="entities", limit=20)` or search with `active_issue` category.
-
-## Current Version: v2.8 - Unified EntityTypes Filtering ✅ PRODUCTION READY
-
-Complete memory solution for Claude Code providing context-aware conversations with semantic search across **10+ programming languages** with universal Tree-sitter parsing, enhanced Python file operations, and project-level configuration.
-
-→ **Use §m to search project memory for:** implementation details, performance results, migration guides
-
-## Quick Start
-
+### Development Setup
 ```bash
-# 1. Setup environment
+# Environment setup
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Configure settings.txt with API keys
-cp settings.template.txt settings.txt
-# Edit with your OpenAI and Qdrant API keys
-
-# 3. Install global wrapper
+# Install global wrapper
 ./install.sh
 
-# 4. Index any multi-language project (use -p and -c shortcuts for faster typing)
-claude-indexer -p /path/to/project -c project-name
+# Start Qdrant database
+docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
 ```
 
-## Core Usage
-
-### Embedding Provider Configuration
-
-**Voyage AI (Recommended - 85% cost reduction):**
+### Build and Quality
 ```bash
-# Add to settings.txt
-VOYAGE_API_KEY=your_voyage_key
-EMBEDDING_PROVIDER=voyage
-EMBEDDING_MODEL=voyage-3-lite  # or voyage-3
+# Code formatting and linting
+black .
+isort .
+flake8 .
+mypy claude_indexer/
+
+# Testing
+pytest                     # All tests
+pytest tests/unit/         # Unit tests only
+pytest tests/integration/  # Integration tests
+pytest --cov=claude_indexer --cov-report=html  # With coverage
 ```
 
-**OpenAI (Default):**
+### Indexing and Memory Operations
 ```bash
-# Add to settings.txt  
-OPENAI_API_KEY=your_openai_key
-EMBEDDING_PROVIDER=openai
-EMBEDDING_MODEL=text-embedding-3-small
-```
+# Index project (auto-detects incremental mode)
+claude-indexer -p /path/to/project -c collection-name
 
-### Direct Qdrant Integration
-
-```bash
-# Auto-detects: First run = Full mode, subsequent runs = Incremental mode (15x faster)
-claude-indexer -p /path -c name
-
-# Clear collection (preserves manually added memories)
-claude-indexer -p /path -c name --clear
-
-# Clear entire collection (deletes all memories including manual)
-claude-indexer -p /path -c name --clear-all
-```
-
-### Essential Commands
-
-#### MCP Server Setup  
-```bash
-# Add MCP server configuration with automatic Voyage AI integration
-claude-indexer add-mcp -c project-name
-claude-indexer add-mcp -c general  # for general memory
-```
-
-#### File Watching & Services
-```bash
 # Real-time file watching
-claude-indexer watch start -p /path -c name --debounce 3.0
+claude-indexer watch start -p /path -c collection-name
 
-# Background service management
+# Search semantic code
+claude-indexer search "query" -p /path -c collection-name
+
+# Service management for multiple projects
 claude-indexer service start
-claude-indexer service add-project /path/to/project project-collection-name
+claude-indexer service add-project /path project-name
 ```
 
-#### Search & Discovery
+### MCP Server Configuration
 ```bash
-# Semantic search across indexed collections
-claude-indexer search "authentication function" -p /path -c name
-claude-indexer search "database connection" -p /path -c name --type entity
+# Automatic MCP setup (reads settings.txt)
+claude-indexer add-mcp -c collection-name
 ```
+
+**⚠️ Project Memory:** Use `mcp__claude-memory-memory__` prefix for all memory operations on this project.
+
+**🧪 Testing:** Use `parser-test-memory` MCP for isolated testing without contaminating production collections.
+
+## Key Architecture Components
+
+### Core Indexing Engine
+- **Entry Point**: `claude_indexer/cli_full.py` (Click-based CLI)
+- **Main Logic**: `claude_indexer/main.py` and `CoreIndexer` (`indexer.py`)
+- **Global Command**: `claude-indexer` (installed via `./install.sh`)
+
+### Multi-Language Analysis
+- **Parser Registry**: `claude_indexer/analysis/parser.py` (Tree-sitter + Jedi)
+- **Supported Languages**: Python, JavaScript/TypeScript, JSON, YAML, HTML, CSS, Markdown
+- **Language Parsers**: Individual parsers in `claude_indexer/analysis/` (e.g., `python_parser.py`, `javascript_parser.py`)
+
+### Storage and Embeddings
+- **Storage**: `claude_indexer/storage/qdrant.py` (Direct Qdrant integration)
+- **Embeddings**: `claude_indexer/embeddings/` (OpenAI + Voyage AI support)
+- **Configuration**: `claude_indexer/config/` (Hierarchical project settings)
+
+### Progressive Disclosure System
+- **Metadata Chunks**: Fast entity overviews (90% speed boost)
+- **Implementation Chunks**: Detailed code content on-demand
+- **Entity-Specific Filtering**: Focus on specific components vs. entire project graphs
+
+## Configuration
+Use `§m` to search memory for detailed configuration patterns, file organization, and advanced command usage.
 
 ## Memory Integration
 
@@ -120,7 +108,7 @@ claude-indexer search "database connection" -p /path -c name --type entity
 
 **Research-backed categorization with semantic content analysis:**
 
-- **`debugging_pattern` (30% target)**: Error diagnosis, root cause analysis, troubleshooting
+- **`debugging_pattern` (30% target)**: SOLUTIONS and resolution patterns for errors (not the bugs themselves)
 - **`implementation_pattern` (25% target)**: Coding solutions, algorithms, best practices  
 - **`integration_pattern` (15% target)**: APIs, databases, authentication, pipelines
 - **`configuration_pattern` (12% target)**: Environment setup, deployment, CI/CD
@@ -129,6 +117,15 @@ claude-indexer search "database connection" -p /path -c name --type entity
 - **`knowledge_insight`**: Research findings, lessons learned, methodology
 - **`active_issue`**: Current bugs/problems requiring attention (delete when fixed)
 - **`ideas`**: Project ideas, feature suggestions, future enhancements, brainstorming
+
+## Memory Storage Rules
+***Don't store just info about bugs, but store about solutions, insights about how the code works***
+
+When categorizing memories:
+- **debugging_pattern**: Store SOLUTIONS and resolution patterns, not the bugs themselves  
+- **implementation_pattern**: Working code solutions and techniques
+- Focus on "how to fix" rather than "what's broken"
+- Only store after issues are resolved with working solutions
 
 **Classification Approach**: Analyze content semantics, not format. Identify 3 strongest indicators, then categorize based on actual problem domain rather than documentation style.
 
@@ -161,20 +158,6 @@ search_similar("pattern")  # Returns all entity and chunk types
 - **Backward Compatible**: Existing calls work unchanged
 - **Performance**: Filter at database level for optimal speed
 
-## MCP Server Setup
-
-**Option 1: Built-in CLI Command (Recommended)**
-```bash
-# Add MCP server using integrated command - reads API keys from settings.txt
-claude-indexer add-mcp -c project-name
-claude-indexer add-mcp -c general  # for general memory
-```
-
-**Option 2: Manual Command Line**
-```bash
-# Add project-specific memory manually
-claude mcp add project-memory -e OPENAI_API_KEY="YOUR_KEY" -e QDRANT_API_KEY="YOUR_KEY" -e QDRANT_URL="http://localhost:6333" -e QDRANT_COLLECTION_NAME="project-name" -- node "/path/to/memory/mcp-qdrant-memory/dist/index.js"
-```
 
 ## Debug Testing Protocol
 
@@ -209,30 +192,6 @@ python utils/manual_memory_backup.py restore -f manual_entries_backup_collection
 python utils/manual_memory_backup.py restore -f backup.json --dry-run
 ```
 
-## Logs and Debug Information
-
-**Project File Organization:**
-- **State files**: `{project_path}/.claude-indexer/{collection_name}.json` (tracks incremental indexing metadata)
-- **Project logs**: `{project_path}/logs/{collection_name}.log`
-- **Project config**: `{project_path}/.claude-indexer/config.json` (optional project-specific settings)
-- **Service logs**: `~/.claude-indexer/logs/` (fallback when no project path)
-- **Service config**: `~/.claude-indexer/config.json` (global service configuration)
-
-**Debug Commands:**
-```bash
-# Enable verbose logging for troubleshooting
-claude-indexer -p /path -c name --verbose
-
-# Check service status with detailed logs
-claude-indexer service status --verbose
-
-# Monitor real-time logs during operation
-tail -f {project_path}/logs/{collection_name}.log
-
-# For testing relation formats and orphan cleanup - use small test directory
-claude-indexer -p /path/to/small-test-dir -c debug-test --verbose
-# Recommended: 1-2 Python files only for cleaner debug output
-```
 
 ## 🎯 Entity-Specific Graph Filtering (NEW in v2.7)
 
@@ -370,39 +329,11 @@ get_implementation("similar_function", scope="logical")  # Understand code style
 - Use `--verbose` flag for detailed error messages
 - Check memory: `search_similar("indexing error no entities", entityTypes=["debugging_pattern", "metadata"])`
 
-## Multi-Language & Configuration Support
+## Additional Information
 
-**Supported Languages:** Python, JavaScript/TypeScript, JSON, YAML, HTML, CSS, Text files (24 extensions total)
-
-**Project Configuration:** Use `.claude-indexer/config.json` for project-specific settings
-
-→ **Use §m to search project memory for:** technical specs, parser details, configuration examples
-
-## Advanced Details → Use §m to search project memory for:
-
-- **Multi-language support technical specs** and parser implementation details
-- **Configuration system patterns** and hierarchy management
-- **Version history and migration guides** (v2.4-v2.7)
-- **Performance validation results** and optimization analysis
-- **Architecture evolution notes** and component integration
-
-## Benefits Summary
-
-- **Automatic Context**: Claude knows your entire project structure
-- **Semantic Search**: Find code by intent, not just keywords
-- **Cross-Session Memory**: Persistent understanding across sessions
-- **True Automation**: Zero manual intervention required
-- **Pattern Recognition**: Learns coding patterns and preferences
-- **Dependency Tracking**: Understands impact of changes
-
-## Prerequisites
-
-- Python 3.12+ installed
-- Node.js 18+ for MCP server
-- Git for version control
-- Claude Code installed and configured
-- Qdrant running (Docker or local)
-
----
-
-The combination of delorenj/mcp-qdrant-memory + Tree-sitter + Jedi + advanced automation provides enterprise-grade memory capabilities for Claude Code while remaining accessible for individual developers and teams.
+**Use `§m` to search memory for:**
+- Multi-language parser specifications
+- Configuration system details  
+- Performance optimization patterns
+- Version history and migration guides
+- Advanced debugging workflows
