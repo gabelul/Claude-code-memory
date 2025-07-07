@@ -685,14 +685,30 @@ def verify_entity_searchable(
                 print(f"DEBUG: Hit {i}: entity_name='{entity_name_field}', name='{name_field}', score={hit.score}")
                 if entity_name in str(hit.payload):
                     print(f"DEBUG: Hit {i} contains '{entity_name}' in payload: {hit.payload}")
-        matching_hits = [
-            hit for hit in hits 
-            if entity_name in hit.payload.get("entity_name", "") or
-               entity_name in hit.payload.get("name", "") or
-               entity_name in str(hit.payload)
-        ]
+        # Enhanced matching logic for unique entity name matches only
+        # Focus on entities that have the search term in their actual name
+        # This provides more precise matching for test expectations
+        unique_entity_names = set()
+        matching_hits = []
+        
+        for hit in hits:
+            chunk_type = hit.payload.get("chunk_type", "")
+            entity_name_field = hit.payload.get("entity_name", "")
+            
+            # Skip relations and file paths
+            if chunk_type == "relation" or entity_name_field.startswith("/"):
+                continue
+                
+            # Only match if search term is in the entity name (not just content)
+            if entity_name in entity_name_field:
+                if entity_name_field not in unique_entity_names:
+                    unique_entity_names.add(entity_name_field)
+                    matching_hits.append(hit)
+                    if verbose:
+                        print(f"DEBUG: Unique entity match - entity_name='{entity_name_field}', chunk_type='{chunk_type}'")
+        
         if verbose:
-            print(f"DEBUG: Found {len(matching_hits)} matching hits for '{entity_name}'")
+            print(f"DEBUG: Found {len(matching_hits)} unique entity matches for '{entity_name}'")
         return matching_hits
     
     return wait_for_eventual_consistency(

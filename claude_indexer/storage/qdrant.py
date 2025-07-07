@@ -733,13 +733,13 @@ class QdrantStore(ManagedVectorStore):
             # Use helper to get all relations with pagination  
             from qdrant_client import models
             
-            # Get all relations (type = "relation")
+            # Get all relations (chunk_type = "relation")
             relations = self._scroll_collection(
                 collection_name=collection_name,
                 scroll_filter=models.Filter(
                     must=[
                         models.FieldCondition(
-                            key="type",
+                            key="chunk_type",
                             match=models.MatchValue(value="relation")
                         )
                     ]
