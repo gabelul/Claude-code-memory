@@ -707,13 +707,46 @@ class CoreIndexer:
         return new_vectored, modified_vectored, deleted_vectored
     
     def _filter_orphan_relations_in_memory(self, relations: List['Relation'], global_entity_names: set) -> List['Relation']:
-        """Filter out relations pointing to non-existent entities."""
+        """Filter out relations pointing to non-existent entities - handles CALLS and IMPORTS."""
         if not global_entity_names:
             self.logger.warning("No global entities available - keeping all relations")
             return relations
             
+        def resolve_module_name(module_name: str) -> bool:
+            """Check if module name resolves to any existing entity."""
+            if module_name in global_entity_names:
+                return True
+            
+            # Handle relative imports (.chat.parser, ..config, etc.)
+            if module_name.startswith('.'):
+                clean_name = module_name.lstrip('.')
+                for entity_name in global_entity_names:
+                    # Direct pattern match first
+                    if entity_name.endswith(f"/{clean_name}.py") or entity_name.endswith(f"\\{clean_name}.py"):
+                        return True
+                    # Handle dot notation (chat.parser -> chat/parser.py)
+                    if '.' in clean_name:
+                        path_version = clean_name.replace('.', '/')
+                        if entity_name.endswith(f"/{path_version}.py") or entity_name.endswith(f"\\{path_version}.py"):
+                            return True
+                    # Fallback: contains check
+                    if clean_name in entity_name and entity_name.endswith('.py'):
+                        return True
+            
+            # Handle absolute module paths (claude_indexer.analysis.entities)
+            elif '.' in module_name:
+                path_parts = module_name.split('.')
+                for entity_name in global_entity_names:
+                    # Check if entity path contains module structure and ends with .py
+                    if (all(part in entity_name for part in path_parts) and 
+                        entity_name.endswith('.py') and path_parts[-1] in entity_name):
+                        return True
+            
+            return False
+            
         valid_relations = []
         orphan_count = 0
+        import_orphan_count = 0
         
         for relation in relations:
             # For CALLS relations, check if target entity exists
@@ -724,11 +757,20 @@ class CoreIndexer:
                 else:
                     orphan_count += 1
                     self.logger.debug(f"🚫 Filtered orphan: {relation.from_entity} -> {relation.to_entity}")
+            
+            # For IMPORTS relations, use module resolution logic
+            elif relation.relation_type.value == 'imports':
+                if resolve_module_name(relation.to_entity):
+                    valid_relations.append(relation)
+                    self.logger.debug(f"✅ Kept import: {relation.to_entity}")
+                else:
+                    import_orphan_count += 1
+                    self.logger.debug(f"🚫 Filtered external import: {relation.to_entity}")
             else:
-                # Keep all non-CALLS relations (imports, contains, etc.)
+                # Keep all other relations (contains, inherits, etc.)
                 valid_relations.append(relation)
         
-        self.logger.info(f"Filtered {orphan_count} orphan CALLS relations")
+        self.logger.info(f"Filtered {orphan_count} orphan CALLS relations, {import_orphan_count} external imports")
         return valid_relations
     
     def _get_all_entity_names(self, collection_name: str) -> set:

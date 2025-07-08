@@ -259,7 +259,7 @@ class PythonParser(CodeParser):
         return entities
     
     def _extract_tree_sitter_relations(self, tree: 'tree_sitter.Tree', file_path: Path) -> List['Relation']:
-        """Extract relations from Tree-sitter AST (inheritance only - imports handled by Jedi)."""
+        """Extract relations from Tree-sitter AST (inheritance + imports for debugging)."""
         
         relations = []
         
@@ -537,14 +537,14 @@ class PythonParser(CodeParser):
         
         for imp in analysis['imports']:
             module_name = imp['name']
-            # Only create relations for relative imports or project-internal modules
-            if module_name.startswith('.') or self._is_internal_import(module_name, file_path, project_root):
-                relation = RelationFactory.create_imports_relation(
-                    importer=file_name,
-                    imported=module_name,
-                    import_type="module"
-                )
-                relations.append(relation)
+            # Create relations for ALL imports - let orphan cleanup handle filtering
+            # This matches the previous system behavior which had 866+ imports
+            relation = RelationFactory.create_imports_relation(
+                importer=file_name,
+                imported=module_name,
+                import_type="module"
+            )
+            relations.append(relation)
         
         return entities, relations
     
