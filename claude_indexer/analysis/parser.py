@@ -94,6 +94,7 @@ class PythonParser(CodeParser):
         self.project_path = project_path
         self._parser = None
         self._project = None
+        self._observation_extractor = None
         
         if TREE_SITTER_AVAILABLE:
             self._initialize_parsers()
@@ -107,6 +108,10 @@ class PythonParser(CodeParser):
             
             # Initialize Jedi project
             self._project = jedi.Project(str(self.project_path))
+            
+            # Initialize observation extractor
+            from .observation_extractor import ObservationExtractor
+            self._observation_extractor = ObservationExtractor(self.project_path)
             
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Python parser: {e}")
@@ -144,11 +149,11 @@ class PythonParser(CodeParser):
                 ts_relations = self._extract_tree_sitter_relations(tree, file_path)
                 result.relations.extend(ts_relations)
             
-            # Analyze with Jedi for semantic information
+            # Analyze with Jedi for semantic information (relations only - entities come from Tree-sitter)
             jedi_analysis = self._analyze_with_jedi(file_path)
-            jedi_entities, jedi_relations = self._process_jedi_analysis(jedi_analysis, file_path)
+            _, jedi_relations = self._process_jedi_analysis(jedi_analysis, file_path)
             
-            result.entities.extend(jedi_entities)
+            # Only add relations from Jedi, not entities (Tree-sitter handles entities with enhanced observations)
             result.relations.extend(jedi_relations)
             
             # Progressive disclosure: Extract implementation chunks for v2.4
@@ -279,7 +284,7 @@ class PythonParser(CodeParser):
 
     def _extract_named_entity(self, node: 'tree_sitter.Node', entity_type: 'EntityType', 
                              file_path: Path) -> Optional['Entity']:
-        """Extract named entity from Tree-sitter node."""
+        """Extract named entity from Tree-sitter node with enhanced observations."""
         
         # Find identifier child
         entity_name = None
@@ -294,12 +299,42 @@ class PythonParser(CodeParser):
         line_number = node.start_point[0] + 1
         end_line = node.end_point[0] + 1
         
+        # Extract enhanced observations if extractor is available
+        enhanced_observations = None
+        if self._observation_extractor:
+            try:
+                # Read source code for observation extraction
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    source_code = f.read()
+                
+                # Create Jedi script for semantic analysis
+                jedi_script = None
+                if self._project:
+                    try:
+                        jedi_script = jedi.Script(source_code, path=str(file_path), project=self._project)
+                    except Exception:
+                        pass
+                
+                # Extract observations based on entity type
+                if entity_type == EntityType.FUNCTION:
+                    enhanced_observations = self._observation_extractor.extract_function_observations(
+                        node, source_code, jedi_script
+                    )
+                elif entity_type == EntityType.CLASS:
+                    enhanced_observations = self._observation_extractor.extract_class_observations(
+                        node, source_code, jedi_script
+                    )
+                
+            except Exception as e:
+                logger.debug(f"Failed to extract enhanced observations for {entity_name}: {e}")
+        
         if entity_type == EntityType.FUNCTION:
             return EntityFactory.create_function_entity(
                 name=entity_name,
                 file_path=file_path,
                 line_number=line_number,
                 end_line=end_line,
+                observations=enhanced_observations,
                 source="tree-sitter"
             )
         elif entity_type == EntityType.CLASS:
@@ -308,6 +343,7 @@ class PythonParser(CodeParser):
                 file_path=file_path,
                 line_number=line_number,
                 end_line=end_line,
+                observations=enhanced_observations,
                 source="tree-sitter"
             )
         

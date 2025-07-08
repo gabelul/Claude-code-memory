@@ -92,7 +92,8 @@ class EntityChunk:
                 "file_path": str(entity.file_path) if entity.file_path else "",
                 "line_number": entity.line_number,
                 "end_line_number": entity.end_line_number,
-                "has_implementation": has_implementation
+                "has_implementation": has_implementation,
+                "observations": entity.observations  # Preserve observations array for MCP compatibility
             }
         )
 
@@ -324,18 +325,21 @@ class EntityFactory:
     @staticmethod  
     def create_function_entity(name: str, file_path: Path, line_number: int,
                              signature: Optional[str] = None, docstring: Optional[str] = None,
+                             end_line: Optional[int] = None, observations: Optional[List[str]] = None,
                              **metadata: Any) -> Entity:
-        """Create a function entity with standard observations."""
-        observations = [
-            f"Function: {name}",
-            f"Defined in: {file_path}",
-            f"Line: {line_number}",
-        ]
-        
-        if signature:
-            observations.append(f"Signature: {signature}")
-        if docstring:
-            observations.append(f"Description: {docstring}")
+        """Create a function entity with enhanced observations."""
+        # Use provided observations or create basic ones
+        if observations is None:
+            observations = [
+                f"Function: {name}",
+                f"Defined in: {file_path}",
+                f"Line: {line_number}",
+            ]
+            
+            if signature:
+                observations.append(f"Signature: {signature}")
+            if docstring:
+                observations.append(f"Description: {docstring}")
         
         return Entity(
             name=name,
@@ -343,6 +347,7 @@ class EntityFactory:
             observations=observations,
             file_path=file_path,
             line_number=line_number,
+            end_line_number=end_line,
             signature=signature,
             docstring=docstring,
             metadata=metadata if isinstance(metadata, dict) else dict(metadata)
@@ -351,18 +356,21 @@ class EntityFactory:
     @staticmethod
     def create_class_entity(name: str, file_path: Path, line_number: int,
                           docstring: Optional[str] = None, base_classes: Optional[List[str]] = None,
+                          end_line: Optional[int] = None, observations: Optional[List[str]] = None,
                           **metadata: Any) -> Entity:
-        """Create a class entity with standard observations."""
-        observations = [
-            f"Class: {name}",
-            f"Defined in: {file_path}",
-            f"Line: {line_number}",
-        ]
-        
-        if base_classes:
-            observations.append(f"Inherits from: {', '.join(base_classes)}")
-        if docstring:
-            observations.append(f"Description: {docstring}")
+        """Create a class entity with enhanced observations."""
+        # Use provided observations or create basic ones
+        if observations is None:
+            observations = [
+                f"Class: {name}",
+                f"Defined in: {file_path}",
+                f"Line: {line_number}",
+            ]
+            
+            if base_classes:
+                observations.append(f"Inherits from: {', '.join(base_classes)}")
+            if docstring:
+                observations.append(f"Description: {docstring}")
         
         return Entity(
             name=name,
@@ -370,6 +378,7 @@ class EntityFactory:
             observations=observations,
             file_path=file_path,
             line_number=line_number,
+            end_line_number=end_line,
             docstring=docstring,
             metadata={**metadata, "base_classes": base_classes or []}
         )
