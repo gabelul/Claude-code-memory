@@ -448,6 +448,10 @@ class PythonParser(CodeParser):
     
     def _is_internal_import(self, module_name: str, current_file: Path, project_root: Path) -> bool:
         """Check if an import is internal to the project by checking if the module file exists."""
+        # Handle relative imports (always internal to the project)
+        if module_name.startswith('.'):
+            return True
+            
         # Common external module prefixes to exclude
         if module_name.startswith(('_', '__')):  # Private/magic modules
             return False
@@ -489,7 +493,12 @@ class PythonParser(CodeParser):
     def _analyze_with_jedi(self, file_path: Path) -> Dict[str, Any]:
         """Analyze file with Jedi for semantic information."""
         try:
-            script = jedi.Script(path=str(file_path), project=self._project)
+            with open(file_path, 'r', encoding='utf-8') as f:
+                source_code = f.read()
+            
+            script = jedi.Script(source_code, path=str(file_path), project=self._project)
+            
+            # Get ALL names including imports (definitions=True)
             names = script.get_names(all_scopes=True, definitions=True)
             
             analysis = {
@@ -499,6 +508,34 @@ class PythonParser(CodeParser):
                 'variables': []
             }
             
+            # Also check for import statements directly
+            import_names = set()
+            for line in source_code.split('\n'):
+                line = line.strip()
+                
+                # Only process lines that actually start with import statements (not strings containing 'import')
+                if line.startswith('import ') and not line.startswith(('"""', "'''", '"', "'")):
+                    # Handle: import os, sys
+                    parts = line[7:].split(',')
+                    for part in parts:
+                        module = part.strip().split(' as ')[0].strip()
+                        if self._is_internal_import(module, file_path, self.project_path):
+                            import_names.add(module)
+                elif line.startswith('from ') and not line.startswith(('"""', "'''", '"', "'")):
+                    # Handle: from pathlib import Path
+                    if ' import ' in line:
+                        module = line.split(' import ')[0][5:].strip()
+                        if self._is_internal_import(module, file_path, self.project_path):
+                            import_names.add(module)
+            
+            # Add direct imports first
+            for module in import_names:
+                analysis['imports'].append({
+                    'name': module,
+                    'full_name': module
+                })
+            
+            # Process Jedi names for additional info
             for name in names:
                 if name.type == 'function':
                     analysis['functions'].append({
@@ -514,7 +551,8 @@ class PythonParser(CodeParser):
                         'docstring': name.docstring() if hasattr(name, 'docstring') else None,
                         'full_name': name.full_name
                     })
-                elif name.type == 'module':
+                elif name.type == 'module' and name.full_name not in import_names:
+                    # Add any modules Jedi found that we didn't catch
                     analysis['imports'].append({
                         'name': name.name,
                         'full_name': name.full_name
@@ -522,6 +560,7 @@ class PythonParser(CodeParser):
             
             return analysis
         except Exception as e:
+            logger.debug(f"Jedi analysis failed: {e}")
             return {'functions': [], 'classes': [], 'imports': [], 'variables': []}
     
     def _process_jedi_analysis(self, analysis: Dict[str, Any], 
