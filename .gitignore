@@ -53,4 +53,4 @@ backups/
 # Python build artifacts
 *.egg-info/
 dist/
-build/
+build/chats.md

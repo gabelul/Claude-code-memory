@@ -259,7 +259,7 @@ class PythonParser(CodeParser):
         return entities
     
     def _extract_tree_sitter_relations(self, tree: 'tree_sitter.Tree', file_path: Path) -> List['Relation']:
-        """Extract relations from Tree-sitter AST (inheritance, imports)."""
+        """Extract relations from Tree-sitter AST (inheritance only - imports handled by Jedi)."""
         
         relations = []
         
@@ -269,10 +269,7 @@ class PythonParser(CodeParser):
                 inheritance_relations = self._extract_inheritance_relations(node, file_path)
                 relations.extend(inheritance_relations)
             
-            # Extract import relations
-            elif node.type in ['import_statement', 'import_from_statement']:
-                import_relations = self._extract_import_relations(node, file_path)
-                relations.extend(import_relations)
+            # NOTE: Import relations now handled exclusively by Jedi for better cross-module resolution
             
             # Recursively traverse children
             for child in node.children:
@@ -529,36 +526,12 @@ class PythonParser(CodeParser):
     
     def _process_jedi_analysis(self, analysis: Dict[str, Any], 
                               file_path: Path) -> tuple[List['Entity'], List['Relation']]:
-        """Process Jedi analysis results into entities and relations."""
+        """Process Jedi analysis results - IMPORTS ONLY (entities handled by Tree-sitter)."""
         
-        entities = []
+        entities = []  # No entities from Jedi - Tree-sitter handles all entity creation
         relations = []
         
-        # Process functions with enhanced semantic information
-        for func in analysis['functions']:
-            if func['docstring']:
-                entity = EntityFactory.create_function_entity(
-                    name=func['name'],
-                    file_path=file_path,
-                    line_number=func['line'],
-                    docstring=func['docstring'],
-                    metadata={"source": "jedi", "full_name": func['full_name']}
-                )
-                entities.append(entity)
-        
-        # Process classes with enhanced semantic information
-        for cls in analysis['classes']:
-            if cls['docstring']:
-                entity = EntityFactory.create_class_entity(
-                    name=cls['name'],
-                    file_path=file_path,
-                    line_number=cls['line'],
-                    docstring=cls['docstring'],
-                    metadata={"source": "jedi", "full_name": cls['full_name']}
-                )
-                entities.append(entity)
-        
-        # Process imports with filtering
+        # Process ONLY imports from Jedi (better cross-module resolution)
         file_name = str(file_path)
         project_root = self.project_path if hasattr(self, 'project_path') else file_path.parent
         

@@ -36,12 +36,19 @@ class ObservationExtractor:
         source_code: str,
         jedi_script: Optional['jedi.Script'] = None
     ) -> List[str]:
-        """Extract observations for function entities."""
+        """Extract observations for function entities with Jedi enrichment."""
         observations = []
         
         try:
-            # 1. Extract docstring
+            # 1. Extract docstring (Tree-sitter + Jedi enrichment)
             docstring = self._extract_docstring(node, source_code)
+            
+            # Try to get enhanced docstring from Jedi if available
+            if jedi_script and not docstring:
+                jedi_docstring = self._get_jedi_docstring(node, jedi_script, source_code)
+                if jedi_docstring:
+                    docstring = jedi_docstring
+            
             if docstring:
                 # First sentence is primary purpose
                 sentences = docstring.split('.')
@@ -54,34 +61,39 @@ class ObservationExtractor:
                 patterns = self._extract_docstring_patterns(docstring)
                 observations.extend(patterns)
             
-            # 2. Extract function calls (behavior)
+            # 2. Extract type hints from Jedi if available
+            if jedi_script:
+                type_info = self._extract_jedi_type_info(node, jedi_script, source_code)
+                observations.extend(type_info)
+            
+            # 3. Extract function calls (behavior)
             calls = self._extract_function_calls(node, source_code)
             if calls:
                 # Limit to most important calls
                 call_list = list(calls)[:5]
                 observations.append(f"Calls: {', '.join(call_list)}")
             
-            # 3. Extract exception handling
+            # 4. Extract exception handling
             exceptions = self._extract_exception_handling(node, source_code)
             if exceptions:
                 observations.append(f"Handles: {', '.join(exceptions)}")
             
-            # 4. Extract return patterns
+            # 5. Extract return patterns
             return_info = self._extract_return_patterns(node, source_code)
             if return_info:
                 observations.append(f"Returns: {return_info}")
             
-            # 5. Extract parameter patterns
+            # 6. Extract parameter patterns
             param_info = self._extract_parameter_patterns(node, source_code)
             if param_info:
                 observations.append(f"Parameters: {param_info}")
             
-            # 6. Extract decorators (behavior modifiers)
+            # 7. Extract decorators (behavior modifiers)
             decorators = self._extract_decorators(node, source_code)
             for decorator in decorators:
                 observations.append(f"Decorator: {decorator}")
             
-            # 7. Extract complexity indicators
+            # 8. Extract complexity indicators
             complexity = self._calculate_complexity(node, source_code)
             if complexity > 5:  # Only note if significantly complex
                 observations.append(f"Complexity: {complexity} (high)")
@@ -395,3 +407,87 @@ class ObservationExtractor:
         }
         
         return func_name in builtins or len(func_name) <= 2
+    
+    def _get_jedi_docstring(self, node: 'tree_sitter.Node', jedi_script: 'jedi.Script', source_code: str) -> Optional[str]:
+        """Get enhanced docstring from Jedi analysis."""
+        try:
+            # Get function name from Tree-sitter node
+            func_name = None
+            for child in node.children:
+                if child.type == 'identifier':
+                    func_name = child.text.decode('utf-8')
+                    break
+            
+            if not func_name:
+                return None
+            
+            # Get line number from node
+            line_no = node.start_point[0] + 1
+            
+            # Try to get definition from Jedi
+            definitions = jedi_script.goto(line_no, 0, follow_imports=True)
+            for definition in definitions:
+                if definition.name == func_name and hasattr(definition, 'docstring'):
+                    docstring = definition.docstring()
+                    if docstring and docstring.strip():
+                        return docstring.strip()
+            
+            return None
+        except Exception as e:
+            logger.debug(f"Error getting Jedi docstring: {e}")
+            return None
+    
+    def _extract_jedi_type_info(self, node: 'tree_sitter.Node', jedi_script: 'jedi.Script', source_code: str) -> List[str]:
+        """Extract type information from Jedi analysis."""
+        type_observations = []
+        
+        try:
+            # Get function name from Tree-sitter node
+            func_name = None
+            for child in node.children:
+                if child.type == 'identifier':
+                    func_name = child.text.decode('utf-8')
+                    break
+            
+            if not func_name:
+                return type_observations
+            
+            # Get line number from node
+            line_no = node.start_point[0] + 1
+            
+            # Try to get definition from Jedi
+            definitions = jedi_script.goto(line_no, 0, follow_imports=True)
+            for definition in definitions:
+                if definition.name == func_name:
+                    # Get return type if available
+                    try:
+                        if hasattr(definition, 'get_signatures'):
+                            signatures = definition.get_signatures()
+                            for sig in signatures:
+                                if hasattr(sig, 'to_string'):
+                                    sig_str = sig.to_string()
+                                    if '->' in sig_str:
+                                        return_type = sig_str.split('->')[-1].strip()
+                                        if return_type and return_type != 'None':
+                                            type_observations.append(f"Returns type: {return_type}")
+                                
+                                # Get parameter types
+                                if hasattr(sig, 'params'):
+                                    typed_params = []
+                                    for param in sig.params:
+                                        if hasattr(param, 'to_string'):
+                                            param_str = param.to_string()
+                                            if ':' in param_str:
+                                                typed_params.append(param_str)
+                                    
+                                    if typed_params:
+                                        type_observations.append(f"Typed parameters: {', '.join(typed_params[:3])}")
+                    except Exception as e:
+                        logger.debug(f"Error extracting Jedi signatures: {e}")
+                    
+                    break
+            
+        except Exception as e:
+            logger.debug(f"Error extracting Jedi type info: {e}")
+        
+        return type_observations
