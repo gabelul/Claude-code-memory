@@ -966,7 +966,27 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive architecture, setup instructions, a
                        └─────────────────┘
 ```
 
-## 📋 Memory Management & Backup
+## 📋 Memory Management & Cleanup
+
+### Manual Memory Cleanup Workflow
+Streamline your memory collection with intelligent cleanup tools:
+
+```bash
+# 1. Generate task list from your memory collection
+python utils/make_manuals_list.py -c your-collection-name -o memories.md
+
+# 2. Review the generated memories.md file with checkbox format
+# Each entry shows: [ ] **Title** (ID: `number`) - description
+
+# 3. Use Claude with the cleanup prompt to process entries
+# Copy prompts/clean_manual_entries.md prompt to Claude
+# Claude will process 10 entries at a time, marking progress with [X]
+
+# 4. Track progress - entries marked as:
+# [X] = processed/validated
+# [D] = deleted as duplicate/outdated
+# [ ] = unprocessed
+```
 
 ### Manual Memory Backup & Restore
 Protect your valuable manual memories (analysis notes, insights, patterns) with automated backup/restore:
