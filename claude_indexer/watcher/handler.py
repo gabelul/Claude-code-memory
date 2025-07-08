@@ -100,39 +100,11 @@ class IndexingEventHandler(FileSystemEventHandler):
     
     def _should_process_file(self, path: Path) -> bool:
         """Check if a file should be processed."""
-        try:
-            # Check if file is within project
-            try:
-                path.relative_to(self.project_path)
-            except ValueError:
-                return False
-            
-            # Check file extension
-            if not self._matches_patterns(path.name, self.watch_patterns):
-                return False
-            
-            # Check ignore patterns
-            if self._matches_patterns(str(path), self.ignore_patterns):
-                return False
-            
-            # Check file size (for existing files)
-            if path.exists() and path.is_file():
-                if path.stat().st_size > self.max_file_size:
-                    return False
-            
-            return True
-            
-        except Exception:
-            return False
-    
-    def _matches_patterns(self, text: str, patterns: list) -> bool:
-        """Check if text matches any pattern."""
-        import fnmatch
-        
-        for pattern in patterns:
-            if fnmatch.fnmatch(text, pattern) or pattern in text:
-                return True
-        return False
+        from .file_utils import should_process_file
+        return should_process_file(
+            path, self.project_path, self.watch_patterns, 
+            self.ignore_patterns, self.max_file_size
+        )
     
     def _process_file_change(self, path: Path, event_type: str):
         """Process a file change or creation."""
@@ -217,96 +189,6 @@ class IndexingEventHandler(FileSystemEventHandler):
             self.processed_files = set(list(self.processed_files)[-5000:])
 
 
-class AsyncIndexingEventHandler:
-    """Async version of the event handler using asyncio debouncer."""
-    
-    def __init__(self, project_path: str, collection_name: str,
-                 debounce_seconds: float = 2.0, settings: Optional[Dict[str, Any]] = None):
-        
-        self.project_path = Path(project_path)
-        self.collection_name = collection_name
-        self.settings = settings or {}
-        
-        # Import here to avoid circular imports
-        from .debounce import AsyncDebouncer
-        
-        self.debouncer = AsyncDebouncer(
-            delay=debounce_seconds,
-            max_batch_size=settings.get("max_batch_size", 50)
-        )
-        self.debouncer.set_callback(self._process_batch)
-        
-        # Stats
-        self.batches_processed = 0
-        self.files_processed = 0
-        
-    async def start(self):
-        """Start the async event handler."""
-        await self.debouncer.start()
-    
-    async def stop(self):
-        """Stop the async event handler."""
-        await self.debouncer.stop()
-    
-    async def handle_file_event(self, file_path: str, event_type: str):
-        """Handle a file system event asynchronously."""
-        await self.debouncer.add_file_event(file_path, event_type)
-    
-    async def _process_batch(self, batch_event: Dict[str, Any]):
-        """Process a batch of file changes."""
-        try:
-            modified_files = batch_event.get("modified_files", [])
-            deleted_files = batch_event.get("deleted_files", [])
-            
-            if modified_files:
-                print(f"🔄 Batch indexing: {len(modified_files)} files")
-                success = await self._run_batch_indexing(modified_files)
-                
-                if success:
-                    self.files_processed += len(modified_files)
-                    print(f"✅ Batch indexed: {len(modified_files)} files")
-                else:
-                    print(f"❌ Batch indexing failed")
-            
-            if deleted_files:
-                print(f"🗑️  Processing {len(deleted_files)} deletions")
-                await self._handle_deletions(deleted_files)
-            
-            self.batches_processed += 1
-            
-        except Exception as e:
-            print(f"❌ Error processing batch: {e}")
-    
-    async def _run_batch_indexing(self, file_paths: list) -> bool:
-        """Run indexing for a batch of files."""
-        try:
-            # Run in executor to avoid blocking the event loop
-            loop = asyncio.get_running_loop()
-            
-            def run_indexing():
-                from ..main import run_indexing
-                return run_indexing(
-                    project_path=str(self.project_path),
-                    collection_name=self.collection_name,
-                    quiet=True,
-                    verbose=False
-                )
-            
-            return await loop.run_in_executor(None, run_indexing)
-            
-        except Exception as e:
-            print(f"❌ Batch indexing failed: {e}")
-            return False
-    
-    def get_stats(self) -> Dict[str, Any]:
-        """Get async handler statistics."""
-        return {
-            "project_path": str(self.project_path),
-            "collection_name": self.collection_name,
-            "batches_processed": self.batches_processed,
-            "files_processed": self.files_processed,
-            "debouncer_stats": self.debouncer.get_stats()
-        }
 
 
 class Watcher:
@@ -530,34 +412,11 @@ class WatcherBridgeHandler(FileSystemEventHandler):
     
     def _should_process_file(self, path: Path) -> bool:
         """Check if a file should be processed based on patterns."""
-        try:
-            # Check if file is within project
-            try:
-                path.relative_to(self.repo_path)
-            except ValueError:
-                return False
-            
-            # Check include patterns
-            if not self._matches_patterns(path.name, self.include_patterns):
-                return False
-            
-            # Check exclude patterns
-            if self._matches_patterns(str(path), self.exclude_patterns):
-                return False
-            
-            return True
-            
-        except Exception:
-            return False
-    
-    def _matches_patterns(self, text: str, patterns: list) -> bool:
-        """Check if text matches any pattern."""
-        import fnmatch
-        
-        for pattern in patterns:
-            if fnmatch.fnmatch(text, pattern) or pattern in text:
-                return True
-        return False
+        from .file_utils import should_process_file
+        return should_process_file(
+            path, self.repo_path, self.include_patterns, 
+            self.exclude_patterns, max_file_size=1048576
+        )
 
 
 class AsyncWatcherHandler:
@@ -621,22 +480,18 @@ class AsyncWatcherHandler:
             
             def run_indexing():
                 # Import here to avoid circular imports
-                from ..indexer import CoreIndexer
+                from ..main import run_indexing_with_specific_files
                 
-                indexer = CoreIndexer(
-                    config=self.config,
-                    embedder=self.embedder,
-                    vector_store=self.store,
-                    project_path=self.repo_path
-                )
-                
-                # Run automatic indexing for the project (auto-detects incremental)
-                result = indexer.index_project(
+                # Process only the specific files that triggered the debounce
+                success = run_indexing_with_specific_files(
+                    project_path=str(self.repo_path),
                     collection_name=getattr(self.config, 'collection_name', 'default'),
-                    include_tests=False
+                    file_paths=file_paths,  # Process only specified files
+                    quiet=True,
+                    verbose=False
                 )
                 
-                return result.success
+                return success
             
             return await loop.run_in_executor(None, run_indexing)
             
