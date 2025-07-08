@@ -743,7 +743,14 @@ claude-indexer service status
 
 ## ✨ Features
 
-### 🎯 NEW v2.8 Features
+### 🎯 NEW v2.9 Features
+- **Chat Analysis Tools**: Extract and analyze Claude Code conversations for insights and patterns
+- **Enhanced HTML Parser**: Improved parsing for web development with better entity extraction
+- **Documentation Organization**: Cleaner project structure with archived legacy docs
+- **Chat Extraction Utilities**: Tools to extract user/assistant messages from Claude Code sessions
+- **Collaboration Insights**: Prompts for analyzing user collaboration patterns and workflows
+
+### 🔥 v2.8 Features
 - **Entity-Specific Graph Filtering**: Focus on individual entities instead of massive project graphs
 - **Smart Entity Analysis**: AI-powered summaries with connection statistics and relationship breakdowns
 - **4 Targeted Modes**: smart (AI summary), entities (connections), relationships (only relations), raw (complete data)

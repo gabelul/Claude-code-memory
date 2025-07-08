@@ -201,12 +201,17 @@ class ChatParser:
             return None
             
         if isinstance(timestamp, (int, float)):
-            # Unix timestamp
+            # Unix timestamp - return as naive datetime
             return datetime.fromtimestamp(timestamp)
         elif isinstance(timestamp, str):
             # ISO format
             try:
-                return datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                # Convert to naive datetime for consistent comparison
+                if dt.tzinfo is not None:
+                    # Convert to UTC then remove timezone info
+                    dt = dt.replace(tzinfo=None)
+                return dt
             except:
                 return None
                 

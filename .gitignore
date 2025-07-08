@@ -15,6 +15,7 @@ Thumbs.db
 
 # Project-specific
 .indexer_state_*.json
+.claude-indexer/
 mcp_output/
 mcp-qdrant-memory/
 mcp-qdrant-memory/*
@@ -33,10 +34,15 @@ test_*.py
 debug_*.py
 cleanup_*.py
 test_*/
-prompts/
 
 # Chat reports
 chat_reports/
+
+# Generated chat analysis files
+chats.md
+memories.md
+memory-chats.md
+user_*.md
 
 # Qdrant storage
 qdrant_storage/

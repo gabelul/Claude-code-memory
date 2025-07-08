@@ -1,0 +1,293 @@
+# Claude Code Chat History
+*All sessions from: /Users/Duracula 1/Python-Projects/memory*
+
+
+*Generated: 2025-07-08 07:22:58*
+*Total Chats: 284*
+
+---
+
+- [X] `a03b8f6d-8539-4207-b82e-3ac53f56d80d.jsonl` | 0h0m | 7 msgs | 80 words
+- [X] `6ae3647a-6cb2-465a-bc0c-dbdaaf948f60.jsonl` | 0h50m | 149 msgs | 1,515 words
+- [X] `19ad458d-af3d-45c0-b922-9a226fb1fd1c.jsonl` | 0h42m | 144 msgs | 2,305 words
+- [X] `d5737c4d-393a-4f01-a0e9-94ba47b6d1df.jsonl` | 4h30m | 307 msgs | 6,738 words
+- [X] `e814a30e-deb7-499d-8d1b-ba4884cc1c92.jsonl` | 0h9m | 151 msgs | 1,498 words
+- [X] `ab8ed6f4-cdd2-43cb-96ca-aa9e6cd40dfa.jsonl` | 0h5m | 200 msgs | 1,753 words
+- [X] `9db7b0e5-c2f4-4540-a147-ce1662467bac.jsonl` | 1h52m | 886 msgs | 16,549 words
+- [ ] `472aea3c-c05e-4f4d-9fde-796606f57084.jsonl` | 0h0m | 1 msgs | 0 words
+- [X] `8fae9efe-f290-4918-98ac-07b338504cb6.jsonl` | 0h26m | 109 msgs | 2,407 words
+- [X] `7777b192-90c5-4b40-b527-ba82bd8bfca6.jsonl` | 0h5m | 31 msgs | 1,123 words
+- [X] `d53c2ddf-afe2-4a6e-8da2-745dc522d2ec.jsonl` | 1h10m | 519 msgs | 9,123 words
+- [X] `ead9889b-87a2-4c3f-a48e-9f9fcb428006.jsonl` | 4h6m | 1073 msgs | 26,492 words
+- [X] `6bbdd7e5-406e-45be-bcf9-3e9c11669d3f.jsonl` | 0h22m | 163 msgs | 2,795 words
+- [X] `081896b5-1434-44dd-8cdd-e19e2c67f22b.jsonl` | 3h32m | 84 msgs | 677 words
+- [ ] `b412ed34-2cad-464f-ae63-6e8283acc820.jsonl` | 0h0m | 1 msgs | 0 words
+- [X] `823e215d-2ad9-4e81-b5dc-cf9639173ee5.jsonl` | 7h19m | 1710 msgs | 29,141 words
+- [X] `c8d651de-5101-4792-84dd-22577cd66ce6.jsonl` | 10h53m | 2303 msgs | 52,664 words
+- [X] `eca28765-ed51-40d7-8302-098653271090.jsonl` | 2h8m | 977 msgs | 21,924 words
+- [X] `bedb57ac-c642-4b2f-9cb2-539eb281901f.jsonl` | 1h56m | 1089 msgs | 18,029 words
+- [ ] `a1b85943-7132-4af1-b72c-a2be516c8201.jsonl` | 1h3m | 606 msgs | 8,428 words
+- [ ] `e3e19540-ba95-473f-b472-a79b3f49f529.jsonl` | 0h25m | 284 msgs | 2,761 words
+- [X] `83d46497-f2c6-43b2-9584-0a51eefc5f41.jsonl` | 3h40m | 1109 msgs | 16,666 words
+- [ ] `7e335a46-dea5-4c0a-acfd-2e662474c7e5.jsonl` | 1h20m | 169 msgs | 1,592 words
+- [ ] `c6cb2b3c-3d5f-4c2f-b333-94bba1d4a370.jsonl` | 2h18m | 432 msgs | 7,511 words
+- [ ] `76ed5bb5-0630-4333-99ab-46291b43a41c.jsonl` | 1h16m | 345 msgs | 3,904 words
+- [ ] `ed05d12e-d410-466a-9624-4bcbf4d66765.jsonl` | 1h21m | 300 msgs | 3,811 words
+- [ ] `33395a30-91e3-495f-ae17-4ce254dfeeef.jsonl` | 1h34m | 603 msgs | 8,091 words
+- [ ] `29de1e09-d0c3-41fc-a1c8-8ba159e14a85.jsonl` | 0h0m | 8 msgs | 0 words
+- [ ] `d1c0e268-fb01-4989-9f3b-107db174b7b4.jsonl` | 0h39m | 365 msgs | 4,101 words
+- [ ] `f26e1643-d589-4595-a068-f8bb44c57641.jsonl` | 2h45m | 310 msgs | 3,354 words
+- [ ] `26db4baf-c79b-422d-836a-ffab52ccf32f.jsonl` | 2h28m | 1359 msgs | 21,282 words
+- [ ] `78de91ba-24ba-4aed-b51e-0c4d31df40fa.jsonl` | 2h23m | 122 msgs | 1,590 words
+- [ ] `3ca7fa10-3b44-4e12-83e5-1e326bf1c6a5.jsonl` | 1h9m | 458 msgs | 7,592 words
+- [ ] `17f2ca12-15f3-4973-b7c0-513ed0ba7b73.jsonl` | 0h49m | 161 msgs | 5,075 words
+- [ ] `e6a65d4e-1ee1-4988-a0c9-562aad04dcc0.jsonl` | 1h24m | 375 msgs | 8,296 words
+- [ ] `784bce13-cc58-40c5-943f-f576078f35ce.jsonl` | 0h23m | 122 msgs | 2,726 words
+- [ ] `48886f50-2de5-4839-816b-4406eb759929.jsonl` | 0h0m | 6 msgs | 1,774 words
+- [ ] `5ceff7c9-0b95-4b70-8cda-a8e778ef28fc.jsonl` | 0h39m | 112 msgs | 3,779 words
+- [ ] `4c87c906-3082-41ba-852f-2c8fc5e99f0f.jsonl` | 0h0m | 3 msgs | 45 words
+- [ ] `b2046f5c-62b3-4d4a-853e-8f9f6783fc6d.jsonl` | 0h6m | 27 msgs | 2,692 words
+- [ ] `69d8de46-8ec0-4328-b929-a54880b3df4c.jsonl` | 0h4m | 29 msgs | 2,824 words
+- [ ] `2a861e5b-4cc1-4fa6-bdbf-52891b240952.jsonl` | 1h35m | 567 msgs | 17,839 words
+- [ ] `b28e8802-2f68-42d4-b883-cdc877286838.jsonl` | 1h56m | 324 msgs | 7,390 words
+- [ ] `77d9fcf2-8af1-4ebb-a613-f74862a5dc1c.jsonl` | 3h1m | 855 msgs | 12,454 words
+- [ ] `b6970e2a-5f28-41e6-bbe5-cc1d61b822a0.jsonl` | 0h8m | 63 msgs | 418 words
+- [ ] `0e6c2114-ead9-4ec0-9b67-308aa2fe0c89.jsonl` | 0h0m | 3 msgs | 0 words
+- [ ] `e24312ab-390f-42cd-8ea5-cfa00f7613da.jsonl` | 0h1m | 22 msgs | 15 words
+- [ ] `c4bad95b-4952-4206-8d26-04844dc1246e.jsonl` | 0h33m | 42 msgs | 1,589 words
+- [X] `f37e96a2-5821-4401-81af-db794fb3b512.jsonl` | 3h18m | 795 msgs | 19,967 words
+- [ ] `b22b5480-d6f4-441d-8045-0577fa516fc0.jsonl` | 0h0m | 1 msgs | 0 words
+- [ ] `509fd575-0a2f-4c0a-a389-273e3edfbe07.jsonl` | 1h12m | 159 msgs | 1,622 words
+- [ ] `c3672b5e-f64b-4378-acf5-ee4abefd9981.jsonl` | 0h47m | 367 msgs | 6,055 words
+- [ ] `b8d2c975-d8ea-4e3c-bd3f-7ca6c7a1471f.jsonl` | 1h21m | 451 msgs | 5,829 words
+- [ ] `fab43f26-b33c-4e85-86d0-499f5c9e1caa.jsonl` | 0h0m | 5 msgs | 0 words
+- [ ] `e0a7599a-d91f-4681-8d38-c5187b95392e.jsonl` | 0h0m | 2 msgs | 0 words
+- [ ] `856b7442-ddc6-4c20-8bae-05c27d496abf.jsonl` | 0h43m | 315 msgs | 6,613 words
+- [ ] `75a8585f-945e-43a1-b6f3-e2e116012596.jsonl` | 0h54m | 128 msgs | 737 words
+- [ ] `5a003fe7-5bd8-4a2e-9a39-4611396780fc.jsonl` | 0h32m | 118 msgs | 2,553 words
+- [ ] `7eb6ee85-03d1-4fec-8d2a-fece401bf1dc.jsonl` | 0h0m | 6 msgs | 0 words
+- [ ] `dec2ab62-bb63-4381-baf3-fda8af0829cc.jsonl` | 0h14m | 83 msgs | 2,260 words
+- [ ] `66c39e7b-8f06-4e34-8ff4-38a6080a6db0.jsonl` | 0h8m | 70 msgs | 2,113 words
+- [ ] `c39a1389-1fdd-40c8-8386-3c41c9360432.jsonl` | 2h10m | 727 msgs | 7,468 words
+- [ ] `086a17f0-969b-42d1-816a-6522a7401bd2.jsonl` | 0h2m | 81 msgs | 3,602 words
+- [ ] `b2a8304b-4324-4ffd-bc6c-15e4bcbc36e2.jsonl` | 0h3m | 64 msgs | 1,764 words
+- [ ] `a2d48769-ad02-47a5-a247-1ab8921ff012.jsonl` | 0h19m | 176 msgs | 3,033 words
+- [ ] `2d098135-4cb1-4887-bbf9-fe5845a1c9a6.jsonl` | 0h2m | 54 msgs | 628 words
+- [ ] `53c8d1f0-af7b-458d-b03f-7edbe070d180.jsonl` | 0h7m | 74 msgs | 406 words
+- [ ] `25883568-4c0d-4389-9884-3e5fe61d477d.jsonl` | 0h0m | 1 msgs | 0 words
+- [ ] `97242056-898d-48fd-bde0-5ba463bfd45a.jsonl` | 0h3m | 55 msgs | 1,340 words
+- [ ] `a6fb63b8-4b87-4dab-b487-f3261bf091a0.jsonl` | 0h8m | 124 msgs | 2,078 words
+- [ ] `b66a6566-4381-4cc5-947f-7d1b09cb649a.jsonl` | 0h11m | 161 msgs | 2,878 words
+- [ ] `f2bdd7e4-9474-4467-8dee-84d2fa0cf87a.jsonl` | 0h45m | 209 msgs | 4,273 words
+- [ ] `ae46c539-82e2-463c-ae8a-5659372307df.jsonl` | 1h22m | 412 msgs | 5,391 words
+- [ ] `77749003-b742-45e8-a946-9564cc486e3d.jsonl` | 0h48m | 66 msgs | 1,910 words
+- [ ] `d97dbc19-96f4-441f-8b55-3181e54e09aa.jsonl` | 0h46m | 42 msgs | 984 words
+- [ ] `8ef653bd-d133-4de4-99e5-a772e5415f6b.jsonl` | 0h0m | 4 msgs | 0 words
+- [ ] `17de9dd4-0f56-48d5-a44c-3a44d26d714a.jsonl` | 0h0m | 1 msgs | 0 words
+- [ ] `795228f8-48ad-46be-b238-e32a80e2c21f.jsonl` | 0h0m | 1 msgs | 0 words
+- [ ] `740636b5-30a8-4f24-a2f5-89411be41d81.jsonl` | 0h0m | 1 msgs | 0 words
+- [ ] `04c73440-0106-4886-b7f4-156d55de0c17.jsonl` | 0h0m | 2 msgs | 0 words
+- [ ] `d038a2e8-6780-4c6b-a3d5-5ca338298430.jsonl` | 11h10m | 1315 msgs | 17,311 words
+- [ ] `bdb22258-df9a-4990-b2b6-38fc249699cb.jsonl` | 0h10m | 48 msgs | 693 words
+- [ ] `533616da-0b30-406a-9d82-3f68559c006a.jsonl` | 2h32m | 806 msgs | 15,709 words
+- [ ] `c102364d-6940-47d4-b473-c3f768bd297a.jsonl` | 0h22m | 15 msgs | 265 words
+- [ ] `edd7f901-4521-4bb0-9e95-0b147b1ca5ec.jsonl` | 0h0m | 3 msgs | 38 words
+- [ ] `d2c2cadc-e17d-4a9f-bc0b-3d605f207df8.jsonl` | 2h7m | 770 msgs | 13,702 words
+- [ ] `0f701e0a-467a-41c7-a150-0ce187b0202b.jsonl` | 0h8m | 99 msgs | 1,038 words
+- [X] `938346ea-f8f4-441e-83d6-c6ab4cda3327.jsonl` | 7h14m | 2193 msgs | 45,403 words
+- [ ] `4d2fcd01-ae9b-42c9-82e0-8a71725e74c5.jsonl` | 2h28m | 585 msgs | 7,758 words
+- [X] `bc5a877b-2f29-4555-b760-be374b52c0b6.jsonl` | 5h7m | 1562 msgs | 27,406 words
+- [ ] `eae0ea65-4c84-4d05-817a-9e4566936896.jsonl` | 0h22m | 155 msgs | 1,854 words
+- [X] `3209822f-903e-473f-82e4-67c61afb1b8e.jsonl` | 3h28m | 1006 msgs | 19,874 words
+- [ ] `efeb475f-68b1-43cc-85c9-fad62d4a2197.jsonl` | 3h1m | 142 msgs | 3,805 words
+- [ ] `507ffa9f-4d96-4d2a-8b8f-f07f81a9531b.jsonl` | 1h7m | 330 msgs | 3,201 words
+- [ ] `53e5580f-4914-41d2-9bb1-a28c4fdc8b6d.jsonl` | 0h7m | 72 msgs | 1,152 words
+- [ ] `586748fc-510e-4654-b566-f6d3e632851c.jsonl` | 0h36m | 255 msgs | 2,888 words
+- [ ] `4d9f6a9e-010c-4c7e-b6e9-7c877ca71261.jsonl` | 0h24m | 130 msgs | 2,187 words
+- [ ] `25f515f5-96c7-488d-8db5-eabd72dc111f.jsonl` | 0h36m | 335 msgs | 4,560 words
+- [ ] `d2441082-9694-42d8-83f7-0887c3c1b1f3.jsonl` | 0h10m | 87 msgs | 1,295 words
+- [ ] `5af98120-d6c0-40f5-a2d8-3657bff83a47.jsonl` | 1h38m | 333 msgs | 9,393 words
+- [X] `397bc11c-f6d1-4a3f-bc42-16dcd3f3186a.jsonl` | 3h14m | 1089 msgs | 20,768 words
+- [ ] `a30250c8-8e37-4a50-a405-d77686d4a7f4.jsonl` | 1h1m | 290 msgs | 3,211 words
+- [ ] `b55450bf-aa10-4e90-9da9-78c3ec72c4f9.jsonl` | 1h34m | 539 msgs | 9,328 words
+- [ ] `222fc2c6-98a5-40b3-9881-9b90d265de9c.jsonl` | 0h3m | 55 msgs | 963 words
+- [ ] `e3547968-7b24-4610-b4e5-ef7f66a09707.jsonl` | 0h26m | 178 msgs | 2,566 words
+- [ ] `934fbb61-ed67-494f-8dbc-ec5de1fe4d7c.jsonl` | 4h3m | 1523 msgs | 19,955 words
+- [ ] `3d3b7f2b-20af-407e-8edc-79a173eab5c8.jsonl` | 0h15m | 77 msgs | 947 words
+- [ ] `158de353-76ac-42dd-911f-886f78de2768.jsonl` | 3h43m | 658 msgs | 15,592 words
+- [ ] `7692f996-2d1a-475d-b67f-6767a73ff126.jsonl` | 0h28m | 209 msgs | 4,491 words
+- [ ] `ecc8f57a-6c6d-4f70-bdfd-ca02d4803181.jsonl` | 3h53m | 1071 msgs | 17,496 words
+- [ ] `eeca6b11-dab3-41e4-8dac-9f0767064f6b.jsonl` | 0h6m | 48 msgs | 762 words
+- [ ] `b347563c-b7b3-479f-891d-fe1eefb85f4a.jsonl` | 0h57m | 302 msgs | 4,760 words
+- [ ] `f3291d60-b653-4609-a229-971b829771bf.jsonl` | 14h22m | 247 msgs | 17,313 words
+- [ ] `6bc70a0a-6a48-42bc-b8f0-0ad33c4910aa.jsonl` | 13h38m | 617 msgs | 8,915 words
+- [ ] `a578b5bb-8e0b-4525-a1ce-1c33992c32bd.jsonl` | 0h20m | 116 msgs | 1,162 words
+- [ ] `eb7f45af-0ec5-4c0b-957d-b59f85ab79c9.jsonl` | 3h40m | 444 msgs | 4,343 words
+- [ ] `038f5c74-a044-4bcf-9f2b-16112519634c.jsonl` | 0h20m | 137 msgs | 761 words
+- [ ] `6ec3d46f-b549-4da2-9da8-925d86042355.jsonl` | 3h30m | 113 msgs | 1,351 words
+- [ ] `4e4b8bf9-bfd1-47fa-9407-587e3c7a6c20.jsonl` | 5h47m | 628 msgs | 19,391 words
+- [ ] `c95c6d3e-c9af-43fc-ab5d-9d5a12f9ccfe.jsonl` | 2h59m | 320 msgs | 19,369 words
+- [ ] `27f430f8-6f4c-4b3a-a823-4347855fcc8f.jsonl` | 0h32m | 339 msgs | 2,676 words
+- [ ] `4bcd693e-806d-4caa-9294-0aa4f70afb48.jsonl` | 0h1m | 8 msgs | 53 words
+- [ ] `6d659760-0489-4b66-8568-9d796ec50c79.jsonl` | 0h0m | 3 msgs | 38 words
+- [ ] `6d657616-d03b-4156-8b26-cb8c7db7d049.jsonl` | 0h7m | 55 msgs | 127 words
+- [ ] `3f568b6f-be63-4452-bb1e-d4385eca9c27.jsonl` | 0h25m | 109 msgs | 1,628 words
+- [ ] `3d3064db-07e4-4d20-ba33-b4008037c0a2.jsonl` | 0h8m | 44 msgs | 968 words
+- [ ] `0a4ea84b-e342-488b-89f0-aecc6cb9634a.jsonl` | 2h4m | 91 msgs | 3,734 words
+- [ ] `192226ba-eded-44dd-a38d-d82b53020a8e.jsonl` | 1h54m | 814 msgs | 15,263 words
+- [ ] `01a5a380-4370-4be6-9857-5c0a06ecdb1d.jsonl` | 3h30m | 298 msgs | 3,144 words
+- [ ] `4dbf6aaf-bd92-4756-a5d0-120050ac31e2.jsonl` | 1h44m | 662 msgs | 19,781 words
+- [ ] `d844ab92-e0e6-4ea8-b229-98689542e5bb.jsonl` | 0h23m | 38 msgs | 1,307 words
+- [ ] `750e82d7-ae48-4f88-aafa-2b16730d5cf8.jsonl` | 0h24m | 228 msgs | 6,079 words
+- [ ] `e0a0e2c4-6d81-4ec7-8d68-9a787369b6c5.jsonl` | 0h7m | 74 msgs | 2,877 words
+- [ ] `22b7be2f-ed3b-4ab0-8684-af73d21d2a55.jsonl` | 0h5m | 88 msgs | 3,746 words
+- [ ] `13a92603-e521-4770-a1bd-858bf786a826.jsonl` | 0h43m | 469 msgs | 10,146 words
+- [ ] `8ba1f9c3-593e-4113-a71f-553d1622d6e1.jsonl` | 0h6m | 72 msgs | 1,526 words
+- [ ] `035dda17-8e2f-46be-b445-85f51175d577.jsonl` | 0h13m | 177 msgs | 2,313 words
+- [ ] `69c84600-0509-4856-aa19-5f294d01b9a0.jsonl` | 0h14m | 182 msgs | 2,340 words
+- [ ] `9901a8c9-7edb-441b-8795-7342646332bf.jsonl` | 0h0m | 6 msgs | 78 words
+- [ ] `7e72f72c-a3ee-4153-ad85-c5718229523e.jsonl` | 0h0m | 2 msgs | 1 words
+- [ ] `c93c4997-5127-4ee6-9df1-9b3e8a8975aa.jsonl` | 1h4m | 747 msgs | 9,510 words
+- [ ] `c25e0a5c-b907-4b21-9bb5-ed2c100deca5.jsonl` | 0h0m | 8 msgs | 52 words
+- [ ] `14561a7a-ef6f-4d47-9de0-65eeb49a67d5.jsonl` | 2h58m | 1096 msgs | 23,457 words
+- [ ] `7f81ad3b-7e54-4a6f-9650-c055c35225ed.jsonl` | 0h27m | 154 msgs | 11,410 words
+- [ ] `de3795bd-c89d-4882-b2f1-4b5d52117c9c.jsonl` | 0h47m | 213 msgs | 5,061 words
+- [ ] `9264b58b-c036-4e1d-88af-882f5bdf30cd.jsonl` | 0h9m | 63 msgs | 1,420 words
+- [ ] `dd122e6e-80e8-45c7-ad51-56c17664251d.jsonl` | 0h1m | 70 msgs | 1,431 words
+- [ ] `e5e88f46-1aa4-4b5e-8d94-7a347bb21ac4.jsonl` | 0h14m | 323 msgs | 5,484 words
+- [ ] `0222087f-8b89-40de-8251-59617e25a858.jsonl` | 0h13m | 122 msgs | 1,671 words
+- [ ] `9e8bffe0-41c2-49be-aa90-0a1449ce30ea.jsonl` | 0h18m | 196 msgs | 1,275 words
+- [ ] `9a5879d5-2480-4fb7-bdcb-7ba8147f534f.jsonl` | 0h12m | 112 msgs | 762 words
+- [ ] `649373c0-e0ee-4c09-a456-eb79144272a0.jsonl` | 0h16m | 120 msgs | 570 words
+- [ ] `b4ece329-67ff-4298-a4a1-62b818a8275e.jsonl` | 0h3m | 38 msgs | 158 words
+- [ ] `02966c9d-b252-4f91-9f9f-fb389cfb1113.jsonl` | 0h13m | 129 msgs | 629 words
+- [ ] `021793f2-5803-4551-866c-679a58a21157.jsonl` | 0h43m | 569 msgs | 5,984 words
+- [ ] `37e68e1a-9bf9-47f8-8cfa-e0abe98788fe.jsonl` | 1h15m | 445 msgs | 6,053 words
+- [ ] `dbe8abeb-fbae-4886-8c76-1f8044bc0ca5.jsonl` | 0h12m | 181 msgs | 1,107 words
+- [ ] `42c59f82-9958-4004-a3e3-5ffc6514febd.jsonl` | 0h20m | 250 msgs | 1,732 words
+- [ ] `444cf1c6-2d4a-471e-8ee7-ecf92a133623.jsonl` | 0h9m | 115 msgs | 284 words
+- [ ] `f3831015-077b-4e16-95e4-b0bd33b9ff4c.jsonl` | 0h40m | 52 msgs | 85 words
+- [ ] `bee7c9f4-b490-43c2-81c6-60e83eabe17e.jsonl` | 0h2m | 44 msgs | 1,194 words
+- [ ] `e2759e1e-985a-4324-bd60-0270a3ffe939.jsonl` | 0h4m | 80 msgs | 1,477 words
+- [ ] `4cdb3891-cb20-4372-bf02-ab564aceb543.jsonl` | 0h14m | 206 msgs | 2,288 words
+- [ ] `9d3b3895-330e-4132-b4a3-ec538753b93a.jsonl` | 0h12m | 234 msgs | 2,469 words
+- [ ] `39e7afb9-a5c0-4154-bba8-281b52daedcd.jsonl` | 0h0m | 1 msgs | 0 words
+- [ ] `21fbe256-1102-45f3-bcd0-6f9a6f17e60b.jsonl` | 0h0m | 3 msgs | 38 words
+- [ ] `6d046df0-ae41-40c5-b662-57fe8f3649bc.jsonl` | 0h40m | 27 msgs | 191 words
+- [ ] `8a771810-c624-4ff7-a1c5-1788c095c4be.jsonl` | 0h39m | 119 msgs | 737 words
+- [ ] `5b0e30f2-a098-45ba-b21b-ff8118dca29b.jsonl` | 0h5m | 21 msgs | 114 words
+- [ ] `7e259c1e-24f0-4407-a206-ad8d3d9541d1.jsonl` | 0h4m | 17 msgs | 110 words
+- [ ] `ea8a94d9-f41e-4eba-9c43-a6d8e8ab7cf3.jsonl` | 0h11m | 67 msgs | 411 words
+- [ ] `7fb6fe66-8001-47df-9eb0-42f98160b22b.jsonl` | 0h23m | 133 msgs | 1,305 words
+- [ ] `21c1f246-4ce1-44fc-a36a-0517776e726b.jsonl` | 0h10m | 70 msgs | 476 words
+- [ ] `dcdb5989-f63f-44fb-9070-fb9cd94cea57.jsonl` | 0h10m | 92 msgs | 624 words
+- [ ] `5768a914-84b8-4918-a212-9bf12947cf14.jsonl` | 0h36m | 330 msgs | 2,400 words
+- [ ] `5029ba8f-5b1e-4948-8d3f-66923d33dff3.jsonl` | 0h3m | 38 msgs | 288 words
+- [ ] `69cf845a-7e72-45fa-a213-907cd101c101.jsonl` | 4h45m | 1243 msgs | 21,977 words
+- [ ] `89552c49-33a3-4b60-ae20-7c38c16e9d24.jsonl` | 0h18m | 143 msgs | 3,978 words
+- [ ] `a2a6c6de-eeb7-4069-8c6d-156cdb2aa3fa.jsonl` | 0h0m | 3 msgs | 1,867 words
+- [ ] `2672da8c-96ae-4829-a273-a97f1e69eabd.jsonl` | 0h9m | 59 msgs | 963 words
+- [ ] `6379c331-eafe-434e-9cec-a9bac25fe9ba.jsonl` | 1h57m | 141 msgs | 3,938 words
+- [ ] `b054cc99-5a8c-4e7e-ad00-d645327b5b7e.jsonl` | 0h36m | 387 msgs | 3,898 words
+- [ ] `d092873f-2c50-4468-9d81-f52d23ecfe7d.jsonl` | 1h7m | 175 msgs | 7,039 words
+- [ ] `184eeef2-ac25-4b36-b93e-787e475e4d76.jsonl` | 0h46m | 288 msgs | 7,726 words
+- [ ] `3cb2dfbd-2d53-4fb4-bc21-4b4bf605dd99.jsonl` | 1h30m | 302 msgs | 8,978 words
+- [ ] `0fa96e58-7966-4e04-a0c4-33294b95e027.jsonl` | 0h12m | 83 msgs | 2,534 words
+- [ ] `cf15f3d8-ca65-419d-8ec7-298ce924538d.jsonl` | 1h26m | 307 msgs | 9,250 words
+- [ ] `0716de13-9d95-4140-8fc6-2554af4e2514.jsonl` | 0h29m | 210 msgs | 1,808 words
+- [ ] `215bd58e-8a93-43bd-8fb6-126f8c2a4f60.jsonl` | 0h0m | 1 msgs | 0 words
+- [ ] `14430943-e5cb-4f62-813b-dcc97e44b9b1.jsonl` | 0h0m | 1 msgs | 0 words
+- [ ] `33366836-7212-4cdd-b19c-6139f170d688.jsonl` | 0h57m | 348 msgs | 4,724 words
+- [ ] `808e3352-a7e9-475d-a27a-e6e2c781e9e0.jsonl` | 0h4m | 16 msgs | 298 words
+- [ ] `23834f44-c4a0-4292-9ee3-0a91ddfbd306.jsonl` | 0h0m | 18 msgs | 129 words
+- [ ] `fa91c4fc-bba1-4269-997b-fa3a6838d909.jsonl` | 0h8m | 16 msgs | 164 words
+- [ ] `2504d34a-c077-43b4-8487-69086a7ced66.jsonl` | 0h23m | 166 msgs | 2,245 words
+- [ ] `566e2660-af86-4ecf-8b41-ff6d55a3b6e5.jsonl` | 0h4m | 18 msgs | 313 words
+- [ ] `7be11a29-9f3f-4b33-9185-a9f8c100e3eb.jsonl` | 6h14m | 406 msgs | 5,613 words
+- [ ] `5a299673-dfac-4ed6-8d86-cae86cd0f9e3.jsonl` | 0h3m | 64 msgs | 1,012 words
+- [ ] `3fc6635d-9ae2-496e-9013-666dbcd0b92f.jsonl` | 0h13m | 102 msgs | 1,742 words
+- [ ] `484fec7a-cea3-4023-8435-e8397e0cc6a1.jsonl` | 1h2m | 30 msgs | 421 words
+- [ ] `27b923ec-128e-4eb3-ade6-87bc94afd629.jsonl` | 4h12m | 368 msgs | 6,484 words
+- [ ] `c54ee07f-2f66-4d09-b779-a1dda48b5016.jsonl` | 0h59m | 143 msgs | 1,381 words
+- [ ] `e2701dc2-74e5-47f6-8176-c4595a69a697.jsonl` | 7h8m | 356 msgs | 16,734 words
+- [ ] `e536849f-ab17-457f-bd7a-358d14008721.jsonl` | 0h3m | 34 msgs | 330 words
+- [ ] `d4a795b4-a0d0-4f5e-863f-35482eaff18f.jsonl` | 0h0m | 7 msgs | 0 words
+- [ ] `2113df3b-7082-4951-b9b5-1814e32fd3ba.jsonl` | 0h39m | 264 msgs | 3,394 words
+- [ ] `3f766a0e-1e5f-4916-b6ca-ab5b9031577c.jsonl` | 0h39m | 91 msgs | 1,010 words
+- [ ] `c803fef2-5dda-4fcc-aff9-e3a346f51f36.jsonl` | 0h16m | 91 msgs | 1,661 words
+- [ ] `856bc619-dd79-4fb5-88bb-c18d7e47e1ed.jsonl` | 0h29m | 310 msgs | 1,955 words
+- [ ] `143f30d2-6a6e-4eeb-8af6-1b569ac8c295.jsonl` | 0h4m | 60 msgs | 415 words
+- [ ] `5ac6df1b-234c-463c-a1eb-67b98c77594f.jsonl` | 3h22m | 1140 msgs | 18,135 words
+- [ ] `7df92abf-aac2-437b-8258-7966d8409c58.jsonl` | 0h39m | 153 msgs | 2,416 words
+- [ ] `25014b11-65d5-4bb4-9826-59885ab1f354.jsonl` | 0h34m | 287 msgs | 5,427 words
+- [ ] `e00628b8-45a7-4d8a-b615-0de0abd8e23c.jsonl` | 0h21m | 203 msgs | 3,197 words
+- [ ] `458c406b-a622-441d-a8de-bb56c593a3ef.jsonl` | 0h16m | 106 msgs | 1,456 words
+- [ ] `5e0a0d86-96fa-43ab-80da-45c0e0a58ca6.jsonl` | 0h32m | 300 msgs | 4,267 words
+- [ ] `070b7bca-167b-4b79-8340-9d31af358907.jsonl` | 0h19m | 228 msgs | 2,552 words
+- [ ] `32a2ea24-2dd8-42af-af8b-c03683133153.jsonl` | 0h0m | 11 msgs | 156 words
+- [ ] `7c55f565-684d-4647-b9ef-540ec52ca995.jsonl` | 0h12m | 124 msgs | 982 words
+- [ ] `97d811f4-face-4c66-a58c-487c893ff484.jsonl` | 0h28m | 271 msgs | 3,070 words
+- [ ] `11ac861e-5457-48db-bbcf-972eda4b2d8b.jsonl` | 0h20m | 207 msgs | 1,378 words
+- [ ] `65e41ec3-66ce-48e8-81e9-54165c2ffe7c.jsonl` | 0h18m | 188 msgs | 1,256 words
+- [ ] `485d6805-f53a-4ffb-87e6-ffde9a03f58a.jsonl` | 0h17m | 169 msgs | 1,181 words
+- [ ] `015135bc-b1ec-4d33-8d1e-966ccd283ddd.jsonl` | 0h13m | 137 msgs | 1,024 words
+- [ ] `813674e4-3dfb-472e-bf94-3204594ba70e.jsonl` | 0h46m | 366 msgs | 3,468 words
+- [ ] `d6bab435-db18-4c71-afca-b006ef4a71b6.jsonl` | 0h1m | 24 msgs | 1,354 words
+- [ ] `cb66efda-ffbb-4fa2-b9ae-28672f972043.jsonl` | 0h7m | 77 msgs | 1,786 words
+- [ ] `21280e49-c74b-46cd-a731-52adf1506a51.jsonl` | 0h9m | 87 msgs | 461 words
+- [ ] `69a5619c-a000-4c5f-8a73-65c758412f7a.jsonl` | 0h55m | 381 msgs | 3,916 words
+- [ ] `b1cff30f-5469-40c4-bac6-f2146b944449.jsonl` | 0h50m | 350 msgs | 3,465 words
+- [ ] `5db62340-9d8f-411c-8663-c1fafd4ac389.jsonl` | 0h29m | 247 msgs | 2,594 words
+- [ ] `2bcbd418-2e4d-4677-9459-ac6e3a0f5c0b.jsonl` | 0h15m | 126 msgs | 673 words
+- [ ] `e7388edc-848b-4284-860b-001127d59ca3.jsonl` | 0h15m | 170 msgs | 963 words
+- [ ] `c3d87eab-551c-4225-abf6-d486c5e5c94f.jsonl` | 0h8m | 106 msgs | 531 words
+- [ ] `f134065b-4bea-4a55-a1a9-6d2f8873df6d.jsonl` | 0h4m | 69 msgs | 1,462 words
+- [ ] `f04c7ee0-abcd-4fcc-adfd-f5da5dacbf5f.jsonl` | 0h6m | 93 msgs | 2,499 words
+- [ ] `5af31446-846e-47a5-a6e5-3b75a4c2afb3.jsonl` | 0h37m | 339 msgs | 8,595 words
+- [ ] `b10014bb-ce4f-458c-9cdb-fa083d82f21b.jsonl` | 0h1m | 44 msgs | 2,000 words
+- [ ] `06a2c091-d9e0-4076-96c2-e2c7c9797741.jsonl` | 6h48m | 263 msgs | 2,377 words
+- [ ] `7b88d54f-ae6f-4d49-b8c1-9b5370572367.jsonl` | 0h0m | 3 msgs | 0 words
+- [ ] `6251cdb7-bfb9-4233-a405-980173315801.jsonl` | 0h0m | 5 msgs | 0 words
+- [ ] `dfdcf6f9-a9a5-44bf-9082-3125f1c31c65.jsonl` | 0h0m | 2 msgs | 0 words
+- [ ] `8db27c84-39d0-4f1b-983c-f03a641cd2eb.jsonl` | 0h13m | 186 msgs | 1,401 words
+- [ ] `d3cbe473-d9dd-4c0e-88d1-fca4e9899e73.jsonl` | 0h0m | 4 msgs | 0 words
+- [ ] `a9d6043a-e728-43ef-9259-044898b466d6.jsonl` | 0h11m | 126 msgs | 1,616 words
+- [ ] `1c9896ad-bd95-4a12-b7dd-ad0cae8ed731.jsonl` | 0h32m | 317 msgs | 4,576 words
+- [ ] `888db982-3d9d-4a6c-82a8-f16a5e7c0baa.jsonl` | 1h39m | 640 msgs | 5,484 words
+- [ ] `6310058d-5bc7-4fef-953b-c4bf4cb8b3a6.jsonl` | 2h3m | 713 msgs | 13,656 words
+- [ ] `2f5a428e-090d-48aa-bb57-d930296d84bf.jsonl` | 2h51m | 355 msgs | 4,202 words
+- [ ] `1d3c4ef4-1da8-454d-a392-2d0589d91b8c.jsonl` | 0h0m | 3 msgs | 0 words
+- [ ] `fff53df0-c485-45c2-88da-0e1a2f24d7ab.jsonl` | 0h5m | 76 msgs | 464 words
+- [ ] `a9b370f9-5cc6-4dd4-970c-9681fd84f2fc.jsonl` | 1h36m | 407 msgs | 6,480 words
+- [ ] `056f9272-2362-4cb2-baa5-fcd115220618.jsonl` | 0h28m | 99 msgs | 2,763 words
+- [ ] `c90ef5d8-544e-4367-bfcf-831d8364db9e.jsonl` | 1h31m | 364 msgs | 5,936 words
+- [ ] `601300ba-8f40-485d-bec3-3c50e648de44.jsonl` | 1h26m | 817 msgs | 8,746 words
+- [ ] `ff4eeaab-65c7-4e91-b1cb-c8a4d727f47f.jsonl` | 0h17m | 226 msgs | 1,813 words
+- [ ] `01670123-63ed-4fd2-8a12-5be6177aab41.jsonl` | 0h4m | 49 msgs | 383 words
+- [ ] `2143d613-af8d-485e-bb67-8635a05b1471.jsonl` | 4h19m | 367 msgs | 4,762 words
+- [ ] `4c01f69a-c621-4a27-9498-e5c623ed3c77.jsonl` | 0h0m | 8 msgs | 16,371 words
+- [ ] `f0fca24c-873a-4fe0-b3f9-692200421ff6.jsonl` | 0h8m | 61 msgs | 224 words
+- [ ] `3311c7fb-bf07-4b73-9418-c8176da796c5.jsonl` | 0h5m | 45 msgs | 182 words
+- [ ] `a32cf4aa-9f9f-40fd-8236-a5c2d09dfe0b.jsonl` | 0h31m | 264 msgs | 1,282 words
+- [ ] `ff828451-df38-4465-91fd-b5bcd776939a.jsonl` | 0h2m | 48 msgs | 301 words
+- [ ] `a56ef471-b727-4a63-9b47-98f6960c9510.jsonl` | 0h2m | 22 msgs | 60 words
+- [ ] `a5b6aebc-0481-48bc-ba13-fe115b28e5aa.jsonl` | 0h24m | 281 msgs | 5,587 words
+- [ ] `fa74dfa9-c778-4dd7-abdc-64491382ec47.jsonl` | 0h25m | 139 msgs | 616 words
+- [ ] `a6b37f34-781a-462a-aec5-16d3a2dd2255.jsonl` | 0h17m | 228 msgs | 2,028 words
+- [ ] `b7083f65-8b62-4cab-b1b4-2e70e5e6b731.jsonl` | 0h11m | 156 msgs | 1,449 words
+- [ ] `cf273ebb-4145-45e5-a743-15b57096164c.jsonl` | 0h30m | 419 msgs | 4,360 words
+- [ ] `a789c4d6-17b3-43fd-aa57-c18004c85120.jsonl` | 0h56m | 736 msgs | 10,035 words
+- [ ] `76b14180-1fba-4065-9435-d965b194ef70.jsonl` | 0h0m | 3 msgs | 0 words
+- [ ] `c3d49156-f78e-48f7-9a13-2c284d53ff93.jsonl` | 0h23m | 246 msgs | 3,990 words
+- [ ] `2c580638-9664-43cd-be54-7dc7a88b72f5.jsonl` | 0h35m | 449 msgs | 6,703 words
+- [ ] `0b856735-2fde-471a-b9e5-09beace8b855.jsonl` | 0h0m | 1 msgs | 0 words
+- [ ] `1563ab99-c550-4392-84e1-06554b4ed60d.jsonl` | 0h0m | 2 msgs | 0 words
+- [ ] `6ed40434-eac8-46a6-9d6b-03b5f6b516b7.jsonl` | 0h0m | 12 msgs | 51 words
+- [ ] `1ecc815d-a0b8-48a3-9c71-d5ba5b94312a.jsonl` | 1h27m | 1215 msgs | 16,760 words
+- [ ] `d5c42727-ec85-4a80-8e35-48d302f9248f.jsonl` | 0h0m | 1 msgs | 0 words
+- [ ] `d571e784-e74a-4151-9da1-cdbf70aa6266.jsonl` | 0h0m | 1 msgs | 0 words
+- [ ] `5d9bd21c-0550-4728-b68c-e1701da1ed48.jsonl` | 0h0m | 3 msgs | 41 words
+- [ ] `9985fd7e-1daa-4472-91f7-1c850e84f001.jsonl` | 0h15m | 134 msgs | 1,311 words
+- [ ] `89345743-71c9-41a2-8985-342fba8975ab.jsonl` | 1h10m | 164 msgs | 651 words
+- [ ] `e4340434-4592-4f86-9beb-9b608702137c.jsonl` | 0h55m | 387 msgs | 3,701 words
+- [ ] `4685ff75-fa23-419c-a03f-0317c511b470.jsonl` | 0h28m | 227 msgs | 2,088 words
