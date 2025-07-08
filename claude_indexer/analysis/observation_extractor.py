@@ -150,64 +150,144 @@ class ObservationExtractor:
         return observations
     
     def _extract_docstring(self, node: 'tree_sitter.Node', source_code: str) -> Optional[str]:
-        """Extract docstring from function or class node."""
-        try:
-            # Look for the first string literal in the body
-            for child in node.children:
-                if child.type == 'block':
-                    for stmt in child.children:
-                        if stmt.type == 'expression_statement':
-                            for expr in stmt.children:
-                                if expr.type == 'string':
-                                    docstring = expr.text.decode('utf-8')
-                                    # Clean up the docstring
-                                    docstring = docstring.strip('\'"')
-                                    if docstring.startswith('"""') or docstring.startswith("'''"):
-                                        docstring = docstring[3:-3]
-                                    elif docstring.startswith('"') or docstring.startswith("'"):
-                                        docstring = docstring[1:-1]
-                                    return docstring.strip()
+        """Extract docstring from function or class node with deep AST traversal."""
+        def find_first_string_literal(n, depth=0):
+            """Recursively find the first string literal in function/class body."""
+            if depth > 3:  # Prevent infinite recursion
+                return None
+                
+            # Check if this node is a string literal
+            if n.type == 'string':
+                return n.text.decode('utf-8')
+            
+            # For function/class definitions, look in the body
+            if n.type in ['function_definition', 'class_definition']:
+                for child in n.children:
+                    if child.type == 'block':
+                        # Look for first statement that's a string
+                        for stmt in child.children:
+                            if stmt.type == 'expression_statement':
+                                result = find_first_string_literal(stmt, depth + 1)
+                                if result:
+                                    return result
+            
+            # For expression statements, check children
+            elif n.type == 'expression_statement':
+                for child in n.children:
+                    if child.type == 'string':
+                        return child.text.decode('utf-8')
+            
+            # General recursive search
+            else:
+                for child in n.children:
+                    result = find_first_string_literal(child, depth + 1)
+                    if result:
+                        return result
+            
             return None
-        except Exception:
+        
+        try:
+            raw_docstring = find_first_string_literal(node)
+            if not raw_docstring:
+                return None
+            
+            # Enhanced docstring cleaning
+            docstring = raw_docstring.strip()
+            
+            # Remove triple quotes
+            if docstring.startswith('"""') and docstring.endswith('"""'):
+                docstring = docstring[3:-3]
+            elif docstring.startswith("'''") and docstring.endswith("'''"):
+                docstring = docstring[3:-3]
+            # Remove single quotes
+            elif docstring.startswith('"') and docstring.endswith('"'):
+                docstring = docstring[1:-1]
+            elif docstring.startswith("'") and docstring.endswith("'"):
+                docstring = docstring[1:-1]
+            
+            # Clean up whitespace and return
+            return docstring.strip() if docstring.strip() else None
+            
+        except Exception as e:
+            logger.debug(f"Error extracting docstring: {e}")
             return None
     
     def _extract_docstring_patterns(self, docstring: str) -> List[str]:
-        """Extract meaningful patterns from docstring."""
+        """Extract meaningful patterns and content from docstring."""
         patterns = []
         
-        # Look for Args/Parameters section
-        if 'Args:' in docstring or 'Parameters:' in docstring:
-            patterns.append("Has parameter documentation")
+        # Extract parameter information with details
+        param_match = re.search(r'Args?:\s*(.*?)(?=\n\s*\n|\n\s*Returns?:|\n\s*Raises?:|\Z)', docstring, re.DOTALL | re.IGNORECASE)
+        if param_match:
+            param_text = param_match.group(1).strip()
+            if param_text:
+                # Extract parameter names
+                param_names = re.findall(r'(\w+):\s*', param_text)
+                if param_names:
+                    patterns.append(f"Parameters: {', '.join(param_names[:3])}")
+                else:
+                    patterns.append("Has parameter documentation")
         
-        # Look for Returns section
-        if 'Returns:' in docstring or 'Return:' in docstring:
-            patterns.append("Has return documentation")
+        # Extract return information with details
+        return_match = re.search(r'Returns?:\s*(.*?)(?=\n\s*\n|\n\s*Raises?:|\n\s*Args?:|\Z)', docstring, re.DOTALL | re.IGNORECASE)
+        if return_match:
+            return_text = return_match.group(1).strip()
+            if return_text:
+                # Extract return type or description
+                return_desc = return_text.split('\n')[0].strip()
+                if len(return_desc) > 0:
+                    patterns.append(f"Returns: {return_desc[:50]}{'...' if len(return_desc) > 50 else ''}")
+                else:
+                    patterns.append("Has return documentation")
         
-        # Look for Raises section
-        if 'Raises:' in docstring or 'Raises' in docstring:
-            patterns.append("Documents exceptions")
+        # Extract exception information with details
+        raises_match = re.search(r'Raises?:\s*(.*?)(?=\n\s*\n|\n\s*Returns?:|\n\s*Args?:|\Z)', docstring, re.DOTALL | re.IGNORECASE)
+        if raises_match:
+            raises_text = raises_match.group(1).strip()
+            if raises_text:
+                # Extract exception types
+                exception_types = re.findall(r'(\w+(?:Error|Exception)):', raises_text)
+                if exception_types:
+                    patterns.append(f"Raises: {', '.join(exception_types[:3])}")
+                else:
+                    patterns.append("Documents exceptions")
         
         # Look for Examples section
-        if 'Example:' in docstring or 'Examples:' in docstring:
+        if re.search(r'Examples?:', docstring, re.IGNORECASE):
             patterns.append("Has usage examples")
+        
+        # Extract behavioral keywords
+        behavior_keywords = re.findall(r'\b(validates?|authenticates?|processes?|handles?|manages?|creates?|deletes?|updates?|retrieves?|calculates?|generates?|transforms?|parses?|formats?)\b', docstring.lower())
+        if behavior_keywords:
+            unique_behaviors = list(set(behavior_keywords))[:3]
+            patterns.append(f"Behaviors: {', '.join(unique_behaviors)}")
         
         return patterns
     
     def _extract_function_calls(self, node: 'tree_sitter.Node', source_code: str) -> Set[str]:
-        """Extract function calls within a function body."""
+        """Extract meaningful function calls using AST structural heuristics."""
         calls = set()
         
         def find_calls(n):
             if n.type == 'call':
-                # Get the function name
                 func_node = n.child_by_field_name('function')
                 if func_node:
-                    func_name = func_node.text.decode('utf-8')
-                    # Extract just the function name (not module.function)
-                    if '.' in func_name:
-                        func_name = func_name.split('.')[-1]
-                    # Filter out built-ins and common patterns
-                    if not self._is_builtin_or_common(func_name):
+                    func_text = func_node.text.decode('utf-8')
+                    
+                    # Handle method calls (obj.method)
+                    if '.' in func_text:
+                        parts = func_text.split('.')
+                        if len(parts) >= 2:
+                            obj, method = parts[-2], parts[-1]
+                            # Include meaningful obj.method patterns
+                            if self._is_meaningful_by_structure(method):
+                                calls.add(f"{obj}.{method}" if len(obj) < 10 else method)
+                        func_name = parts[-1]
+                    else:
+                        func_name = func_text
+                    
+                    # Use existing builtin filter + structural heuristics
+                    if not self._is_builtin_or_common(func_name) and self._is_meaningful_by_structure(func_name):
                         calls.add(func_name)
             
             for child in n.children:
@@ -216,17 +296,64 @@ class ObservationExtractor:
         find_calls(node)
         return calls
     
+    def _is_meaningful_by_structure(self, func_name: str) -> bool:
+        """Determine meaningfulness using AST structural heuristics."""
+        # Snake_case indicates intentional naming
+        if '_' in func_name:
+            return True
+        
+        # Length > 4 indicates descriptive function
+        if len(func_name) > 4:
+            return True
+        
+        # CamelCase indicates class/constructor patterns
+        if func_name[0].isupper() and any(c.isupper() for c in func_name[1:]):
+            return True
+        
+        # Short names are usually noise
+        return False
+    
     def _extract_exception_handling(self, node: 'tree_sitter.Node', source_code: str) -> Set[str]:
-        """Extract exception types that are caught."""
+        """Extract exception types that are caught with enhanced pattern recognition."""
         exceptions = set()
         
         def find_exceptions(n):
             if n.type == 'except_clause':
-                # Look for exception type
+                # Enhanced exception type extraction
                 for child in n.children:
+                    # Single exception type
                     if child.type == 'identifier':
                         exc_name = child.text.decode('utf-8')
-                        if exc_name not in ['as', 'except']:
+                        if exc_name not in ['as', 'except', 'e', 'err', 'error', 'ex']:
+                            exceptions.add(exc_name)
+                    
+                    # Multiple exception types in tuple
+                    elif child.type == 'tuple':
+                        for tuple_child in child.children:
+                            if tuple_child.type == 'identifier':
+                                exc_name = tuple_child.text.decode('utf-8')
+                                if exc_name not in ['as', 'except']:
+                                    exceptions.add(exc_name)
+                    
+                    # Attribute access (e.g., module.Exception)
+                    elif child.type == 'attribute':
+                        attr_text = child.text.decode('utf-8')
+                        if '.' in attr_text and 'Error' in attr_text or 'Exception' in attr_text:
+                            exceptions.add(attr_text.split('.')[-1])
+            
+            # Also look for raised exceptions
+            elif n.type == 'raise_statement':
+                for child in n.children:
+                    if child.type == 'call':
+                        # Extract exception being raised
+                        func_node = child.child_by_field_name('function')
+                        if func_node and func_node.type == 'identifier':
+                            exc_name = func_node.text.decode('utf-8')
+                            if 'Error' in exc_name or 'Exception' in exc_name:
+                                exceptions.add(exc_name)
+                    elif child.type == 'identifier':
+                        exc_name = child.text.decode('utf-8')
+                        if 'Error' in exc_name or 'Exception' in exc_name:
                             exceptions.add(exc_name)
             
             for child in n.children:

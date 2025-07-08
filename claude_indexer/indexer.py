@@ -209,7 +209,7 @@ class CoreIndexer:
             logger.info(f"   Collection: {collection_name}")
             logger.info(f"   State file exists: {incremental}")
             logger.info(f"   Mode: {'INCREMENTAL' if incremental else 'FULL'}")
-            logger.info(f"   Orphan cleanup will run: {'YES' if incremental else 'NO (full mode)'}")
+            logger.info(f"   Orphan cleanup will run: YES (both modes)")
         
         result = IndexingResult(success=True, operation="incremental" if incremental else "full")
         
@@ -309,10 +309,10 @@ class CoreIndexer:
                 # Store processed files in result for test verification
                 result.processed_files = [str(f) for f in successfully_processed]
                 
-                # Clean up orphaned relations after processing modified files
-                if incremental and successfully_processed:
+                # Clean up orphaned relations after processing files (both full and incremental modes)
+                if successfully_processed:
                     logger.info(f"🧹 === ORPHAN CLEANUP TRIGGERED ===")
-                    logger.info(f"   Mode: INCREMENTAL")
+                    logger.info(f"   Mode: {'INCREMENTAL' if incremental else 'FULL'}")
                     logger.info(f"   Files processed: {len(successfully_processed)}")
                     logger.info(f"   Starting orphan cleanup...")
                     orphaned_deleted = self.vector_store._cleanup_orphaned_relations(collection_name, verbose)
@@ -324,7 +324,7 @@ class CoreIndexer:
                     logger.info(f"🚫 === ORPHAN CLEANUP SKIPPED ===")
                     logger.info(f"   Incremental: {incremental}")
                     logger.info(f"   Successfully processed: {len(successfully_processed) if successfully_processed else 0}")
-                    logger.info(f"   Reason: {'Not incremental mode' if not incremental else 'No files processed'}")
+                    logger.info(f"   Reason: No files processed")
             elif verbose:
                 logger.warning(f"⚠️  No files to save state for (all {len(files_to_process)} files failed)")
             
