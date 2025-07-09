@@ -33,9 +33,10 @@ class OpenAIEmbedder(RetryableEmbedder):
         }
     }
     
-    def __init__(self, api_key: str = None, openai_api_key: str = None, 
+    def __init__(self, api_key: str = None, openai_api_key: str = None,
                  model: str = "text-embedding-3-small",
-                 max_retries: int = 3, base_delay: float = 1.0, **kwargs):
+                 max_retries: int = 3, base_delay: float = 1.0,
+                 base_url: Optional[str] = None, **kwargs):
         
         if not OPENAI_AVAILABLE:
             raise ImportError("OpenAI package not available. Install with: pip install openai")
@@ -57,7 +58,16 @@ class OpenAIEmbedder(RetryableEmbedder):
         
         self.model = model
         self.model_config = self.MODELS[model]
-        self.client = openai.OpenAI(api_key=final_api_key, timeout=30.0)
+        
+        # Configure client with optional base_url
+        client_args = {
+            "api_key": final_api_key,
+            "timeout": 30.0,
+        }
+        if base_url:
+            client_args["base_url"] = base_url
+            
+        self.client = openai.OpenAI(**client_args)
         
         # Rate limiting
         self._requests_per_minute = 3000  # Conservative limit

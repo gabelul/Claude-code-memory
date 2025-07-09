@@ -17,6 +17,7 @@ def load_legacy_settings(settings_file: Path) -> Dict[str, Any]:
         'EMBEDDING_PROVIDER': 'embedding_provider',
         'EMBEDDING_MODEL': 'voyage_model',  # Map EMBEDDING_MODEL to voyage_model for voyage provider
         'OPENAI_API_KEY': 'openai_api_key',
+        'OPENAI_BASE_URL': 'openai_base_url',
         'QDRANT_API_KEY': 'qdrant_api_key',
         'QDRANT_URL': 'qdrant_url',
         'CHAT_MODEL': 'chat_model',

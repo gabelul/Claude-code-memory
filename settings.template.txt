@@ -13,6 +13,7 @@ EMBEDDING_MODEL=voyage-3-lite
 
 # Option 2: OpenAI (comment out Voyage settings above to use this)
 OPENAI_API_KEY=your_openai_api_key_here
+#OPENAI_BASE_URL=your_openai_base_url_here
 #EMBEDDING_PROVIDER=openai
 #EMBEDDING_MODEL=text-embedding-3-small
 

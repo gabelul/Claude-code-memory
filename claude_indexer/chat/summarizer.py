@@ -108,7 +108,13 @@ class ChatSummarizer:
             raise ValueError("OpenAI API key not found in configuration")
         
         openai.api_key = api_key
-        self.client = openai.OpenAI(api_key=api_key)
+        client_args = {
+            "api_key": api_key,
+            "timeout": 30.0
+        }
+        if hasattr(self.config, 'openai_base_url') and self.config.openai_base_url:
+            client_args["base_url"] = self.config.openai_base_url
+        self.client = openai.OpenAI(**client_args)
         
         # Rate limiting settings
         self.max_retries = 3

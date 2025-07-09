@@ -47,6 +47,7 @@ class ConfigLoader:
             'qdrant_url': os.environ.get('QDRANT_URL'),
             'embedding_provider': os.environ.get('EMBEDDING_PROVIDER'),
             'voyage_model': os.environ.get('VOYAGE_MODEL'),
+            'openai_base_url': os.environ.get('OPENAI_BASE_URL'),
         }
         env_count = 0
         for key, value in env_vars.items():
