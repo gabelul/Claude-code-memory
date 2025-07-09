@@ -63,7 +63,7 @@ class QdrantStore(ManagedVectorStore):
         super().__init__(auto_create_collections=auto_create_collections)
         
         self.url = url
-        self.api_key = api_key
+        self.api_key = api_key if api_key and api_key.strip() else None  # Skip empty/blank keys
         self.timeout = timeout
         
         # Initialize client
@@ -71,19 +71,41 @@ class QdrantStore(ManagedVectorStore):
             # Suppress insecure connection warning for development
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", message="Api key is used with an insecure connection")
-                self.client = QdrantClient(
-                    url=url,
-                    api_key=api_key,
-                    timeout=timeout
-                )
-            # Test connection
-            self.client.get_collections()
+                
+                # Only pass api_key if it has a value
+                client_kwargs = {
+                    'url': url,
+                    'timeout': timeout
+                }
+                if self.api_key:
+                    client_kwargs['api_key'] = self.api_key
+                
+                self.client = QdrantClient(**client_kwargs)
+            
+            # Test connection and authentication
+            try:
+                self.client.get_collections()
+            except Exception as auth_error:
+                if "Unauthorized" in str(auth_error) or "403" in str(auth_error):
+                    raise ConnectionError(f"Qdrant authentication failed - invalid API key for {url}")
+                raise  # Re-raise other errors
+            
+        except ConnectionError:
+            raise  # Re-raise our custom auth errors
         except Exception as e:
-            raise ConnectionError(f"Failed to connect to Qdrant at {url}: {e}")
+            error_msg = f"Failed to connect to Qdrant at {url}"
+            if "Connection refused" in str(e):
+                error_msg += " - server not running"
+            elif "Unauthorized" in str(e):
+                error_msg += " - invalid API key"
+            else:
+                error_msg += f": {e}"
+            raise ConnectionError(error_msg)
     
     def create_collection(self, collection_name: str, vector_size: int, 
                          distance_metric: str = "cosine") -> StorageResult:
         """Create a new Qdrant collection."""
+        logger.debug(f"Attempting to create Qdrant collection: '{collection_name}' with vector size {vector_size}")
         start_time = time.time()
         
         try:
@@ -98,13 +120,14 @@ class QdrantStore(ManagedVectorStore):
             
             distance = self.DISTANCE_METRICS[distance_metric]
             
-            self.client.create_collection(
+            create_response = self.client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(size=vector_size, distance=distance),
                 optimizers_config={
                     "indexing_threshold": 100
                 }
             )
+            logger.debug(f"Qdrant create_collection response: {create_response}")
             
             return StorageResult(
                 success=True,
@@ -125,8 +148,12 @@ class QdrantStore(ManagedVectorStore):
         """Check if collection exists."""
         try:
             collections = self.client.get_collections()
-            return any(col.name == collection_name for col in collections.collections)
-        except Exception:
+            logger.debug(f"Qdrant get_collections response: {collections}")
+            exists = any(col.name == collection_name for col in collections.collections)
+            logger.debug(f"Collection '{collection_name}' exists check: {exists}")
+            return exists
+        except Exception as e:
+            logger.debug(f"Error checking if collection '{collection_name}' exists: {e}")
             return False
     
     def delete_collection(self, collection_name: str) -> StorageResult:

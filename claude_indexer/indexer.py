@@ -509,6 +509,9 @@ class CoreIndexer:
         include_patterns = self.config.include_patterns
         exclude_patterns = self.config.exclude_patterns
         
+        self.logger.debug(f"Include patterns: {include_patterns}")
+        self.logger.debug(f"Exclude patterns: {exclude_patterns}")
+        
         # No fallback patterns - use what's configured
         if not include_patterns:
             raise ValueError("No include patterns configured")

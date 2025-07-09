@@ -162,14 +162,28 @@ class ManagedVectorStore(VectorStore):
     
     def ensure_collection(self, collection_name: str, vector_size: Optional[int] = None) -> bool:
         """Ensure collection exists, create if necessary."""
+        from ..indexer_logging import get_logger
+        logger = get_logger()
+        
+        logger.debug(f"Ensuring collection '{collection_name}' exists...")
         if self.collection_exists(collection_name):
+            logger.debug(f"Collection '{collection_name}' already exists.")
             return True
         
+        logger.debug(f"Collection '{collection_name}' does not exist. Checking auto_create_collections...")
         if not self.auto_create_collections:
+            logger.warning(f"auto_create_collections is False. Cannot create collection '{collection_name}'.")
             return False
         
         vector_size = vector_size or self.default_vector_size
+        logger.info(f"Attempting to create collection '{collection_name}' with vector size {vector_size}...")
         result = self.create_collection(collection_name, vector_size)
+        
+        if result.success:
+            logger.info(f"Successfully created collection '{collection_name}'.")
+        else:
+            logger.error(f"Failed to create collection '{collection_name}': {result.errors}")
+            
         return result.success
     
     def upsert_points(self, collection_name: str, points: List[VectorPoint]) -> StorageResult:

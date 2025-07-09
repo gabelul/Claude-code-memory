@@ -37,9 +37,15 @@ class IndexerConfig(BaseModel):
     debounce_seconds: float = Field(default=2.0)
     
     # Watcher Settings
-    include_patterns: list = Field(default_factory=lambda: ['*.py', '*.md'])
+    include_patterns: list = Field(default_factory=lambda: [
+        '*.py', '*.pyi', '*.js', '*.jsx', '*.ts', '*.tsx', 
+        '*.html', '*.htm', '*.css', '*.md', '*.txt', '*.json'
+    ])
     exclude_patterns: list = Field(default_factory=lambda: [
-        '*.pyc', '__pycache__', '.git', '.venv', 'node_modules'
+        '*.pyc', '__pycache__', '.git', '.venv', 'node_modules', 
+        'dist', 'build', '*.min.js', '.env', '*.log', '.mypy_cache',
+        'qdrant_storage', 'backups', 'chat_reports', '*.egg-info',
+        'settings.txt', '.claude-indexer'
     ])
     
     # File Processing

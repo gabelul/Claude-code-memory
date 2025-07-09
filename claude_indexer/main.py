@@ -228,13 +228,11 @@ def run_indexing_with_specific_files(project_path: str, collection_name: str,
             else:
                 paths_to_process.append(fp)
         
-        if not paths_to_process:
-            if not quiet:
-                logger.info("✅ No files to process")
-            return True
-        
         if not quiet and verbose:
-            logger.info(f"🔄 Processing {len(paths_to_process)} specific files")
+            if not paths_to_process:
+                logger.info("✅ No files to process, but proceeding to ensure collection and update statistics.")
+            else:
+                logger.info(f"🔄 Processing {len(paths_to_process)} specific files")
             logger.info(f"📦 Collection: {collection_name}")
         
         # Capture vectored files state BEFORE any processing for accurate comparison
@@ -523,9 +521,11 @@ def run_indexing(project_path: str, collection_name: str,
         # Create indexer for file discovery
         indexer = CoreIndexer(config, embedder, vector_store, project)
         
-        # Auto-detect incremental mode
-        state_file = indexer._get_state_file(collection_name)
-        incremental = state_file.exists()
+        # Ensure collection exists before any operations
+        logger.debug(f"Attempting to ensure collection '{collection_name}' exists via vector_store.ensure_collection...")
+        if not vector_store.ensure_collection(collection_name):
+            logger.error(f"❌ Failed to ensure collection '{collection_name}' exists. Aborting indexing.")
+            return False
         
         if not quiet and verbose:
             logger.info(f"🔄 Indexing project: {project}")
@@ -629,16 +629,12 @@ def run_indexing(project_path: str, collection_name: str,
             files_to_process = indexer._find_all_files(include_tests)
             deleted_files = []
         
-        if not files_to_process:
-            if not quiet:
-                logger.info("✅ No files to process")
-            return True
-        
-        # Delegate to the specific files function
+        # Delegate to the specific files function, even if no files to process.
+        # This ensures the collection is properly handled and statistics are updated.
         return run_indexing_with_specific_files(
             project_path=project_path,
             collection_name=collection_name,
-            file_paths=files_to_process,
+            file_paths=files_to_process, # This might be empty if only deletions were handled
             quiet=quiet,
             verbose=verbose,
             config_file=config_file

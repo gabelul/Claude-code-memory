@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 import time
+import logging
 
 
 @dataclass
@@ -84,6 +85,7 @@ class RetryableEmbedder(Embedder):
         self.base_delay = base_delay
         self.max_delay = max_delay
         self.backoff_factor = backoff_factor
+        self.logger = logging.getLogger(self.__class__.__name__)
     
     def _calculate_delay(self, attempt: int) -> float:
         """Calculate delay for exponential backoff with jitter."""

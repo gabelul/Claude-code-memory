@@ -65,6 +65,9 @@ class OpenAIEmbedder(RetryableEmbedder):
             
         self.client = openai.OpenAI(**client_args)
         
+        # Debugging: Log the client configuration
+        self.logger.debug(f"OpenAI client initialized with base_url: {client_args.get('base_url', 'default')}, API key starts with: {final_api_key[:5]}...")
+        
         # Rate limiting
         self._requests_per_minute = 3000  # Conservative limit
         self._tokens_per_minute = 1000000
@@ -142,6 +145,7 @@ class OpenAIEmbedder(RetryableEmbedder):
             result = self._embed_with_retry(_embed)
             return result
         except Exception as e:
+            self.logger.error(f"❌ Error embedding text with OpenAI: {e}")
             return EmbeddingResult(
                 text=text,
                 embedding=[],
@@ -176,6 +180,7 @@ class OpenAIEmbedder(RetryableEmbedder):
         
         def _embed():
             self._check_rate_limits(estimated_tokens)
+            self.logger.debug(f"Sending text to OpenAI for embedding (model: {self.model}, tokens: {estimated_tokens})")
             
             response = self.client.embeddings.create(
                 model=self.model,
@@ -215,6 +220,7 @@ class OpenAIEmbedder(RetryableEmbedder):
         except Exception as e:
             # Return error results for all texts
             error_msg = str(e)
+            self.logger.error(f"❌ Error embedding batch with OpenAI: {error_msg}")
             return [
                 EmbeddingResult(
                     text=text,
