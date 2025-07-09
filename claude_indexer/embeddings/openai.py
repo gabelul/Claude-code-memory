@@ -42,14 +42,10 @@ class OpenAIEmbedder(RetryableEmbedder):
             raise ImportError("OpenAI package not available. Install with: pip install openai")
         
         # Support both parameter names for backward compatibility
+        # Accept any non-empty string as an API key (custom endpoints may use arbitrary formats)
         final_api_key = api_key or openai_api_key
         if not final_api_key:
-            raise ValueError("Valid OpenAI API key required")
-        
-        # Allow test keys for testing
-        is_test_key = final_api_key.startswith("test-")
-        if not is_test_key and not final_api_key.startswith("sk-"):
-            raise ValueError("Valid OpenAI API key required")
+            raise ValueError("Valid OpenAI API key required")  # Only require a value, no format restriction
         
         if model not in self.MODELS:
             raise ValueError(f"Unsupported model: {model}. Available: {list(self.MODELS.keys())}")
