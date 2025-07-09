@@ -194,7 +194,7 @@ class PythonParser(CodeParser):
             # Create containment relations
             file_name = str(file_path)
             for entity in result.entities[1:]:  # Skip file entity itself
-                if entity.entity_type in [EntityType.FUNCTION, EntityType.CLASS]:
+                if entity.entity_type in [EntityType.FUNCTION, EntityType.CLASS, EntityType.VARIABLE, EntityType.IMPORT]:
                     relation = RelationFactory.create_contains_relation(file_name, entity.name)
                     result.relations.append(relation)
             
