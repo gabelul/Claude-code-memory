@@ -243,7 +243,10 @@ class PythonParser(CodeParser):
         def traverse_node(node, depth=0):
             entity_mapping = {
                 'function_definition': EntityType.FUNCTION,
-                'class_definition': EntityType.CLASS
+                'class_definition': EntityType.CLASS,
+                'assignment': EntityType.VARIABLE,
+                'import_statement': EntityType.IMPORT,
+                'import_from_statement': EntityType.IMPORT
             }
             
             if node.type in entity_mapping:
@@ -283,12 +286,29 @@ class PythonParser(CodeParser):
                              file_path: Path) -> Optional['Entity']:
         """Extract named entity from Tree-sitter node with enhanced observations."""
         
-        # Find identifier child
+        # Find identifier child - different structure for different node types
         entity_name = None
-        for child in node.children:
-            if child.type == 'identifier':
-                entity_name = child.text.decode('utf-8')
-                break
+        
+        if node.type == 'assignment':
+            # For assignment: assignment -> identifier (left side)
+            if node.children and node.children[0].type == 'identifier':
+                entity_name = node.children[0].text.decode('utf-8')
+        elif node.type in ['import_statement', 'import_from_statement']:
+            # For imports: find the imported module name
+            for child in node.children:
+                if child.type == 'dotted_name':
+                    # Get the full module path or just the identifier
+                    entity_name = child.text.decode('utf-8')
+                    break
+                elif child.type == 'identifier':
+                    entity_name = child.text.decode('utf-8')
+                    break
+        else:
+            # For functions/classes: find identifier child
+            for child in node.children:
+                if child.type == 'identifier':
+                    entity_name = child.text.decode('utf-8')
+                    break
         
         if not entity_name:
             return None
@@ -342,6 +362,32 @@ class PythonParser(CodeParser):
                 end_line=end_line,
                 observations=enhanced_observations,
                 source="tree-sitter"
+            )
+        elif entity_type == EntityType.VARIABLE:
+            return Entity(
+                name=entity_name,
+                entity_type=EntityType.VARIABLE,
+                observations=enhanced_observations or [
+                    f"Variable: {entity_name}",
+                    f"Defined in: {file_path}",
+                    f"Line: {line_number}"
+                ],
+                file_path=file_path,
+                line_number=line_number,
+                end_line_number=end_line
+            )
+        elif entity_type == EntityType.IMPORT:
+            return Entity(
+                name=entity_name,
+                entity_type=EntityType.IMPORT,
+                observations=enhanced_observations or [
+                    f"Import: {entity_name}",
+                    f"In file: {file_path}",
+                    f"Line: {line_number}"
+                ],
+                file_path=file_path,
+                line_number=line_number,
+                end_line_number=end_line
             )
         
         return None
@@ -1048,7 +1094,7 @@ class MarkdownParser(CodeParser):
                 content = f.read()
                 lines = content.split('\n')
             
-            # Extract headers
+            # Extract headers (only h1 and h2 to reduce entity bloat)
             for line_num, line in enumerate(lines, 1):
                 line = line.strip()
                 if line.startswith('#'):
@@ -1056,7 +1102,8 @@ class MarkdownParser(CodeParser):
                     level = len(line) - len(line.lstrip('#'))
                     header_text = line.lstrip('#').strip()
                     
-                    if header_text:
+                    # Only extract major headers (h1, h2) to reduce noise
+                    if header_text and level <= 2:
                         entity = Entity(
                             name=header_text,
                             entity_type=EntityType.DOCUMENTATION,
@@ -1096,8 +1143,15 @@ class MarkdownParser(CodeParser):
             # Extract code blocks with language detection
             code_block_pattern = r'```(\w+)?\n(.*?)\n```'
             for match in re.finditer(code_block_pattern, content, re.DOTALL):
-                language = match.group(1) or "unknown"
                 code = match.group(2)
+                
+                # Detect natural language queries vs actual code
+                if match.group(1):
+                    language = match.group(1)
+                elif '"' in code and not any(c in code for c in [';', '{', 'def ', 'function', 'class ', 'import']):
+                    language = "natural_language_query"
+                else:
+                    language = "unknown"
                 
                 # Find line number
                 line_num = content[:match.start()].count('\n') + 1
@@ -1105,8 +1159,14 @@ class MarkdownParser(CodeParser):
                 # Truncate long code blocks
                 display_code = code[:100] + "..." if len(code) > 100 else code
                 
+                # Set descriptive name based on content type
+                if language == "natural_language_query":
+                    entity_name = "Natural Language Query Examples"
+                else:
+                    entity_name = f"Code Block ({language})"
+                
                 entity = Entity(
-                    name=f"Code Block ({language})",
+                    name=entity_name,
                     entity_type=EntityType.DOCUMENTATION,
                     observations=[
                         f"Language: {language}",

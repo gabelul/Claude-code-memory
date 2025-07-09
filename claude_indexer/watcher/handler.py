@@ -137,6 +137,12 @@ class IndexingEventHandler(FileSystemEventHandler):
     
     def _process_file_deletion(self, path: Path):
         """Process a file deletion using shared deletion logic."""
+        # FIX: Add file existence check to prevent phantom deletions
+        if path.exists():
+            logger = get_logger()
+            logger.info(f"🛡️  File still exists at {path.relative_to(self.project_path)}, ignoring phantom deletion event")
+            return
+        
         try:
             relative_path = path.relative_to(self.project_path)
             logger = get_logger()

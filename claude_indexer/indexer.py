@@ -927,6 +927,8 @@ class CoreIndexer:
                 
                 embedding_results = self.embedder.embed_batch(metadata_texts)
                 if logger:
+                    logger.debug(f"🔤 Entity embeddings: processing {len(metadata_texts)} texts...")
+                if logger:
                     logger.debug(f"✅ Entity embeddings completed: {sum(1 for r in embedding_results if r.success)}/{len(embedding_results)} successful")
                 
                 # Process embedding results for metadata chunks
@@ -986,6 +988,8 @@ class CoreIndexer:
                     
                 embedding_results = self.embedder.embed_batch(relation_texts)
                 if logger:
+                    logger.debug(f"🔤 Relation embeddings: processing {len(relation_texts)} texts...")
+                if logger:
                     logger.debug(f"✅ Relation embeddings completed: {sum(1 for r in embedding_results if r.success)}/{len(embedding_results)} successful")
                 
                 # Process embedding results for relations
@@ -1013,6 +1017,8 @@ class CoreIndexer:
                     logger.debug(f"🔤 Generating embeddings for {len(implementation_texts)} implementation texts")
                     
                 embedding_results = self.embedder.embed_batch(implementation_texts)
+                if logger:
+                    logger.debug(f"🔤 Implementation embeddings: processing {len(implementation_texts)} texts...")
                 if logger:
                     logger.debug(f"✅ Implementation embeddings completed: {sum(1 for r in embedding_results if r.success)}/{len(embedding_results)} successful")
                 
