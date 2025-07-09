@@ -20,6 +20,7 @@ class IndexerConfig(BaseModel):
     
     # URLs and Endpoints
     qdrant_url: str = Field(default="http://localhost:6333")
+    openai_base_url: Optional[str] = None
     
     # Collection Management
     collection_name: str = Field(default="default")
@@ -61,6 +62,7 @@ class IndexerConfig(BaseModel):
             voyage_api_key=os.environ.get('VOYAGE_API_KEY', ''),
             qdrant_api_key=os.environ.get('QDRANT_API_KEY', 'default-key'),
             qdrant_url=os.environ.get('QDRANT_URL', 'http://localhost:6333'),
+            openai_base_url=os.environ.get('OPENAI_BASE_URL'),
             embedding_provider=os.environ.get('EMBEDDING_PROVIDER', 'openai'),
             voyage_model=os.environ.get('VOYAGE_MODEL', 'voyage-3-lite'),
         )
