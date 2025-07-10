@@ -814,8 +814,9 @@ else:
 
     @cli.command('add-mcp')
     @click.option('--collection', '-c', required=True, help='Collection name for MCP server')
+    @click.option('--project', '-p', type=click.Path(), help='Project directory path (defaults to current directory)')
     @common_options
-    def add_mcp(collection, verbose, quiet, config):
+    def add_mcp(collection, project, verbose, quiet, config):
         """Add MCP server configuration for a collection."""
         
         try:
@@ -826,6 +827,15 @@ else:
             
             if not quiet:
                 click.echo(f"🔧 Setting up MCP server for collection: {collection}")
+            
+            # Determine target project directory
+            if project:
+                project_path = Path(project).resolve()
+            else:
+                project_path = Path.cwd()  # Use current working directory
+                
+            if not quiet:
+                click.echo(f"📁 Target project: {project_path}")
             
             # Load configuration
             config_obj = load_config(Path(config) if config else None)
@@ -863,17 +873,23 @@ else:
                 cmd.insert(-3, "-e")
                 cmd.insert(-3, f"EMBEDDING_PROVIDER={config_obj.embedding_provider}")
                 
-            if hasattr(config_obj, 'voyage_model') and config_obj.voyage_model:
-                cmd.insert(-3, "-e")
-                cmd.insert(-3, f"EMBEDDING_MODEL={config_obj.voyage_model}")
+            # Set EMBEDDING_MODEL based on provider
+            if hasattr(config_obj, 'embedding_provider') and config_obj.embedding_provider:
+                if config_obj.embedding_provider == 'voyage' and hasattr(config_obj, 'voyage_model') and config_obj.voyage_model:
+                    cmd.insert(-3, "-e")
+                    cmd.insert(-3, f"EMBEDDING_MODEL={config_obj.voyage_model}")
+                elif config_obj.embedding_provider == 'openai' and hasattr(config_obj, 'openai_model') and config_obj.openai_model:
+                    cmd.insert(-3, "-e")
+                    cmd.insert(-3, f"EMBEDDING_MODEL={config_obj.openai_model}")
             
             if verbose:
                 click.echo(f"🚀 Adding MCP server: {server_name}")
                 click.echo(f"📊 Collection name: {collection}")
                 click.echo(f"🔗 Server path: {mcp_server_path}")
             
-            # Execute the command
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            # Execute the command from the target project directory 
+            # This ensures the MCP server gets "local" scope for the correct project
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(project_path))
             
             if result.returncode == 0:
                 if not quiet:
@@ -883,7 +899,7 @@ else:
                     click.echo()
                     click.echo("Next steps:")
                     click.echo("1. Restart Claude Code")
-                    click.echo(f"2. Index your project: claude-indexer --project /path/to/project --collection {collection}")
+                    click.echo(f"2. Index your project: claude-indexer -p {project_path} -c {collection}")
                     click.echo(f"3. Test search: mcp__{server_name.replace('-', '_')}__search_similar('your query')")
             else:
                 click.echo("❌ Failed to add MCP server", err=True)
