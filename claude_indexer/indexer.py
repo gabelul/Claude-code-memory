@@ -96,8 +96,12 @@ class CoreIndexer:
         self.project_path = project_path
         self.logger = get_logger()
         
-        # Initialize parser registry
-        self.parser_registry = ParserRegistry(project_path)
+        # Initialize project config manager (shared across all operations)
+        from .config.project_config import ProjectConfigManager
+        self.project_config_manager = ProjectConfigManager(project_path)
+        
+        # Initialize parser registry with shared config manager
+        self.parser_registry = ParserRegistry(project_path, self.project_config_manager)
     
     def _create_batch_callback(self, collection_name: str):
         """Create a callback function for batch processing during streaming."""
@@ -121,13 +125,11 @@ class CoreIndexer:
                 return False
             
             # Check if this is a project that uses content_only mode for JSON
-            # Use the same config loading approach as ParserRegistry
-            from .config.project_config import ProjectConfigManager
-            config_manager = ProjectConfigManager(self.project_path)
-            if not config_manager.exists:
+            # Use the shared config manager instance
+            if not self.project_config_manager.exists:
                 return False
             
-            project_config = config_manager.load()
+            project_config = self.project_config_manager.load()
             
             # Check if content_only is enabled for JSON parsing
             self.logger.debug(f"🔍 Batch check for {file_path.name}: project_config type = {type(project_config)}")

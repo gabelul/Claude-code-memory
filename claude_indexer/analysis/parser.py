@@ -1275,20 +1275,22 @@ class MarkdownParser(CodeParser):
 class ParserRegistry:
     """Registry for managing multiple code parsers."""
     
-    def __init__(self, project_path: Path):
+    def __init__(self, project_path: Path, config_manager: Optional['ProjectConfigManager'] = None):
         self.project_path = project_path
         self._parsers: List[CodeParser] = []
         
-        # Load project config for parser initialization
-        self.project_config = self._load_project_config()
+        # Use provided config manager or create new one (backward compatibility)
+        self.project_config = self._load_project_config(config_manager)
         
         self._register_default_parsers()
     
-    def _load_project_config(self) -> Dict[str, Any]:
+    def _load_project_config(self, config_manager: Optional['ProjectConfigManager'] = None) -> Dict[str, Any]:
         """Load project-specific configuration."""
         try:
-            from ..config.project_config import ProjectConfigManager
-            config_manager = ProjectConfigManager(self.project_path)
+            if config_manager is None:
+                from ..config.project_config import ProjectConfigManager
+                config_manager = ProjectConfigManager(self.project_path)
+            
             if config_manager.exists:
                 return config_manager.load()
             return {}
