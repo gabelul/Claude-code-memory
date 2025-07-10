@@ -33,6 +33,20 @@ if [[ ! -d "$VENV_PATH" ]]; then
     exit 1
 fi
 
+# Check if claude_indexer package is installed in venv
+echo -e "${BLUE}Checking claude_indexer package installation...${NC}"
+if ! "$VENV_PATH/bin/python" -c "import claude_indexer" 2>/dev/null; then
+    echo -e "${YELLOW}Installing claude_indexer package in editable mode...${NC}"
+    "$VENV_PATH/bin/pip" install -e .
+    if ! "$VENV_PATH/bin/python" -c "import claude_indexer" 2>/dev/null; then
+        echo -e "${RED}Error: Failed to install claude_indexer package${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ claude_indexer package installed successfully${NC}"
+else
+    echo -e "${GREEN}✅ claude_indexer package already installed${NC}"
+fi
+
 # Check if /usr/local/bin exists
 if [[ ! -d "/usr/local/bin" ]]; then
     echo -e "${YELLOW}Creating /usr/local/bin directory...${NC}"
