@@ -61,120 +61,70 @@ else:
         
         claude_md_path = project_path / "CLAUDE.md"
         
-        # Template for memory instructions
+        # Template for memory instructions (based on README.md template)
+        mcp_prefix = f"mcp__{server_name.replace('-', '_')}__"
+        
         memory_template = f"""
 # Project Memory Instructions
 
-🧠 **You have access to complete memory of this codebase via MCP server: `{server_name}`**
+You have access to a complete memory of this codebase. ALWAYS:
+1. Search for existing implementations before writing new code
+2. Use established patterns found in memory
+3. Check for similar functions to avoid duplication
+4. When debugging, search for similar errors that were fixed before
+5. Follow the coding conventions found in existing code
 
-## Essential Memory Functions
+## Memory Usage Examples
+- Before creating a function: "I found 3 similar validation functions in memory..."
+- When debugging: "This error pattern matches issue fixed in auth.js..."
+- For refactoring: "Memory shows this pattern used in 5 places..."
 
-### 🔍 Smart Search (90% faster with entityTypes filtering)
-```python
-# Fast metadata overview (90% speed boost)
-{server_name.replace('-', '_')}__search_similar("your query", entityTypes=["metadata"])
+## Enhanced Memory Graph Functions
 
-# Find specific functions/classes
-{server_name.replace('-', '_')}__search_similar("authentication logic", entityTypes=["function", "class"])
+### 🎯 Unified Search with entityTypes Filtering (MCP Only)
+- {mcp_prefix}search_similar("query", entityTypes=["metadata"]) - 90% faster overview search
+- {mcp_prefix}search_similar("query", entityTypes=["function", "class"]) - Find specific code elements
+- {mcp_prefix}search_similar("query", entityTypes=["debugging_pattern"]) - Find past error solutions
+- {mcp_prefix}search_similar("query", entityTypes=["documentation"]) - Search docs only
+- {mcp_prefix}search_similar("query", entityTypes=["function", "metadata"]) - Mixed search with OR logic
 
-# Find past debugging solutions
-{server_name.replace('-', '_')}__search_similar("error pattern", entityTypes=["debugging_pattern"])
+### 📊 Codebase Mapping (with safe limits)
+**General Analysis:**
+- {mcp_prefix}read_graph(mode="smart", limit=100) - AI overview (max 150 entities)
+- {mcp_prefix}read_graph(mode="entities", entityTypes=["class"], limit=50) - Filtered components  
+- {mcp_prefix}read_graph(mode="relationships", limit=200) - Connections (max 300, careful!)
 
-# Mixed search (functions OR metadata)
-{server_name.replace('-', '_')}__search_similar("validation", entityTypes=["function", "metadata"])
+**Entity-Specific (10-20 relations vs 300+):**
+- {mcp_prefix}read_graph(entity="ClassName", mode="smart") - AI analysis of specific component
+- {mcp_prefix}read_graph(entity="functionName", mode="relationships") - Direct connections only
+- {mcp_prefix}read_graph(entity="ServiceName", mode="entities") - Connected components
 
-# Search everything (default)
-{server_name.replace('-', '_')}__search_similar("your query")
-```
+### 🔍 Implementation Access
+- {mcp_prefix}get_implementation("name") - Just the code
+- {mcp_prefix}get_implementation("name", "logical") - Include same-file helpers (max 20)
+- {mcp_prefix}get_implementation("name", "dependencies") - Include imports/calls (max 30)
 
-### 📊 Entity-Specific Analysis (NEW v2.8)
-```python
-# AI summary of specific component
-{server_name.replace('-', '_')}__read_graph(entity="AuthService", mode="smart")
+## Optimal Debugging Workflow
 
-# Focus on specific entity relationships (10-20 vs 300+)
-{server_name.replace('-', '_')}__read_graph(entity="process_login", mode="relationships")
+1. **Fast Discovery**: {mcp_prefix}search_similar("error", entityTypes=["metadata", "debugging_pattern"])
+2. **Focus Analysis**: {mcp_prefix}read_graph(entity="ProblemFunction", mode="smart")
+3. **Code Details**: {mcp_prefix}get_implementation("ProblemFunction", "dependencies")
+4. **Store Solution**: After fixing, add pattern to memory for future
 
-# Find connected entities
-{server_name.replace('-', '_')}__read_graph(entity="validate_token", mode="entities")
-```
+## Memory Power User Shortcuts (Optional)
 
-### 🔧 Code Implementation Access
-```python
-# Just the code (default)
-{server_name.replace('-', '_')}__get_implementation("FunctionName")
+Add these to your CLAUDE.md for enhanced memory usage:
 
-# Include same-file helpers
-{server_name.replace('-', '_')}__get_implementation("FunctionName", "logical")
+- "§m" = Use project memory to find implementations, patterns, and architectural decisions
+- "§d" = **Memory-search first for similar patterns, project memory if there is**, replicate the problem first, understand what is the error/problem ((same parameters and context) if you don't sure, ask!), use entity-specific debugging: search_similar to find target entity, then read_graph(entity="EntityName", mode="smart") for focused analysis (10-20 relations vs 300+), read related project logs, then debug deeper to find root cause (problem-focused, not solution-focused), show plan for fixing, if more info needed add debug prints. Don't fix until you made sure your fix will fix the exact same problem, just present findings (after receiving ok, fix with no code duping, check other possible function first, and do a test in the end to make sure this specific problem with this context and parameter solved).
+- "$dup" = Don't duplicate code, check twice if there's a function that already does something similar prior to implementing what you want (use memory to check relations and best practices).
 
-# Include imports and dependencies
-{server_name.replace('-', '_')}__get_implementation("FunctionName", "dependencies")
-```
-
-## 🎯 Memory-First Development Workflow
-
-**ALWAYS before writing any code:**
-
-1. **Search for existing implementations:**
-   ```python
-   {server_name.replace('-', '_')}__search_similar("what you want to build", entityTypes=["function", "class"])
-   ```
-
-2. **Check for similar patterns:**
-   ```python
-   {server_name.replace('-', '_')}__search_similar("similar functionality", entityTypes=["implementation_pattern"])
-   ```
-
-3. **Find architectural context:**
-   ```python
-   {server_name.replace('-', '_')}__read_graph(entity="RelatedComponent", mode="smart")
-   ```
-
-4. **Get implementation details:**
-   ```python
-   {server_name.replace('-', '_')}__get_implementation("ExistingFunction", "dependencies")
-   ```
-
-## 🐛 Memory-First Debugging Protocol
-
-1. **Fast error discovery:**
-   ```python
-   {server_name.replace('-', '_')}__search_similar("error description", entityTypes=["metadata", "debugging_pattern"])
-   ```
-
-2. **Focus on problem area:**
-   ```python
-   {server_name.replace('-', '_')}__read_graph(entity="ProblemFunction", mode="smart")
-   ```
-
-3. **Get detailed context:**
-   ```python
-   {server_name.replace('-', '_')}__get_implementation("ProblemFunction", "dependencies")
-   ```
-
-4. **Find similar past fixes:**
-   ```python
-   {server_name.replace('-', '_')}__search_similar("similar error", entityTypes=["debugging_pattern"])
-   ```
-
-## 💡 Power User Shortcuts
-
-Add these shortcuts to your workflow:
-
-- **§m** = Use project memory to find implementations, patterns, and architectural decisions
-- **§d** = Memory-search first for similar patterns, then entity-specific debugging with focused analysis
-- **$dup** = Check memory for duplicate code before implementing new functions
-
-## 🚀 Best Practices
-
-- **Use entityTypes filtering** for 90% faster searches
-- **Start with metadata search** for quick overviews
-- **Use entity-specific analysis** to avoid information overload
-- **Check memory before coding** to prevent duplication
-- **Store solution patterns** after fixing issues
+Note: This is my personal workflow that works well with Claude Code Memory.
+Have better shortcuts or workflows? Share them: https://github.com/Durafen/Claude-code-memory/issues
 
 ---
 *Auto-generated by claude-indexer add-mcp for collection: {collection}*
+*MCP Server: {server_name}*
 """
 
         try:
