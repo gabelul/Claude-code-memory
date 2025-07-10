@@ -35,17 +35,13 @@ Claude: I'll help you install the complete Claude Code Memory system...
 **Option 2: Manual Setup**
 See the [Installation section](#installation) below for step-by-step manual installation.
 
-**After installation**, add to your project's `CLAUDE.md` file:
-```markdown
-## Memory Usage Instructions
-You have access to a complete memory of this codebase. Before writing ANY code:
-1. ALWAYS search for existing implementations first
-2. Use memory to find similar patterns and follow them
-3. Check for duplicate functionality before creating new functions
-4. When debugging, search for similar errors that were fixed before
-```
+**That's it!** The `add-mcp` command automatically creates a `CLAUDE.md` file with comprehensive memory instructions and project-specific examples. Claude is now in God Mode and will reference your code like a senior dev who's been on your team for years.
 
-**That's it!** Claude is now in God Mode. Watch it reference your code like a senior dev who's been on your team for years.
+**🎯 What you get automatically:**
+- Complete memory usage instructions in `CLAUDE.md`
+- Project-specific MCP function examples
+- Debugging workflows and power user shortcuts
+- Smart append to existing `CLAUDE.md` files
 
 ## 🎯 What Claude Can Do in God Mode
 
@@ -107,6 +103,9 @@ We're moving fast and breaking things (in a good way). Your feedback helps us pr
 - Added `-p/--project` flag for flexible project path specification
 - Works from any directory, not just project root
 - Auto-detects project directory when using `-p .`
+- **NEW: Automatic CLAUDE.md enhancement** - Creates or appends memory instructions with project-specific examples
+- Smart duplicate detection prevents multiple memory sections
+- `--no-claude-md` flag to skip CLAUDE.md enhancement if needed
 
 **🐛 Configuration Fixes:**
 - Fixed EMBEDDING_MODEL mapping bug for custom OpenAI endpoints
@@ -161,7 +160,7 @@ docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_storage:/qdrant/storage:z 
 # 6. Index your project
 claude-indexer -p /your/project -c my-project
 
-# 7. Add MCP server to Claude (from your project directory)
+# 7. Add MCP server to Claude (automatically creates CLAUDE.md!)
 claude-indexer add-mcp -c my-project -p .
 ```
 
