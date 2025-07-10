@@ -15,7 +15,6 @@ def load_legacy_settings(settings_file: Path) -> Dict[str, Any]:
     key_mapping = {
         'VOYAGE_API_KEY': 'voyage_api_key',
         'EMBEDDING_PROVIDER': 'embedding_provider',
-        'EMBEDDING_MODEL': 'voyage_model',  # Map EMBEDDING_MODEL to voyage_model for voyage provider
         'OPENAI_API_KEY': 'openai_api_key',
         'OPENAI_BASE_URL': 'openai_base_url',
         'QDRANT_API_KEY': 'qdrant_api_key',
@@ -52,7 +51,15 @@ def load_legacy_settings(settings_file: Path) -> Dict[str, Any]:
                             pass
                     
                     # Map uppercase keys to lowercase field names
-                    mapped_key = key_mapping.get(key, key)
+                    if key == 'EMBEDDING_MODEL':
+                        # Handle EMBEDDING_MODEL based on provider
+                        provider = settings.get('embedding_provider', 'openai')
+                        if provider == 'voyage':
+                            mapped_key = 'voyage_model'
+                        else:
+                            mapped_key = 'openai_model'
+                    else:
+                        mapped_key = key_mapping.get(key, key)
                     settings[mapped_key] = value
     except Exception as e:
         logger.warning(f"Failed to load settings.txt: {e}")

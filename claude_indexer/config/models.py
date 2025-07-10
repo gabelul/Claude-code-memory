@@ -29,6 +29,7 @@ class IndexerConfig(BaseModel):
     embedder_type: str = Field(default="openai")
     embedding_provider: str = Field(default="openai")  # For compatibility
     voyage_model: str = Field(default="voyage-3-lite")
+    openai_model: str = Field(default="text-embedding-3-small")
     storage_type: str = Field(default="qdrant")
     
     # Indexing Behavior

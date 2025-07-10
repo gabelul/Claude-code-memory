@@ -95,7 +95,7 @@ def create_embedder_from_config(config) -> Embedder:
         else:  # openai
             provider_config = {
                 "api_key": config.openai_api_key,
-                "model": "text-embedding-3-small",
+                "model": config.openai_model,
             }
             if hasattr(config, 'openai_base_url') and config.openai_base_url:
                 provider_config["base_url"] = config.openai_base_url
