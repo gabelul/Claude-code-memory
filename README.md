@@ -101,6 +101,24 @@ We're moving fast and breaking things (in a good way). Your feedback helps us pr
 - ✅ **All Tests Passing**: 158/158 tests now pass with simplified architecture  
 - ⚡ **Same Performance**: All optimizations preserved (15x incremental updates)
 
+### Recent Improvements & Bug Fixes (v2.8)
+
+**🔧 Enhanced add-mcp Command:**
+- Added `-p/--project` flag for flexible project path specification
+- Works from any directory, not just project root
+- Auto-detects project directory when using `-p .`
+
+**🐛 Configuration Fixes:**
+- Fixed EMBEDDING_MODEL mapping bug for custom OpenAI endpoints
+- Added support for text-embedding-3-large (3072 dimensions)
+- Fixed hardcoded model references in embedder registry
+- Improved custom OpenAI base URL support
+
+**⚡ Performance & Reliability:**
+- Enhanced environment variable precedence and loading
+- Better error handling for configuration mismatches
+- Improved global installation with conflict resolution
+
 ### Migration from v1.x
 **v1.x users upgrading to v2.0:**
 - Remove any `--generate-commands` flags from your scripts
@@ -143,8 +161,8 @@ docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_storage:/qdrant/storage:z 
 # 6. Index your project
 claude-indexer -p /your/project -c my-project
 
-# 7. Add MCP server to Claude
-claude-indexer add-mcp -c my-project
+# 7. Add MCP server to Claude (from your project directory)
+claude-indexer add-mcp -c my-project -p .
 ```
 
 
@@ -168,8 +186,20 @@ EMBEDDING_MODEL=voyage-3-lite  # or voyage-3
 # Add to settings.txt  
 OPENAI_API_KEY=your_openai_key
 EMBEDDING_PROVIDER=openai
-EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_MODEL=text-embedding-3-small  # or text-embedding-3-large (3072-dim)
+
+# Custom OpenAI endpoint support (for OpenAI-compatible APIs)
+OPENAI_BASE_URL=https://your-custom-endpoint.com/v1  # Optional
 ```
+
+**Model Options:**
+- `text-embedding-3-small` - 1536 dimensions, faster, lower cost
+- `text-embedding-3-large` - 3072 dimensions, higher quality, more storage
+
+**Custom Endpoints:**
+- Supports any OpenAI-compatible embedding API
+- Perfect for self-hosted models or alternative providers
+- Automatically handles different vector dimensions
 
 ### Chat Summarization Options
 ```bash
@@ -185,8 +215,11 @@ CHAT_MODEL=gpt-3.5-turbo
 
 **The Easy Way (Recommended):**
 ```bash
-# This command does everything - reads your settings, configures Claude
-claude-indexer add-mcp -c your-project-name
+# From your project directory
+claude-indexer add-mcp -c your-project-name -p .
+
+# Or from any directory
+claude-indexer add-mcp -c your-project-name -p /path/to/project
 ```
 
 **Manual Setup (If You Like Control):**
@@ -444,8 +477,11 @@ Claude: I found the authentication error. Looking at your codebase:
 
 **Option 1: Built-in CLI Command (Recommended)**
 ```bash
-# Add MCP server using integrated command with v2.4 progressive disclosure
-claude-indexer add-mcp -c my-project
+# From your project directory
+claude-indexer add-mcp -c my-project -p .
+
+# Or from any directory
+claude-indexer add-mcp -c my-project -p /path/to/project
 ```
 
 **Option 2: Command Line**
@@ -537,10 +573,15 @@ claude-indexer -p ~/projects/auth-api -c project1
 
 ### 4. Multiple Projects? Multiple Collections
 ```bash
-# Each project gets its own memory
-claude-indexer add-mcp -c frontend-app
-claude-indexer add-mcp -c backend-api
-claude-indexer add-mcp -c mobile-app
+# Each project gets its own memory (run from each project directory)
+claude-indexer add-mcp -c frontend-app -p .
+claude-indexer add-mcp -c backend-api -p .
+claude-indexer add-mcp -c mobile-app -p .
+
+# Or specify paths from anywhere
+claude-indexer add-mcp -c frontend-app -p ~/projects/frontend
+claude-indexer add-mcp -c backend-api -p ~/projects/backend
+claude-indexer add-mcp -c mobile-app -p ~/projects/mobile
 ```
 
 ### 5. What Claude Sees in God Mode
