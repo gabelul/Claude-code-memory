@@ -2,7 +2,7 @@
 
 ⚡ **Transform Claude Code from a talented junior into a 10x senior architect with photographic memory**
 
-🧠 **One command. 30 seconds. Claude becomes omniscient.**
+🧠 **Two commands. 30 seconds. Claude becomes omniscient.**
 
 Stop treating Claude like a goldfish. Give it the superpower of perfect memory and watch it become the senior developer who never forgets a single line of code.
 
@@ -29,19 +29,19 @@ Stop treating Claude like a goldfish. Give it the superpower of perfect memory a
 You: Install Claude Code Memory from https://github.com/Durafen/Claude-code-memory and help me understand how to use it
 
 Claude: I'll help you install the complete Claude Code Memory system...
-[Claude handles everything: clones repos, installs dependencies, configures settings, indexes your project]
+[Claude handles everything: clones repos, installs dependencies, configures settings, indexes your project, and sets up MCP]
 ```
 
 **Option 2: Manual Setup**
 See the [Installation section](#installation) below for step-by-step manual installation.
 
-**That's it!** The `add-mcp` command automatically creates a `CLAUDE.md` file with comprehensive memory instructions and project-specific examples. Claude is now in God Mode and will reference your code like a senior dev who's been on your team for years.
+**That's it!** After indexing your project and configuring the MCP server, Claude gets automatic `CLAUDE.md` instructions and project-specific examples. Claude is now in God Mode and will reference your code like a senior dev who's been on your team for years.
 
-**🎯 What you get automatically:**
-- Complete memory usage instructions in `CLAUDE.md`
-- Project-specific MCP function examples
-- Debugging workflows and power user shortcuts
-- Smart append to existing `CLAUDE.md` files
+**🎯 What you get automatically from the setup:**
+- **Indexing**: Complete semantic analysis of your codebase
+- **MCP Configuration**: Automatic server setup for Claude Code
+- **CLAUDE.md Instructions**: Memory usage guide with project-specific examples
+- **Smart Integration**: Appends to existing CLAUDE.md files without duplication
 
 ## 🎯 What Claude Can Do in God Mode
 
@@ -157,10 +157,10 @@ cd mcp-qdrant-memory && npm install && npm run build && cd ..
 # 5. Start Qdrant
 docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_storage:/qdrant/storage:z qdrant/qdrant
 
-# 6. Index your project
+# 6. Index your project (analyzes your code)
 claude-indexer -p /your/project -c my-project
 
-# 7. Add MCP server to Claude (automatically creates CLAUDE.md!)
+# 7. Configure MCP server (automatically creates CLAUDE.md!)
 claude-indexer add-mcp -c my-project -p .
 ```
 
@@ -214,7 +214,10 @@ CHAT_MODEL=gpt-3.5-turbo
 
 **The Easy Way (Recommended):**
 ```bash
-# From your project directory
+# Step 1: Index your project (analyzes your code)
+claude-indexer -p /your/project -c your-project-name
+
+# Step 2: Configure MCP server (from your project directory)
 claude-indexer add-mcp -c your-project-name -p .
 
 # Or from any directory
@@ -472,24 +475,28 @@ Claude: I found the authentication error. Looking at your codebase:
 
 ## 📋 Adding New Projects
 
-### Step 1: Add MCP Collection
+### Step 1: Index Project and Add MCP Collection
 
-**Option 1: Built-in CLI Command (Recommended)**
+**Option 1: Built-in CLI Commands (Recommended)**
 ```bash
-# From your project directory
-claude-indexer add-mcp -c my-project -p .
+# First: Index your project
+claude-indexer -p /path/to/project -c my-project
 
-# Or from any directory
+# Then: Configure MCP server  
 claude-indexer add-mcp -c my-project -p /path/to/project
 ```
 
 **Option 2: Command Line**
 ```bash
+# Index first (required)
+claude-indexer -p /path/to/project -c my-project
+
+# Then configure MCP manually
 claude mcp add my-project-memory -e OPENAI_API_KEY="YOUR_OPENAI_KEY" -e QDRANT_API_KEY="YOUR_QDRANT_KEY" -e QDRANT_URL="http://localhost:6333" -e QDRANT_COLLECTION_NAME="my-project" -- node "/path/to/memory/mcp-qdrant-memory/dist/index.js"
 ```
 
 **Option 3: Manual JSON Configuration**
-Add to `~/.claude/claude_desktop_config.json`:
+First index your project (`claude-indexer -p /path/to/project -c my-project`), then add to `~/.claude/claude_desktop_config.json`:
 ```json
 "my-project-memory": {
   "command": "node",
@@ -572,14 +579,17 @@ claude-indexer -p ~/projects/auth-api -c project1
 
 ### 4. Multiple Projects? Multiple Collections
 ```bash
-# Each project gets its own memory (run from each project directory)
-claude-indexer add-mcp -c frontend-app -p .
-claude-indexer add-mcp -c backend-api -p .
-claude-indexer add-mcp -c mobile-app -p .
-
-# Or specify paths from anywhere
+# Each project gets its own memory (index + configure MCP)
+# Frontend project
+claude-indexer -p ~/projects/frontend -c frontend-app
 claude-indexer add-mcp -c frontend-app -p ~/projects/frontend
+
+# Backend project  
+claude-indexer -p ~/projects/backend -c backend-api
 claude-indexer add-mcp -c backend-api -p ~/projects/backend
+
+# Mobile project
+claude-indexer -p ~/projects/mobile -c mobile-app
 claude-indexer add-mcp -c mobile-app -p ~/projects/mobile
 ```
 
