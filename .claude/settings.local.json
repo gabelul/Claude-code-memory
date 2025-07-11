@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "mcp__zen__consensus"
+      "mcp__zen__consensus",
+      "WebFetch(domain:github.com)",
+      "Bash(python:*)",
+      "Bash(source:*)"
     ],
     "deny": []
   }

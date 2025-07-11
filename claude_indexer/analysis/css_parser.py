@@ -13,8 +13,15 @@ class CSSParser(TreeSitterParser):
     SUPPORTED_EXTENSIONS = ['.css', '.scss', '.sass']
     
     def __init__(self, config: Dict[str, Any] = None):
-        import tree_sitter_css as tscss
-        super().__init__(tscss, config)
+        # Use tree-sitter-language-pack for comprehensive language support
+        try:
+            from tree_sitter_language_pack import get_language
+            css_language = get_language("css")
+            super().__init__(css_language, config)
+        except ImportError:
+            # Fallback to individual package
+            import tree_sitter_css as tscss
+            super().__init__(tscss, config)
         
     def parse(self, file_path: Path) -> ParserResult:
         """Extract CSS rules, classes, IDs."""

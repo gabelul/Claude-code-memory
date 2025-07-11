@@ -9,9 +9,16 @@ import re
 
 try:
     import tree_sitter
-    import tree_sitter_python as tspython
+    # Use tree-sitter-language-pack for comprehensive language support
+    try:
+        from tree_sitter_language_pack import get_language
+        tspython = get_language("python")
+        TREE_SITTER_AVAILABLE = True
+    except ImportError:
+        # Fallback to individual packages
+        import tree_sitter_python as tspython
+        TREE_SITTER_AVAILABLE = True
     import jedi
-    TREE_SITTER_AVAILABLE = True
 except ImportError:
     TREE_SITTER_AVAILABLE = False
 
@@ -102,9 +109,18 @@ class PythonParser(CodeParser):
     def _initialize_parsers(self):
         """Initialize Tree-sitter and Jedi parsers."""
         try:
-            # Initialize Tree-sitter
-            language = tree_sitter.Language(tspython.language())
-            self._parser = tree_sitter.Parser(language)
+            # Initialize Tree-sitter with language pack or fallback
+            if hasattr(tspython, 'language'):
+                # Individual package (tree_sitter_python)
+                language_capsule = tspython.language()
+                language = tree_sitter.Language(language_capsule)
+                self._parser = tree_sitter.Parser(language)
+            elif hasattr(tspython, '_address'):
+                # Language pack (already a Language object)
+                self._parser = tree_sitter.Parser(tspython)
+            else:
+                # Try direct initialization
+                self._parser = tree_sitter.Parser(tspython)
             
             # Initialize Jedi project
             self._project = jedi.Project(str(self.project_path))

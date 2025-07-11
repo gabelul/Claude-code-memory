@@ -13,8 +13,16 @@ class YAMLParser(TreeSitterParser):
     SUPPORTED_EXTENSIONS = ['.yaml', '.yml']
     
     def __init__(self, config: Dict[str, Any] = None):
-        import tree_sitter_yaml as tsyaml
-        super().__init__(tsyaml, config)
+        # Use tree-sitter-language-pack for comprehensive language support
+        try:
+            from tree_sitter_language_pack import get_language
+            yaml_language = get_language("yaml")
+            super().__init__(yaml_language, config)
+        except ImportError:
+            # Fallback to individual package
+            import tree_sitter_yaml as tsyaml
+            super().__init__(tsyaml, config)
+        
         self.detect_type = config.get('detect_type', True) if config else True
         
     def parse(self, file_path: Path) -> ParserResult:

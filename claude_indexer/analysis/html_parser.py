@@ -13,8 +13,15 @@ class HTMLParser(TreeSitterParser):
     SUPPORTED_EXTENSIONS = ['.html', '.htm']
     
     def __init__(self, config: Dict[str, Any] = None):
-        import tree_sitter_html as tshtml
-        super().__init__(tshtml, config)
+        # Use tree-sitter-language-pack for comprehensive language support
+        try:
+            from tree_sitter_language_pack import get_language
+            html_language = get_language("html")
+            super().__init__(html_language, config)
+        except ImportError:
+            # Fallback to individual package
+            import tree_sitter_html as tshtml
+            super().__init__(tshtml, config)
         
     def parse(self, file_path: Path) -> ParserResult:
         """Extract HTML structure, IDs, classes, components."""

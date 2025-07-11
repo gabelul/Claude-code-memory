@@ -15,8 +15,16 @@ class JSONParser(TreeSitterParser):
     SUPPORTED_EXTENSIONS = ['.json']
     
     def __init__(self, config: Dict[str, Any] = None):
-        import tree_sitter_json as tsjson
-        super().__init__(tsjson, config)
+        # Use tree-sitter-language-pack for comprehensive language support
+        try:
+            from tree_sitter_language_pack import get_language
+            json_language = get_language("json")
+            super().__init__(json_language, config)
+        except ImportError:
+            # Fallback to individual package
+            import tree_sitter_json as tsjson
+            super().__init__(tsjson, config)
+        
         self.special_files = config.get('special_files', ['package.json', 'tsconfig.json', 'composer.json']) if config else ['package.json', 'tsconfig.json', 'composer.json']
         
     def parse(self, file_path: Path, batch_callback=None) -> ParserResult:

@@ -24,9 +24,17 @@ class TreeSitterParser(CodeParser):
             language_capsule = language_module.language()
             language = Language(language_capsule)
             self.parser = Parser(language)
-        else:
-            # For direct language objects
+        elif hasattr(language_module, '_address'):
+            # For language pack objects (already Language instances)
             self.parser = Parser(language_module)
+        else:
+            # For direct language objects, wrap in Language
+            try:
+                language = Language(language_module)
+                self.parser = Parser(language)
+            except Exception:
+                # If that fails, try using it directly
+                self.parser = Parser(language_module)
     
     def can_parse(self, file_path: Path) -> bool:
         """Check if this parser can handle the file."""
