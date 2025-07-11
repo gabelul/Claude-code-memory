@@ -55,22 +55,50 @@ class Embedder(ABC):
         """Get maximum token limit for input text."""
         pass
     
+    def get_accurate_token_count(self, text: str) -> int:
+        """Get accurate token count using tiktoken when available."""
+        try:
+            import tiktoken
+            # Use cl100k_base encoding (used by text-embedding-3-large)
+            encoding = tiktoken.get_encoding("cl100k_base")
+            return len(encoding.encode(text))
+        except ImportError:
+            # Fallback to conservative approximation for code
+            return int(len(text) / 2.5)
+    
     def truncate_text(self, text: str, max_tokens: Optional[int] = None) -> str:
-        """Truncate text to fit within token limits."""
+        """Truncate text to fit within token limits using accurate token counting."""
         if max_tokens is None:
             max_tokens = self.get_max_tokens()
         
-        # Simple approximation: ~4 characters per token for English
-        max_chars = max_tokens * 4
+        # Leave some buffer for safety (200 tokens)
+        target_tokens = max_tokens - 200
         
-        if len(text) <= max_chars:
+        # Check if text is already within limits
+        current_tokens = self.get_accurate_token_count(text)
+        if current_tokens <= target_tokens:
             return text
         
+        # Binary search for optimal truncation point
+        left, right = 0, len(text)
+        best_length = 0
+        
+        while left <= right:
+            mid = (left + right) // 2
+            test_text = text[:mid]
+            token_count = self.get_accurate_token_count(test_text)
+            
+            if token_count <= target_tokens:
+                best_length = mid
+                left = mid + 1
+            else:
+                right = mid - 1
+        
         # Truncate at word boundary when possible
-        truncated = text[:max_chars]
+        truncated = text[:best_length]
         last_space = truncated.rfind(' ')
         
-        if last_space > max_chars * 0.8:  # Don't lose too much content
+        if last_space > best_length * 0.8:  # Don't lose too much content
             truncated = truncated[:last_space]
         
         return truncated + "..."
