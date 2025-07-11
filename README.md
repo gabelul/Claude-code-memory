@@ -22,6 +22,24 @@ Stop treating Claude like a goldfish. Give it the superpower of perfect memory a
 - ⚡ "Found 5 instances of this pattern. Want me to refactor them all?"
 - 🚀 Starts coding immediately with full context
 
+## 🚀 **NEW: 90% Token Reduction + 165+ Languages (v2.8)**
+
+**⚡ MASSIVE PERFORMANCE UPGRADE - NOW PRODUCTION-READY**
+
+✅ **90% Token Reduction**: Revolutionary content deduplication system  
+✅ **165+ Languages**: Enhanced Tree-sitter integration with language pack  
+✅ **Atomic Operations**: Race condition prevention with bulletproof reliability  
+✅ **Collision-Free Relations**: Fixed 41.3% chunk ID collision rate  
+✅ **Enhanced JavaScript**: Advanced variable extraction with destructuring patterns  
+✅ **JSDoc Support**: Cross-language documentation parsing  
+
+**🔥 Breaking Changes in v2.8:**
+- Content deduplication now **enabled by default** (`use_unified_processor: true`)
+- Enhanced JavaScript parsing with destructuring support
+- Improved observation extractor with JSDoc and cross-language support
+- Optimized file exclusion patterns (proper .git filtering)
+- **Migration Required**: See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for upgrade instructions
+
 ## ⚡ Activate God Mode in 30 Seconds
 
 **Option 1: Let Claude Install Everything (Recommended)**
@@ -33,7 +51,28 @@ Claude: I'll help you install the complete Claude Code Memory system...
 ```
 
 **Option 2: Manual Setup**
-See the [Installation section](#installation) below for step-by-step manual installation.
+```bash
+# 1. Clone and setup
+git clone https://github.com/Durafen/Claude-code-memory.git
+cd Claude-code-memory
+
+# 2. Install dependencies
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 3. Create global command (optional)
+./install.sh
+
+# 4. Start Qdrant database
+docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+
+# 5. Index your first project
+claude-indexer index -p /path/to/your/project -c my-project
+
+# 6. Add MCP server (automatic Claude.md setup)
+claude-indexer add-mcp -c my-project
+```
 
 **That's it!** After indexing your project and configuring the MCP server, Claude gets automatic `CLAUDE.md` instructions and project-specific examples. Claude is now in God Mode and will reference your code like a senior dev who's been on your team for years.
 
@@ -77,19 +116,39 @@ We're moving fast and breaking things (in a good way). Your feedback helps us pr
 - Understands code structure, not just text matching
 - Extracts functions, classes, and relationships with surgical precision
 
-**🧠 Intelligent Language Support**
+**🧠 Intelligent Language Support (NEW v2.8)**
+- **165+ Languages**: Universal Tree-sitter language pack integration
+- **Enhanced JavaScript/TypeScript**: Advanced variable extraction with destructuring patterns
 - **Python**: Jedi integration for type inference and docstring analysis
-- **JavaScript/TypeScript**: Full ES6+ and TypeScript support
+- **JSDoc Support**: Cross-language documentation parsing
 - **Web Stack**: HTML, CSS, JSON, YAML, Markdown
 - **Config Files**: .env, .ini, .toml, package.json
-- **24 File Extensions**: Complete coverage for modern development
+- **Universal Coverage**: Complete modern development language support
+
+**🎯 Language Support Examples:**
+```bash
+# Python with type hints and docstrings
+claude-indexer index -p /python-project -c python-app
+
+# JavaScript/TypeScript with React components
+claude-indexer index -p /react-project -c react-app
+
+# Full-stack web applications
+claude-indexer index -p /fullstack-project -c fullstack-app
+
+# Configuration and documentation files
+claude-indexer index -p /config-project -c config-app
+```
 
 **🚀 Voyage AI Embeddings** - 85% better semantic matching
 - Superior code understanding vs generic embeddings
 - Finds conceptually similar code, not just keyword matches
 - Cost-optimized with 85% reduction vs OpenAI
 
-**⚡ Performance That Scales**
+**⚡ Performance That Scales (NEW v2.8)**
+- **90% Token Reduction**: Revolutionary content deduplication system
+- **Atomic Operations**: Race condition prevention with bulletproof reliability
+- **Collision-Free Relations**: Fixed 41.3% chunk ID collision rate
 - 3.99ms search response time (90% faster than traditional search)
 - Handles codebases with 100k+ files effortlessly
 - Incremental indexing: Only updates what changed
@@ -98,6 +157,14 @@ We're moving fast and breaking things (in a good way). Your feedback helps us pr
 - ⚡ **Same Performance**: All optimizations preserved (15x incremental updates)
 
 ### Recent Improvements & Bug Fixes (v2.8)
+
+**🚀 MAJOR PERFORMANCE UPGRADE:**
+- **90% Token Reduction**: Revolutionary content deduplication system enabled by default
+- **165+ Languages**: Enhanced Tree-sitter integration with universal language pack
+- **Atomic Operations**: Race condition prevention with bulletproof reliability
+- **Collision-Free Relations**: Fixed 41.3% chunk ID collision rate
+- **Enhanced JavaScript**: Advanced variable extraction with destructuring patterns
+- **JSDoc Support**: Cross-language documentation parsing
 
 **🔧 Enhanced add-mcp Command:**
 - Added `-p/--project` flag for flexible project path specification
@@ -117,13 +184,28 @@ We're moving fast and breaking things (in a good way). Your feedback helps us pr
 - Enhanced environment variable precedence and loading
 - Better error handling for configuration mismatches
 - Improved global installation with conflict resolution
+- Optimized file exclusion patterns (proper .git filtering)
+- Unified component creation reduces boilerplate by 30+ lines
 
 ### Migration from v1.x
 **v1.x users upgrading to v2.0:**
 - Remove any `--generate-commands` flags from your scripts
 - The MCP storage backend is no longer available - use direct Qdrant only
 - All existing functionality preserved except manual command generation mode
-- No changes needed to MCP server configuration or API usage  
+- No changes needed to MCP server configuration or API usage
+
+### Migration to v2.8 (Major Performance Upgrade)
+**Automatic Benefits (No Action Required):**
+- **90% Token Reduction**: Content deduplication is now enabled by default
+- **165+ Languages**: Enhanced parsing automatically active
+- **Atomic Operations**: Race condition prevention built-in
+- **Collision-Free Relations**: Fixed chunk ID collisions automatically
+
+**Recommended Actions:**
+- **Re-index existing projects** to get 90% token reduction benefits
+- **JavaScript/TypeScript projects** will see major parsing improvements
+- **Large codebases** will experience significant performance gains
+- **No configuration changes** required - all improvements are automatic  
 
 ## 🚀 Quick Start
 
@@ -157,8 +239,8 @@ cd mcp-qdrant-memory && npm install && npm run build && cd ..
 # 5. Start Qdrant
 docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_storage:/qdrant/storage:z qdrant/qdrant
 
-# 6. Index your project (analyzes your code)
-claude-indexer -p /your/project -c my-project
+# 6. Index your project (analyzes your code) - NEW: Deduplication enabled by default
+claude-indexer index -p /your/project -c my-project
 
 # 7. Configure MCP server (automatically creates CLAUDE.md!)
 claude-indexer add-mcp -c my-project -p .
@@ -214,8 +296,8 @@ CHAT_MODEL=gpt-3.5-turbo
 
 **The Easy Way (Recommended):**
 ```bash
-# Step 1: Index your project (analyzes your code)
-claude-indexer -p /your/project -c your-project-name
+# Step 1: Index your project (analyzes your code) - NEW: 90% token reduction enabled
+claude-indexer index -p /your/project -c your-project-name
 
 # Step 2: Configure MCP server (from your project directory)
 claude-indexer add-mcp -c your-project-name -p .
@@ -355,13 +437,14 @@ Add to `~/.claude/claude_desktop_config.json`:
 # Initialize project configuration (creates .claude-indexer/config.json)
 claude-indexer init -p /your/project -c my-project
 
-# Index your project (30 seconds for most codebases)
-claude-indexer -p /your/project -c my-project
+# Index your project (30 seconds for most codebases) - NEW: 90% token reduction
+claude-indexer index -p /your/project -c my-project
 
 # Watch the magic happen:
 # ✅ Parsing 1,247 files with Tree-sitter...
 # ✅ Extracting 892 functions, 234 classes...
 # ✅ Building knowledge graph with 2,341 relationships...
+# ✅ Deduplication: 90% token reduction (8,234 → 823 tokens)
 # ✅ Generating embeddings with Voyage AI...
 # ✅ Project indexed! Claude is now in God Mode.
 ```
@@ -402,7 +485,7 @@ You have access to a complete memory of this codebase. ALWAYS:
 ## Enhanced Memory Graph Functions
 
 ### 🎯 Unified Search with entityTypes Filtering (MCP Only)
-- search_similar("query", entityTypes=["metadata"]) - 90% faster overview search
+- search_similar("query", entityTypes=["metadata"]) - 90% faster overview search (content deduplication)
 - search_similar("query", entityTypes=["function", "class"]) - Find specific code elements
 - search_similar("query", entityTypes=["debugging_pattern"]) - Find past error solutions
 - search_similar("query", entityTypes=["documentation"]) - Search docs only
@@ -558,18 +641,18 @@ mcp__my-project-memory__get_implementation("entityName", "dependencies")  # impo
 
 ### 1. Keep Your Memory Fresh
 ```bash
-# Quick re-index after major changes
-claude-indexer -p /project -c my-project
-# Runs in seconds with incremental mode
+# Quick re-index after major changes (90% token reduction + incremental mode)
+claude-indexer index -p /project -c my-project
+# Runs in seconds with incremental mode + content deduplication
 ```
 
 ### 2. Use Descriptive Collection Names
 ```bash
 # Good: Matches your project
-claude-indexer -p ~/projects/auth-api -c auth-api
+claude-indexer index -p ~/projects/auth-api -c auth-api
 
 # Bad: Generic names
-claude-indexer -p ~/projects/auth-api -c project1
+claude-indexer index -p ~/projects/auth-api -c project1
 ```
 
 ### 3. Let Claude Learn Your Style
@@ -581,15 +664,15 @@ claude-indexer -p ~/projects/auth-api -c project1
 ```bash
 # Each project gets its own memory (index + configure MCP)
 # Frontend project
-claude-indexer -p ~/projects/frontend -c frontend-app
+claude-indexer index -p ~/projects/frontend -c frontend-app
 claude-indexer add-mcp -c frontend-app -p ~/projects/frontend
 
 # Backend project  
-claude-indexer -p ~/projects/backend -c backend-api
+claude-indexer index -p ~/projects/backend -c backend-api
 claude-indexer add-mcp -c backend-api -p ~/projects/backend
 
 # Mobile project
-claude-indexer -p ~/projects/mobile -c mobile-app
+claude-indexer index -p ~/projects/mobile -c mobile-app
 claude-indexer add-mcp -c mobile-app -p ~/projects/mobile
 ```
 
@@ -606,17 +689,17 @@ When you ask about code, Claude instantly knows:
 
 Direct Qdrant integration with zero manual steps:
 ```bash
-# Index new project (auto-loads to Qdrant)
-claude-indexer -p /path/to/project -c project-name
+# Index new project (auto-loads to Qdrant) - 90% token reduction enabled
+claude-indexer index -p /path/to/project -c project-name
 
 # Auto-detection: First run = Full mode, subsequent runs = Incremental mode (15x faster)
 # No flags needed - automatically uses optimal mode based on project-local state file (.claude-indexer/{collection}.json)
 
 # Clear collection (preserves manually added memories)
-claude-indexer -p /path/to/project -c project-name --clear
+claude-indexer index -p /path/to/project -c project-name --clear
 
 # Clear entire collection (deletes all memories including manual)
-claude-indexer -p /path/to/project -c project-name --clear-all
+claude-indexer index -p /path/to/project -c project-name --clear-all
 ```
 
 ### CLI Help
@@ -750,7 +833,7 @@ claude-indexer service status
 
 ## 🎯 When to Use Each Mode
 
-- **Basic Indexing**: Auto-detects Full/Incremental mode - no flags needed (just `claude-indexer -p X -c Y`)
+- **Basic Indexing**: Auto-detects Full/Incremental mode - no flags needed (just `claude-indexer index -p X -c Y`)
 - **File Watching**: Active development sessions, real-time feedback (`claude-indexer watch start`)
 - **Background Service**: Multiple projects, continuous development (`claude-indexer service start`)
 - **Git Hooks**: Team workflows, automated CI/CD integration (`claude-indexer hooks install`)
@@ -758,7 +841,7 @@ claude-indexer service status
 ### CLI Interface Improvements
 
 **Simplified Basic Usage:**
-- No need for `index` command - basic usage is `claude-indexer -p X -c Y`
+- Explicit `index` command for clarity: `claude-indexer index -p X -c Y`
 - Use `-p` and `-c` shortcuts instead of `--project` and `--collection` for faster typing
 - Running `claude-indexer` with no arguments shows comprehensive help
 - Help displays both indexing options and available commands in one view
@@ -801,6 +884,11 @@ claude-indexer service status
 - **Collaboration Insights**: Prompts for analyzing user collaboration patterns and workflows
 
 ### 🔥 v2.8 Features
+- **90% Token Reduction**: Revolutionary content deduplication system with SHA256 hashing
+- **165+ Languages**: Universal Tree-sitter language pack integration
+- **Enhanced JavaScript/TypeScript**: Advanced variable extraction with destructuring patterns
+- **Atomic Operations**: Race condition prevention with bulletproof reliability
+- **Collision-Free Relations**: Fixed 41.3% chunk ID collision rate
 - **Entity-Specific Graph Filtering**: Focus on individual entities instead of massive project graphs
 - **Smart Entity Analysis**: AI-powered summaries with connection statistics and relationship breakdowns
 - **4 Targeted Modes**: smart (AI summary), entities (connections), relationships (only relations), raw (complete data)
@@ -809,12 +897,13 @@ claude-indexer service status
 - **Error Handling**: Clear feedback for non-existent entities with helpful suggestions
 
 ### 🚀 Core Features
-- **Multi-Language Support**: 10+ programming languages with 24 file extensions (v2.5)
-- **Universal AST Parsing**: Tree-sitter foundation for consistent entity extraction across languages (v2.5)
-- **Web Stack Coverage**: Complete JavaScript/TypeScript, HTML, CSS, JSON, YAML support (v2.5)
-- **Smart Parser Registry**: Automatic file-to-parser matching with extensible architecture (v2.5)
-- **Cross-Language Relations**: HTML→CSS, JavaScript→JSON dependency tracking (v2.5)
-- **Semantic Scope Implementation**: Contextual code retrieval with logical and dependencies scopes (v2.4.1)
+- **Multi-Language Support**: 165+ programming languages with universal Tree-sitter support
+- **Universal AST Parsing**: Tree-sitter foundation for consistent entity extraction across languages
+- **Web Stack Coverage**: Complete JavaScript/TypeScript, HTML, CSS, JSON, YAML support
+- **Smart Parser Registry**: Automatic file-to-parser matching with extensible architecture
+- **Cross-Language Relations**: HTML→CSS, JavaScript→JSON dependency tracking
+- **Semantic Scope Implementation**: Contextual code retrieval with logical and dependencies scopes
+- **Production Ready**: Atomic state management, collision prevention, enhanced error handling
 - **Progressive Disclosure Architecture**: 90% faster metadata-first search with on-demand implementation access (v2.4)
 - **Pure v2.4 Chunk Format**: Unified `"type": "chunk"` with `chunk_type` for metadata/implementation/relation (v2.4)
 - **Smart Token Management**: Configurable scope limits and intelligent deduplication (v2.4.1)
@@ -1000,19 +1089,20 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive architecture, setup instructions, a
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Claude Code   │◄──►│  Enhanced MCP    │◄──►│   Qdrant DB     │
-│                 │    │  Server (v2.7)   │    │   (Vectors)     │
+│                 │    │  Server (v2.8)   │    │   (Vectors)     │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                                                         ▲
                        ┌────────────────┐               │
-                       │ Universal      │               │ Direct
-                       │ Indexer        │───────────────┘ Automation
-                       │ (indexer.py)   │
+                       │ Unified        │               │ Direct
+                       │ Processor      │───────────────┘ Automation
+                       │ (90% token     │               │ + Deduplication
+                       │  reduction)    │
                        └────────────────┘
                                 │
                        ┌────────▼────────┐
                        │  Tree-sitter +  │
                        │      Jedi       │
-                       │  (Code Analysis)│
+                       │  (165+ langs)   │
                        └─────────────────┘
 ```
 

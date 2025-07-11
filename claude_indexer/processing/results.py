@@ -17,13 +17,14 @@ class ProcessingResult:
     points_created: List[Any] = field(default_factory=list)
     
     @classmethod
-    def success_result(cls, items_processed: int = 0, items_skipped: int = 0, 
+    def success_result(cls, items_processed: int = 0, items_skipped: int = 0, items_failed: int = 0,
                       cost_data: Dict[str, Any] = None, points_created: List[Any] = None) -> 'ProcessingResult':
         """Create a successful processing result."""
         return cls(
             success=True,
             items_processed=items_processed,
             items_skipped=items_skipped,
+            items_failed=items_failed,
             cost_data=cost_data or {},
             points_created=points_created or []
         )

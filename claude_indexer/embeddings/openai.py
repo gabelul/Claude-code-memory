@@ -98,9 +98,8 @@ class OpenAIEmbedder(RetryableEmbedder):
                 time.sleep(sleep_time)
     
     def _estimate_tokens(self, text: str) -> int:
-        """Estimate token count for text."""
-        # Simple approximation: ~4 characters per token for English
-        return max(1, len(text) // 4)
+        """Estimate token count for text using accurate tiktoken counting."""
+        return self.get_accurate_token_count(text)
     
     def _calculate_cost(self, token_count: int) -> float:
         """Calculate estimated cost for token count."""
@@ -180,7 +179,21 @@ class OpenAIEmbedder(RetryableEmbedder):
         
         def _embed():
             self._check_rate_limits(estimated_tokens)
-            self.logger.debug(f"Sending text to OpenAI for embedding (model: {self.model}, tokens: {estimated_tokens})")
+            
+            # Enhanced token count logging for debugging
+            token_counts = [self.get_accurate_token_count(text) for text in truncated_texts]
+            max_tokens_in_batch = max(token_counts)
+            avg_tokens_in_batch = sum(token_counts) / len(token_counts)
+            
+            self.logger.debug(f"📊 Batch stats: {len(truncated_texts)} texts, est_tokens: {estimated_tokens}, max: {max_tokens_in_batch}, avg: {avg_tokens_in_batch:.1f}")
+            
+            # Log oversized content with more detail
+            oversized_count = sum(1 for t in token_counts if t > 7500)  # Getting close to limit
+            if oversized_count > 0:
+                self.logger.info(f"📏 {oversized_count}/{len(truncated_texts)} texts are large (>7500 tokens)")
+            
+            if max_tokens_in_batch > 8000:  # Very close to limit
+                self.logger.warning(f"⚠️ Large content detected: {max_tokens_in_batch} tokens (limit: 8192)")
             
             response = self.client.embeddings.create(
                 model=self.model,
@@ -195,6 +208,11 @@ class OpenAIEmbedder(RetryableEmbedder):
             usage = response.usage
             actual_tokens = usage.total_tokens
             self._token_counts.append((current_time, actual_tokens))
+            
+            # Log successful batch processing
+            self.logger.debug(f"✅ Batch processed successfully: {actual_tokens} actual tokens vs {estimated_tokens} estimated")
+            if abs(actual_tokens - estimated_tokens) > estimated_tokens * 0.2:  # 20% difference
+                self.logger.debug(f"📊 Token estimation variance: {((actual_tokens - estimated_tokens) / estimated_tokens * 100):.1f}%")
             
             # Create results for each text
             processing_time = time.time() - start_time

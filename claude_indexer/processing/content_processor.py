@@ -98,28 +98,53 @@ class ContentProcessor(ContentHashMixin, ABC):
         
         # Extract content for embedding
         texts = []
+        oversized_count = 0
+        
         for item in items:
             if hasattr(item, 'content'):
-                texts.append(item.content)
+                content = item.content
             elif hasattr(item, 'observations') and item.observations:
-                texts.append('\n'.join(item.observations))
+                content = '\n'.join(item.observations)
             else:
-                texts.append(str(item))
+                content = str(item)
+            
+            # Validate content size before adding
+            token_count = self._get_token_count(content)
+            if token_count > 15000:  # Much larger than 8192 limit - likely needs intervention
+                oversized_count += 1
+                if self.logger:
+                    item_name_str = getattr(item, 'entity_name', getattr(item, 'name', f'{item_name}_{len(texts)}'))
+                    self.logger.warning(f"⚠️ Large content detected: {item_name_str} = {token_count} tokens (will be truncated)")
+            
+            texts.append(content)
         
         if self.logger:
             self.logger.debug(f"🔤 Generating embeddings for {len(texts)} {item_name} texts")
+            if oversized_count > 0:
+                self.logger.info(f"📏 {oversized_count}/{len(texts)} {item_name} items require truncation")
         
         # Generate embeddings
         embedding_results = self.embedder.embed_batch(texts)
         
         if self.logger:
             successful = sum(1 for r in embedding_results if r.success)
+            failed = len(embedding_results) - successful
             self.logger.debug(f"✅ {item_name.title()} embeddings completed: {successful}/{len(embedding_results)} successful")
+            if failed > 0:
+                self.logger.warning(f"❌ {failed} {item_name} embeddings failed")
         
         # Collect cost data
         cost_data = self._collect_embedding_cost_data(embedding_results)
         
-        return embedding_results, cost_data    
+        return embedding_results, cost_data
+    
+    def _get_token_count(self, text: str) -> int:
+        """Get accurate token count for text."""
+        if hasattr(self.embedder, 'get_accurate_token_count'):
+            return self.embedder.get_accurate_token_count(text)
+        else:
+            # Fallback to conservative approximation
+            return int(len(text) / 2.5)    
     
     def create_points(self, items: List, embedding_results: List, collection_name: str, 
                      point_creation_method: str = 'create_chunk_point') -> Tuple[List, int]:

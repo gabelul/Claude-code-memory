@@ -71,13 +71,19 @@ class Embedder(ABC):
         if max_tokens is None:
             max_tokens = self.get_max_tokens()
         
-        # Leave some buffer for safety (200 tokens)
-        target_tokens = max_tokens - 200
+        # More conservative buffer for safety (400 tokens)
+        # This accounts for variations in token counting and API processing
+        target_tokens = max_tokens - 400
         
         # Check if text is already within limits
         current_tokens = self.get_accurate_token_count(text)
         if current_tokens <= target_tokens:
             return text
+        
+        # For very large content, use a more aggressive initial reduction
+        if current_tokens > max_tokens * 2:
+            # Start with a rough 50% reduction for very large content
+            text = text[:len(text) // 2]
         
         # Binary search for optimal truncation point
         left, right = 0, len(text)
@@ -94,12 +100,24 @@ class Embedder(ABC):
             else:
                 right = mid - 1
         
+        # Ensure we have a valid length
+        if best_length == 0:
+            # Fallback: use a very conservative character-based truncation
+            best_length = min(len(text), target_tokens * 2)  # ~2 chars per token conservative estimate
+        
         # Truncate at word boundary when possible
         truncated = text[:best_length]
         last_space = truncated.rfind(' ')
         
-        if last_space > best_length * 0.8:  # Don't lose too much content
+        # Be more conservative about word boundary truncation
+        if last_space > best_length * 0.9:  # Only truncate at word boundary if we don't lose much
             truncated = truncated[:last_space]
+        
+        # Double-check the final result
+        final_tokens = self.get_accurate_token_count(truncated + "...")
+        if final_tokens > target_tokens:
+            # Emergency fallback: more aggressive truncation
+            truncated = truncated[:len(truncated) // 2]
         
         return truncated + "..."
 
