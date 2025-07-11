@@ -6,7 +6,8 @@
       "Bash(python:*)",
       "Bash(source:*)",
       "Bash(git ls-tree:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(claude-indexer index:*)"
     ],
     "deny": []
   }

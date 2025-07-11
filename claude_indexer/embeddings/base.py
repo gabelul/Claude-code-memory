@@ -71,9 +71,13 @@ class Embedder(ABC):
         if max_tokens is None:
             max_tokens = self.get_max_tokens()
         
-        # More conservative buffer for safety (400 tokens)
-        # This accounts for variations in token counting and API processing
-        target_tokens = max_tokens - 400
+        # More aggressive truncation - target 6000 tokens for safety
+        # This provides a large buffer to prevent any token limit issues
+        # while still preserving substantial content
+        if max_tokens > 6000:
+            target_tokens = 6000  # Much more conservative target
+        else:
+            target_tokens = max_tokens - 400  # Fallback for smaller limits
         
         # Check if text is already within limits
         current_tokens = self.get_accurate_token_count(text)

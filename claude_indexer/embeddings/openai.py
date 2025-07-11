@@ -170,34 +170,99 @@ class OpenAIEmbedder(RetryableEmbedder):
         return results
     
     def _embed_batch(self, texts: List[str]) -> List[EmbeddingResult]:
-        """Embed a single batch of texts."""
+        """Embed a single batch of texts with smart batch splitting."""
         start_time = time.time()
         
         # Truncate texts if necessary
         truncated_texts = [self.truncate_text(text) for text in texts]
-        estimated_tokens = sum(self._estimate_tokens(text) for text in truncated_texts)
+        
+        # Validate and split batch if necessary
+        validated_batches = self._validate_and_split_batch(truncated_texts)
+        
+        all_results = []
+        for batch_texts in validated_batches:
+            batch_results = self._embed_single_batch(batch_texts, start_time)
+            all_results.extend(batch_results)
+        
+        return all_results
+    
+    def _validate_and_split_batch(self, texts: List[str]) -> List[List[str]]:
+        """Validate batch token count and split if necessary."""
+        # Calculate accurate token counts for all texts
+        token_counts = [self.get_accurate_token_count(text) for text in texts]
+        total_tokens = sum(token_counts)
+        max_single_token = max(token_counts) if token_counts else 0
+        
+        # Set conservative batch limits
+        max_batch_tokens = 40000  # Conservative total batch limit
+        max_single_text_tokens = 7500  # Conservative individual text limit (well below 8192)
+        
+        self.logger.debug(f"📊 Batch validation: {len(texts)} texts, total_tokens: {total_tokens}, max_single: {max_single_token}")
+        
+        # Check for oversized individual texts and re-truncate if needed
+        safe_texts = []
+        for i, (text, token_count) in enumerate(zip(texts, token_counts)):
+            if token_count > max_single_text_tokens:
+                self.logger.warning(f"📏 Re-truncating oversized text (idx {i}): {token_count} → {max_single_text_tokens} tokens")
+                # More aggressive truncation
+                re_truncated = self.truncate_text(text, max_single_text_tokens + 200)  # Small buffer
+                safe_texts.append(re_truncated)
+            else:
+                safe_texts.append(text)
+        
+        # If total batch is within limits, return as single batch
+        if total_tokens <= max_batch_tokens:
+            return [safe_texts]
+        
+        # Split into multiple batches
+        self.logger.info(f"🔄 Splitting large batch: {total_tokens} tokens → multiple smaller batches")
+        batches = []
+        current_batch = []
+        current_tokens = 0
+        
+        for text in safe_texts:
+            text_tokens = self.get_accurate_token_count(text)
+            
+            # If adding this text would exceed batch limit, start new batch
+            if current_tokens + text_tokens > max_batch_tokens and current_batch:
+                batches.append(current_batch)
+                current_batch = [text]
+                current_tokens = text_tokens
+            else:
+                current_batch.append(text)
+                current_tokens += text_tokens
+        
+        # Add final batch
+        if current_batch:
+            batches.append(current_batch)
+        
+        self.logger.info(f"📦 Split into {len(batches)} batches with max {max(sum(self.get_accurate_token_count(t) for t in batch) for batch in batches)} tokens each")
+        
+        return batches
+    
+    def _embed_single_batch(self, texts: List[str], start_time: float) -> List[EmbeddingResult]:
+        """Embed a single validated batch of texts."""
+        estimated_tokens = sum(self._estimate_tokens(text) for text in texts)
         
         def _embed():
             self._check_rate_limits(estimated_tokens)
             
-            # Enhanced token count logging for debugging
-            token_counts = [self.get_accurate_token_count(text) for text in truncated_texts]
+            # Final token validation before API call
+            token_counts = [self.get_accurate_token_count(text) for text in texts]
             max_tokens_in_batch = max(token_counts)
-            avg_tokens_in_batch = sum(token_counts) / len(token_counts)
+            total_tokens = sum(token_counts)
+            avg_tokens_in_batch = total_tokens / len(token_counts)
             
-            self.logger.debug(f"📊 Batch stats: {len(truncated_texts)} texts, est_tokens: {estimated_tokens}, max: {max_tokens_in_batch}, avg: {avg_tokens_in_batch:.1f}")
+            self.logger.debug(f"📊 Final batch stats: {len(texts)} texts, total: {total_tokens}, max: {max_tokens_in_batch}, avg: {avg_tokens_in_batch:.1f}")
             
-            # Log oversized content with more detail
-            oversized_count = sum(1 for t in token_counts if t > 7500)  # Getting close to limit
-            if oversized_count > 0:
-                self.logger.info(f"📏 {oversized_count}/{len(truncated_texts)} texts are large (>7500 tokens)")
-            
-            if max_tokens_in_batch > 8000:  # Very close to limit
-                self.logger.warning(f"⚠️ Large content detected: {max_tokens_in_batch} tokens (limit: 8192)")
+            # Emergency check - should not happen with validation
+            if max_tokens_in_batch > 8000:
+                self.logger.error(f"🚨 EMERGENCY: Oversized text detected after validation: {max_tokens_in_batch} tokens")
+                raise ValueError(f"Text exceeds token limit after validation: {max_tokens_in_batch} tokens")
             
             response = self.client.embeddings.create(
                 model=self.model,
-                input=truncated_texts,
+                input=texts,
                 encoding_format="float"
             )
             
@@ -236,19 +301,56 @@ class OpenAIEmbedder(RetryableEmbedder):
         try:
             return self._embed_with_retry(_embed)
         except Exception as e:
-            # Return error results for all texts
             error_msg = str(e)
-            self.logger.error(f"❌ Error embedding batch with OpenAI: {error_msg}")
-            return [
-                EmbeddingResult(
+            self.logger.warning(f"⚠️ Batch embedding failed: {error_msg}")
+            
+            # Check if this is a token limit error that requires individual retry
+            if "maximum context length" in error_msg.lower() or "token" in error_msg.lower():
+                self.logger.info(f"🔄 Attempting individual text embedding fallback for {len(texts)} texts")
+                return self._embed_individual_fallback(texts, start_time)
+            else:
+                # For other errors, return error results for all texts
+                self.logger.error(f"❌ Non-recoverable embedding error: {error_msg}")
+                return [
+                    EmbeddingResult(
+                        text=text,
+                        embedding=[],
+                        model=self.model,
+                        processing_time=0.0,
+                        error=error_msg
+                    )
+                    for text in texts
+                ]
+    
+    def _embed_individual_fallback(self, texts: List[str], start_time: float) -> List[EmbeddingResult]:
+        """Fallback to individual text embedding when batch fails."""
+        results = []
+        successful = 0
+        failed = 0
+        
+        for i, text in enumerate(texts):
+            try:
+                # Use single text embedding with more aggressive truncation
+                individual_result = self.embed_text(text)
+                results.append(individual_result)
+                if individual_result.success:
+                    successful += 1
+                else:
+                    failed += 1
+            except Exception as e:
+                failed += 1
+                error_msg = str(e)
+                self.logger.warning(f"❌ Individual embedding failed for text {i+1}/{len(texts)}: {error_msg}")
+                results.append(EmbeddingResult(
                     text=text,
                     embedding=[],
                     model=self.model,
                     processing_time=0.0,
                     error=error_msg
-                )
-                for text in texts
-            ]
+                ))
+        
+        self.logger.info(f"🎯 Individual fallback completed: {successful}/{len(texts)} successful, {failed} failed")
+        return results
     
     def get_model_info(self) -> Dict[str, Any]:
         """Get information about the embedding model."""
