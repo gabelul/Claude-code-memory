@@ -1,6 +1,6 @@
 #!/bin/bash
-# Claude Code Memory Solution - Remote Installer
-# Automatically clones from GitHub and sets up everything
+# Claude Code Memory Solution - Hybrid Remote Installer
+# Automatically clones from GitHub and sets up both Python indexer and Node.js MCP server
 
 set -e
 
@@ -15,9 +15,13 @@ NC='\033[0m' # No Color
 REPO_URL="https://github.com/gabelul/mcp-qdrant-memory.git"
 INSTALL_DIR="$HOME/mcp-qdrant-memory"
 PYTHON_VERSION="python3.12"
+MCP_SERVER_DIR="$INSTALL_DIR/mcp-qdrant-memory"
 
-echo -e "${BLUE}Claude Code Memory Solution - Remote Installer${NC}"
-echo "=============================================="
+echo -e "${BLUE}Claude Code Memory Solution - Hybrid Remote Installer${NC}"
+echo "=========================================================="
+
+# Check prerequisites
+echo -e "${BLUE}Checking prerequisites...${NC}"
 
 # Check if Python 3.12 is available
 if ! command -v $PYTHON_VERSION &> /dev/null; then
@@ -25,6 +29,23 @@ if ! command -v $PYTHON_VERSION &> /dev/null; then
     echo -e "${YELLOW}Please install Python 3.12 first${NC}"
     exit 1
 fi
+echo -e "${GREEN}✅ Python 3.12 found${NC}"
+
+# Check if Node.js is available
+if ! command -v node &> /dev/null; then
+    echo -e "${RED}Error: Node.js is not installed${NC}"
+    echo -e "${YELLOW}Please install Node.js first${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ Node.js found ($(node --version))${NC}"
+
+# Check if npm is available
+if ! command -v npm &> /dev/null; then
+    echo -e "${RED}Error: npm is not installed${NC}"
+    echo -e "${YELLOW}Please install npm first${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ npm found ($(npm --version))${NC}"
 
 # Check if git is available
 if ! command -v git &> /dev/null; then
@@ -32,6 +53,7 @@ if ! command -v git &> /dev/null; then
     echo -e "${YELLOW}Please install git first${NC}"
     exit 1
 fi
+echo -e "${GREEN}✅ git found${NC}"
 
 # Clone or update repository
 if [[ -d "$INSTALL_DIR" ]]; then
@@ -45,17 +67,22 @@ else
     cd "$INSTALL_DIR"
 fi
 
+# ============================================
+# PYTHON INDEXER SETUP
+# ============================================
+echo -e "${BLUE}Setting up Python indexer...${NC}"
+
 # Set up virtual environment
 VENV_PATH="$INSTALL_DIR/.venv"
 if [[ ! -d "$VENV_PATH" ]]; then
-    echo -e "${BLUE}Creating virtual environment...${NC}"
+    echo -e "${BLUE}Creating Python virtual environment...${NC}"
     $PYTHON_VERSION -m venv "$VENV_PATH"
 else
-    echo -e "${GREEN}✅ Virtual environment already exists${NC}"
+    echo -e "${GREEN}✅ Python virtual environment already exists${NC}"
 fi
 
-# Install dependencies
-echo -e "${BLUE}Installing dependencies...${NC}"
+# Install Python dependencies
+echo -e "${BLUE}Installing Python dependencies...${NC}"
 "$VENV_PATH/bin/pip" install --upgrade pip
 "$VENV_PATH/bin/pip" install -r requirements.txt
 
@@ -63,16 +90,46 @@ echo -e "${BLUE}Installing dependencies...${NC}"
 echo -e "${BLUE}Installing claude_indexer package...${NC}"
 "$VENV_PATH/bin/pip" install -e .
 
-# Verify installation
+# Verify Python installation
 if ! "$VENV_PATH/bin/python" -c "import claude_indexer" 2>/dev/null; then
     echo -e "${RED}Error: Failed to install claude_indexer package${NC}"
     exit 1
 fi
 echo -e "${GREEN}✅ claude_indexer package installed successfully${NC}"
 
-# Create global wrapper
+# ============================================
+# NODE.JS MCP SERVER SETUP
+# ============================================
+echo -e "${BLUE}Setting up Node.js MCP server...${NC}"
+
+# Install Node.js dependencies
+echo -e "${BLUE}Installing Node.js dependencies...${NC}"
+cd "$MCP_SERVER_DIR"
+npm install
+
+# Build TypeScript
+echo -e "${BLUE}Building TypeScript...${NC}"
+npm run build
+
+# Verify build
+if [[ ! -f "$MCP_SERVER_DIR/dist/index.js" ]]; then
+    echo -e "${RED}Error: TypeScript build failed${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✅ MCP server built successfully${NC}"
+
+# Return to root directory
+cd "$INSTALL_DIR"
+
+# ============================================
+# GLOBAL COMMAND WRAPPERS
+# ============================================
+echo -e "${BLUE}Setting up global command wrappers...${NC}"
+
+# Create global wrapper for Python indexer
 WRAPPER_PATH="/usr/local/bin/claude-indexer"
 PACKAGE_PATH="$INSTALL_DIR/claude_indexer"
+MCP_WRAPPER_PATH="/usr/local/bin/mcp-qdrant-memory"
 
 # Check if /usr/local/bin exists
 if [[ ! -d "/usr/local/bin" ]]; then
@@ -83,8 +140,8 @@ if [[ ! -d "/usr/local/bin" ]]; then
     fi
 fi
 
-# Create the wrapper script
-echo -e "${BLUE}Creating global wrapper script at $WRAPPER_PATH${NC}"
+# Create the Python indexer wrapper script
+echo -e "${BLUE}Creating Python indexer wrapper at $WRAPPER_PATH${NC}"
 
 sudo tee "$WRAPPER_PATH" > /dev/null << EOF
 #!/bin/bash
@@ -147,8 +204,39 @@ else
 fi
 EOF
 
-# Make the wrapper executable
+# Make the Python indexer wrapper executable
 sudo chmod +x "$WRAPPER_PATH"
+echo -e "${GREEN}✅ Python indexer wrapper created${NC}"
+
+# Create MCP server wrapper
+echo -e "${BLUE}Creating MCP server wrapper at $MCP_WRAPPER_PATH${NC}"
+
+sudo tee "$MCP_WRAPPER_PATH" > /dev/null << EOF
+#!/bin/bash
+# Claude Code Memory Solution - MCP Server Wrapper
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+MCP_SERVER_DIR="$MCP_SERVER_DIR"
+
+# Check if files still exist
+if [[ ! -f "\$MCP_SERVER_DIR/dist/index.js" ]]; then
+    echo -e "\${RED}Error: MCP server not found at \$MCP_SERVER_DIR/dist/index.js\${NC}"
+    echo -e "\${YELLOW}The MCP server may have been moved or not built.\${NC}"
+    exit 1
+fi
+
+# Run the MCP server with all passed arguments
+exec node "\$MCP_SERVER_DIR/dist/index.js" "\$@"
+EOF
+
+# Make the MCP server wrapper executable
+sudo chmod +x "$MCP_WRAPPER_PATH"
+echo -e "${GREEN}✅ MCP server wrapper created${NC}"
 
 # Remove problematic venv binary that conflicts with global wrapper
 VENV_CLAUDE_INDEXER="$VENV_PATH/bin/claude-indexer"
@@ -157,16 +245,50 @@ if [[ -f "$VENV_CLAUDE_INDEXER" ]]; then
     rm "$VENV_CLAUDE_INDEXER"
 fi
 
+# ============================================
+# ENVIRONMENT SETUP
+# ============================================
+echo -e "${BLUE}Setting up environment configuration...${NC}"
+
+# Create settings file from template if it doesn't exist
+SETTINGS_FILE="$INSTALL_DIR/settings.txt"
+TEMPLATE_FILE="$INSTALL_DIR/settings.template.txt"
+
+if [[ ! -f "$SETTINGS_FILE" && -f "$TEMPLATE_FILE" ]]; then
+    echo -e "${BLUE}Creating settings.txt from template...${NC}"
+    cp "$TEMPLATE_FILE" "$SETTINGS_FILE"
+    echo -e "${YELLOW}Please configure your API keys in $SETTINGS_FILE${NC}"
+fi
+
+# Create MCP server .env file
+MCP_ENV_FILE="$MCP_SERVER_DIR/.env"
+if [[ ! -f "$MCP_ENV_FILE" ]]; then
+    echo -e "${BLUE}Creating MCP server .env file...${NC}"
+    cat > "$MCP_ENV_FILE" << EOF
+# Qdrant Configuration
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=
+QDRANT_COLLECTION_NAME=memory-project
+
+# API Keys
+OPENAI_API_KEY=
+VOYAGE_API_KEY=
+EOF
+    echo -e "${YELLOW}Please configure your API keys in $MCP_ENV_FILE${NC}"
+fi
+
 # Verify installation
-if [[ -x "$WRAPPER_PATH" ]]; then
-    echo -e "${GREEN}✅ Installation successful!${NC}"
+if [[ -x "$WRAPPER_PATH" && -x "$MCP_WRAPPER_PATH" ]]; then
+    echo -e "${GREEN}✅ Hybrid installation successful!${NC}"
     echo ""
     echo -e "${BLUE}Installation Summary:${NC}"
     echo "  Repository: $INSTALL_DIR"
-    echo "  Virtual env: $VENV_PATH"
-    echo "  Global command: $WRAPPER_PATH"
+    echo "  Python env: $VENV_PATH"
+    echo "  MCP server: $MCP_SERVER_DIR"
+    echo "  Python indexer: $WRAPPER_PATH"
+    echo "  MCP server: $MCP_WRAPPER_PATH"
     echo ""
-    echo -e "${BLUE}Usage:${NC}"
+    echo -e "${BLUE}Python Indexer Usage:${NC}"
     echo "  claude-indexer --project /path/to/project --collection project-name"
     echo "  claude-indexer --project . --collection current-project"
     echo "  claude-indexer --help"
@@ -178,31 +300,35 @@ if [[ -x "$WRAPPER_PATH" ]]; then
     echo "  # Index with incremental updates"
     echo "  claude-indexer --project /path/to/project --collection name --incremental"
     echo ""
-    echo "  # Generate commands for debugging"
-    echo "  claude-indexer --project . --collection test --generate-commands"
-    echo ""
-    echo -e "${BLUE}Advanced Commands:${NC}"
     echo "  # File watching"
     echo "  claude-indexer watch start --project . --collection my-project"
-    echo ""
-    echo "  # Git hooks"
-    echo "  claude-indexer hooks install --project . --collection my-project"
     echo ""
     echo "  # Search collections"
     echo "  claude-indexer search \"query\" --project . --collection my-project"
     echo ""
-    echo "  # Add MCP server"
+    echo "  # Add MCP server configuration"
     echo "  claude-indexer add-mcp my-project"
     echo ""
-    echo "  # Chat processing"
-    echo "  claude-indexer chat index --project . --collection my-project"
+    echo -e "${BLUE}MCP Server Usage:${NC}"
+    echo "  # Test MCP server directly"
+    echo "  mcp-qdrant-memory"
     echo ""
-    echo -e "${GREEN}You can now use 'claude-indexer' from any directory!${NC}"
+    echo -e "${BLUE}Setup Steps:${NC}"
+    echo "1. Start Qdrant database:"
+    echo "   docker run -p 6333:6333 -v \$(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant"
     echo ""
-    echo -e "${BLUE}Next Steps:${NC}"
-    echo "1. Start Qdrant database: docker run -p 6333:6333 -v \$(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant"
-    echo "2. Configure API keys in $INSTALL_DIR/settings.txt"
-    echo "3. Test with: claude-indexer --project . --collection test"
+    echo "2. Configure API keys:"
+    echo "   - Edit $SETTINGS_FILE (for Python indexer)"
+    echo "   - Edit $MCP_ENV_FILE (for MCP server)"
+    echo ""
+    echo "3. Test Python indexer:"
+    echo "   claude-indexer --project . --collection test"
+    echo ""
+    echo "4. Configure Claude Code MCP server:"
+    echo "   - Use command: node $MCP_SERVER_DIR/dist/index.js"
+    echo "   - Set environment variables from $MCP_ENV_FILE"
+    echo ""
+    echo -e "${GREEN}Both Python indexer and MCP server are now ready!${NC}"
 else
     echo -e "${RED}❌ Installation failed${NC}"
     exit 1
