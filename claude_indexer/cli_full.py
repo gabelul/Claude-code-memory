@@ -980,6 +980,7 @@ This project uses Claude Code Memory for enhanced development workflow.
             cmd = [
                 "claude", "mcp", "add", server_name,
                 "-e", f"OPENAI_API_KEY={config_obj.openai_api_key}",
+                "-e", f"OPENAI_BASE_URL={config_obj.openai_base_url}",
                 "-e", f"QDRANT_API_KEY={config_obj.qdrant_api_key}",
                 "-e", f"QDRANT_URL={config_obj.qdrant_url}",
                 "-e", f"QDRANT_COLLECTION_NAME={collection}",
