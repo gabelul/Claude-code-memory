@@ -19,6 +19,7 @@ Thumbs.db
 mcp_output/
 mcp-qdrant-memory/
 mcp-qdrant-memory/*
+iron-manus-sessions/
 
 # Configuration files with secrets
 settings.txt
