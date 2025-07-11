@@ -111,8 +111,16 @@ class CoreIndexer:
                 # Use existing _store_vectors method for immediate processing
                 success = self._store_vectors(collection_name, entities, relations, chunks)
                 return success
+            except ConnectionError as e:
+                self.logger.error(f"❌ Batch processing connection error: {e}")
+                return False
+            except TimeoutError as e:
+                self.logger.error(f"❌ Batch processing timeout: {e}")
+                return False
             except Exception as e:
-                self.logger.error(f"❌ Batch processing failed: {e}")
+                self.logger.error(f"❌ Batch processing failed: {type(e).__name__}: {e}")
+                import traceback
+                self.logger.debug(f"❌ Batch processing traceback: {traceback.format_exc()}")
                 return False
         
         return batch_callback
@@ -292,6 +300,15 @@ class CoreIndexer:
                 else:
                     self.logger.warning("⚠️ No entities available for filtering - proceeding without pre-filtering")
             
+            # Update state file - merge successfully processed files with existing state
+            successfully_processed = [f for f in files_to_process if str(f) not in result.failed_files]
+            
+            # Capture file states before storage to prevent race conditions
+            pre_captured_state = None
+            if successfully_processed:
+                pre_captured_state = self._get_current_state(successfully_processed)
+                logger.debug(f"🔒 Pre-captured atomic state for {len(pre_captured_state)} files")
+            
             # Store vectors using direct Qdrant automation with progressive disclosure
             if all_entities or all_relations or all_implementation_chunks:
                 # Use direct Qdrant automation via existing _store_vectors method
@@ -304,10 +321,9 @@ class CoreIndexer:
                     result.relations_created = len(all_relations)
                     result.implementation_chunks_created = len(all_implementation_chunks)
             
-            # Update state file - merge successfully processed files with existing state
-            successfully_processed = [f for f in files_to_process if str(f) not in result.failed_files]
+            # Update state with pre-captured atomic state
             if successfully_processed:
-                self._update_state(successfully_processed, collection_name, verbose, deleted_files=deleted_files if incremental else None)
+                self._update_state(successfully_processed, collection_name, verbose, deleted_files=deleted_files if incremental else None, pre_captured_state=pre_captured_state)
                 # Store processed files in result for test verification
                 result.processed_files = [str(f) for f in successfully_processed]
                 
@@ -338,9 +354,24 @@ class CoreIndexer:
                 # Reset for next operation
                 self._session_cost_data = {'tokens': 0, 'cost': 0.0, 'requests': 0}
             
+        except FileNotFoundError as e:
+            result.success = False
+            result.errors.append(f"File not found during indexing: {e}")
+            logger.error(f"❌ File not found: {e}")
+        except PermissionError as e:
+            result.success = False
+            result.errors.append(f"Permission denied during indexing: {e}")
+            logger.error(f"❌ Permission denied: {e}")
+        except OSError as e:
+            result.success = False
+            result.errors.append(f"OS error during indexing: {e}")
+            logger.error(f"❌ OS error: {e}")
         except Exception as e:
             result.success = False
             result.errors.append(f"Indexing failed: {e}")
+            logger.error(f"❌ Unexpected error during indexing: {type(e).__name__}: {e}")
+            import traceback
+            logger.debug(f"❌ Full traceback: {traceback.format_exc()}")
         
         result.processing_time = time.time() - start_time
         return result
@@ -427,10 +458,28 @@ class CoreIndexer:
                     result.files_failed = 1
                     result.errors.append("Failed to store vectors")
             
+        except FileNotFoundError as e:
+            result.success = False
+            result.files_failed = 1
+            result.errors.append(f"File not found: {file_path}: {e}")
+            logger.error(f"❌ File not found: {file_path}: {e}")
+        except PermissionError as e:
+            result.success = False
+            result.files_failed = 1
+            result.errors.append(f"Permission denied: {file_path}: {e}")
+            logger.error(f"❌ Permission denied: {file_path}: {e}")
+        except UnicodeDecodeError as e:
+            result.success = False
+            result.files_failed = 1
+            result.errors.append(f"Unicode decode error: {file_path}: {e}")
+            logger.error(f"❌ Unicode decode error: {file_path}: {e}")
         except Exception as e:
             result.success = False
             result.files_failed = 1
             result.errors.append(f"Failed to index {file_path}: {e}")
+            logger.error(f"❌ Unexpected error indexing {file_path}: {type(e).__name__}: {e}")
+            import traceback
+            logger.debug(f"❌ Full traceback: {traceback.format_exc()}")
         
         result.processing_time = time.time() - start_time
         return result
@@ -475,8 +524,19 @@ class CoreIndexer:
             
             return search_result.results if search_result.success else []
             
+        except ConnectionError as e:
+            logger.error(f"❌ Connection error during search: {e}")
+            return []
+        except TimeoutError as e:
+            logger.error(f"❌ Search timeout: {e}")
+            return []
+        except ValueError as e:
+            logger.error(f"❌ Invalid search parameters: {e}")
+            return []
         except Exception as e:
-            logger.error(f"Search failed: {e}")
+            logger.error(f"❌ Search failed: {type(e).__name__}: {e}")
+            import traceback
+            logger.debug(f"❌ Full search traceback: {traceback.format_exc()}")
             return []
     
     def clear_collection(self, collection_name: str, preserve_manual: bool = True) -> bool:
@@ -534,12 +594,30 @@ class CoreIndexer:
         for file_path in files:
             # Skip files matching exclude patterns
             relative_path = file_path.relative_to(self.project_path)
-            if any(relative_path.match(pattern) for pattern in exclude_patterns):
-                continue
-            
-            # Skip files in excluded directories
             path_str = str(relative_path)
-            if any(excluded in path_str for excluded in exclude_patterns):
+            path_parts = path_str.split('/')
+            
+            # Check if file matches any exclude pattern
+            exclude_file = False
+            for pattern in exclude_patterns:
+                # Handle glob patterns
+                if '*' in pattern or '?' in pattern:
+                    if relative_path.match(pattern):
+                        exclude_file = True
+                        break
+                # Handle directory patterns (patterns ending with '/')
+                elif pattern.endswith('/'):
+                    dir_pattern = pattern[:-1]  # Remove trailing '/'
+                    if dir_pattern in path_parts:
+                        exclude_file = True
+                        break
+                # Handle exact file/directory names
+                else:
+                    if pattern in path_parts:
+                        exclude_file = True
+                        break
+            
+            if exclude_file:
                 continue
             
             # Check file size
@@ -903,6 +981,12 @@ class CoreIndexer:
         if logger:
             logger.debug(f"🔄 Starting storage: {len(entities)} entities, {len(relations)} relations, {len(implementation_chunks)} chunks")
         
+        # Feature flag: Use unified content processor if enabled
+        use_unified_processor = getattr(self.config, 'use_unified_processor', False)
+        
+        if use_unified_processor:
+            return self._store_vectors_unified(collection_name, entities, relations, implementation_chunks)
+        
         try:
             all_points = []
             total_tokens = 0
@@ -1084,6 +1168,62 @@ class CoreIndexer:
             logger.error(f"Error in _store_vectors: {e}")
             return False
     
+    def _store_vectors_unified(self, collection_name: str, entities: List[Entity], 
+                              relations: List[Relation], implementation_chunks: List[EntityChunk] = None) -> bool:
+        """Store using unified content processor with deduplication (Phase 2 implementation)."""
+        if implementation_chunks is None:
+            implementation_chunks = []
+        
+        logger = self.logger if hasattr(self, 'logger') else None
+        if logger:
+            logger.debug(f"🚀 Using unified content processor with deduplication")
+        
+        try:
+            # Import the unified processor
+            from .processing.unified_processor import UnifiedContentProcessor
+            
+            # Create the processor
+            processor = UnifiedContentProcessor(
+                vector_store=self.vector_store,
+                embedder=self.embedder,
+                logger=logger
+            )
+            
+            # For now, assume all entities are changed (full processing)
+            # In the future, this could be optimized to only process changed entities
+            changed_entity_ids = {entity.name for entity in entities}
+            
+            # Process all content through the unified pipeline
+            result = processor.process_all_content(
+                collection_name=collection_name,
+                entities=entities,
+                relations=relations,
+                implementation_chunks=implementation_chunks,
+                changed_entity_ids=changed_entity_ids
+            )
+            
+            # Store cost tracking data for result reporting
+            if not hasattr(self, '_session_cost_data'):
+                self._session_cost_data = {'tokens': 0, 'cost': 0.0, 'requests': 0}
+            
+            if result.cost_data:
+                self._session_cost_data['tokens'] += result.cost_data.get('tokens', 0)
+                self._session_cost_data['cost'] += result.cost_data.get('cost', 0.0)
+                self._session_cost_data['requests'] += result.cost_data.get('requests', 0)
+            
+            if logger:
+                if result.success:
+                    logger.debug(f"✅ Unified processing completed successfully")
+                else:
+                    logger.error(f"❌ Unified processing failed: {result.error_message}")
+            
+            return result.success
+            
+        except Exception as e:
+            if logger:
+                logger.error(f"Error in _store_vectors_unified: {e}")
+            return False
+    
     def _entity_to_text(self, entity: Entity) -> str:
         """Convert entity to text for embedding."""
         parts = [
@@ -1127,6 +1267,35 @@ class CoreIndexer:
         
         return state
     
+    def _atomic_json_write(self, file_path: Path, data: Dict[str, Any]) -> None:
+        """Write JSON data atomically to prevent race conditions."""
+        import json
+        import tempfile
+        import os
+        
+        # Create temporary file in same directory as target
+        temp_fd, temp_path = tempfile.mkstemp(
+            dir=file_path.parent,
+            prefix=f".{file_path.name}.",
+            suffix=".tmp"
+        )
+        
+        try:
+            with os.fdopen(temp_fd, 'w') as f:
+                json.dump(data, f, indent=2)
+            
+            # Atomic rename
+            os.rename(temp_path, file_path)
+            logger.debug(f"🔒 Atomic write completed for {file_path}")
+            
+        except Exception as e:
+            # Clean up temp file on error
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+            raise e
+    
     def _get_file_hash(self, file_path: Path) -> str:
         """Get SHA256 hash of file contents."""
         try:
@@ -1165,30 +1334,35 @@ class CoreIndexer:
                 'timestamp': time.time()
             }
             
-            # Save updated state
+            # Save updated state atomically
             state_file = self._get_state_file(collection_name)
             state_file.parent.mkdir(parents=True, exist_ok=True)
             
-            temp_file = state_file.with_suffix('.tmp')
-            with open(temp_file, 'w') as f:
-                json.dump(state, f, indent=2)
-            temp_file.rename(state_file)
+            self._atomic_json_write(state_file, state)
             
         except Exception as e:
             logger.debug(f"Failed to save statistics to state: {e}")
     
-    def _update_state(self, new_files: List[Path], collection_name: str, verbose: bool = False, full_rebuild: bool = False, deleted_files: List[str] = None):
+    def _update_state(self, new_files: List[Path], collection_name: str, verbose: bool = False, full_rebuild: bool = False, deleted_files: List[str] = None, pre_captured_state: Dict[str, Dict[str, Any]] = None):
         """Update state file by merging new files with existing state, or do full rebuild."""
         try:
             if full_rebuild:
-                # Full rebuild: use only the new files as complete state
-                final_state = self._get_current_state(new_files)
+                # Full rebuild: use pre-captured state if available, otherwise scan fresh
+                if pre_captured_state is not None:
+                    final_state = pre_captured_state
+                    logger.debug(f"🔒 Using pre-captured atomic state with {len(final_state)} files")
+                else:
+                    final_state = self._get_current_state(new_files)
                 operation_desc = "rebuilt"
                 file_count_desc = f"{len(new_files)} files tracked"
             else:
                 # Incremental update: merge new files with existing state
                 existing_state = self._load_state(collection_name)
-                new_state = self._get_current_state(new_files)
+                if pre_captured_state is not None:
+                    new_state = pre_captured_state
+                    logger.debug(f"🔒 Using pre-captured atomic state for {len(new_state)} files")
+                else:
+                    new_state = self._get_current_state(new_files)
                 final_state = existing_state.copy()
                 final_state.update(new_state)
                 operation_desc = "updated"
@@ -1219,12 +1393,7 @@ class CoreIndexer:
             state_file = self._get_state_file(collection_name)
             state_file.parent.mkdir(parents=True, exist_ok=True)
             
-            temp_file = state_file.with_suffix('.tmp')
-            with open(temp_file, 'w') as f:
-                json.dump(final_state, f, indent=2)
-            
-            # Atomic rename
-            temp_file.rename(state_file)
+            self._atomic_json_write(state_file, final_state)
             
             # Verify saved state
             with open(state_file) as f:
@@ -1239,11 +1408,31 @@ class CoreIndexer:
             if verbose:
                 logger.info(f"✅ State {operation_desc}: {file_count_desc}")
                 
+        except FileNotFoundError as e:
+            error_msg = f"❌ State file not found during {'rebuild' if full_rebuild else 'update'}: {e}"
+            logger.error(error_msg)
+            # For incremental updates, fallback to full rebuild if update fails
+            if not full_rebuild:
+                logger.warning("🔄 Falling back to full state rebuild...")
+                self._update_state(self._find_all_files(include_tests=False), collection_name, verbose, full_rebuild=True, deleted_files=None)
+        except PermissionError as e:
+            error_msg = f"❌ Permission denied during state {'rebuild' if full_rebuild else 'update'}: {e}"
+            logger.error(error_msg)
+        except OSError as e:
+            error_msg = f"❌ OS error during state {'rebuild' if full_rebuild else 'update'}: {e}"
+            logger.error(error_msg)
+        except json.JSONDecodeError as e:
+            error_msg = f"❌ Invalid JSON in state file during {'rebuild' if full_rebuild else 'update'}: {e}"
+            logger.error(error_msg)
+            # For incremental updates, fallback to full rebuild if update fails
+            if not full_rebuild:
+                logger.warning("🔄 Falling back to full state rebuild...")
+                self._update_state(self._find_all_files(include_tests=False), collection_name, verbose, full_rebuild=True, deleted_files=None)
         except Exception as e:
-            error_msg = f"❌ Failed to {'rebuild' if full_rebuild else 'update'} state: {e}"
+            error_msg = f"❌ Failed to {'rebuild' if full_rebuild else 'update'} state: {type(e).__name__}: {e}"
             logger.error(error_msg)
             import traceback
-            traceback.print_exc()
+            logger.debug(f"❌ State update traceback: {traceback.format_exc()}")
             # For incremental updates, fallback to full rebuild if update fails
             if not full_rebuild:
                 logger.warning("🔄 Falling back to full state rebuild...")

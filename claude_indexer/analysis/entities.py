@@ -61,10 +61,15 @@ class EntityChunk:
     
     def to_vector_payload(self) -> Dict[str, Any]:
         """Convert to Qdrant payload format with progressive disclosure support."""
+        # Generate content hash for deduplication
+        import hashlib
+        content_hash = hashlib.sha256(self.content.encode()).hexdigest()
+        
         payload = {
             "entity_name": self.entity_name,
             "chunk_type": self.chunk_type,
             "content": self.content,
+            "content_hash": content_hash,
             "created_at": datetime.now().isoformat(),
             **self.metadata
         }
@@ -121,7 +126,23 @@ class RelationChunk:
     @classmethod
     def from_relation(cls, relation: 'Relation') -> 'RelationChunk':
         """Create a RelationChunk from a Relation."""
-        chunk_id = f"{relation.from_entity}::{relation.relation_type.value}::{relation.to_entity}"
+        base_id = f"{relation.from_entity}::{relation.relation_type.value}::{relation.to_entity}"
+        
+        # Add unique suffix for relations without specific metadata to prevent collisions
+        has_specific_metadata = (
+            relation.metadata and 
+            ('import_type' in relation.metadata or 'context' in relation.metadata)
+        )
+        
+        if has_specific_metadata:
+            # Relations with import_type or context metadata use existing ID format
+            chunk_id = base_id
+        else:
+            # Relations without metadata get unique hash suffix to prevent collisions
+            import hashlib
+            # Use object memory address for deterministic yet unique identification
+            relation_hash = hashlib.md5(f"{base_id}::{id(relation)}".encode()).hexdigest()[:8]
+            chunk_id = f"{base_id}::{relation_hash}"
         
         # Build human-readable content
         content = f"{relation.from_entity} {relation.relation_type.value} {relation.to_entity}"
@@ -141,12 +162,17 @@ class RelationChunk:
     
     def to_vector_payload(self) -> Dict[str, Any]:
         """Convert relation chunk to vector storage payload."""
+        # Generate content hash for deduplication
+        import hashlib
+        content_hash = hashlib.sha256(self.content.encode()).hexdigest()
+        
         payload: Dict[str, Any] = {
             "chunk_type": "relation",
             "entity_name": self.from_entity,  # Primary entity for search
             "relation_target": self.to_entity,
             "relation_type": self.relation_type.value,
             "content": self.content,
+            "content_hash": content_hash,
             "created_at": datetime.now().isoformat(),
             "type": "chunk"
         }
@@ -184,11 +210,16 @@ class ChatChunk:
     
     def to_vector_payload(self) -> Dict[str, Any]:
         """Convert chat chunk to vector storage payload."""
+        # Generate content hash for deduplication
+        import hashlib
+        content_hash = hashlib.sha256(self.content.encode()).hexdigest()
+        
         payload = {
             "chunk_type": self.chunk_type,
             "entity_name": f"chat_{self.chat_id}",
             "entity_type": "chat",
             "content": self.content,
+            "content_hash": content_hash,
             "created_at": datetime.now().isoformat(),
             "type": "chunk"
         }

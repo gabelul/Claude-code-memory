@@ -58,6 +58,9 @@ class IndexerConfig(BaseModel):
     batch_size: int = Field(default=50, ge=1, le=1000)
     max_concurrent_files: int = Field(default=10, ge=1, le=100)
     
+    # Production Features
+    use_unified_processor: bool = Field(default=True, description="Enable unified content processor with deduplication (90% token reduction)")
+    
     # State Management
     state_directory: Optional[Path] = Field(default=None)
     

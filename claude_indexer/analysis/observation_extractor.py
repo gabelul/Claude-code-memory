@@ -150,7 +150,18 @@ class ObservationExtractor:
         return observations
     
     def _extract_docstring(self, node: 'tree_sitter.Node', source_code: str) -> Optional[str]:
-        """Extract docstring from function or class node with deep AST traversal."""
+        """Extract docstring/JSDoc from function or class node with deep AST traversal."""
+        
+        # Detect language based on node type
+        is_javascript = node.type in ['function_declaration', 'arrow_function', 'function_expression', 'method_definition']
+        
+        if is_javascript:
+            return self._extract_jsdoc_comment(node, source_code)
+        else:
+            return self._extract_python_docstring(node, source_code)
+    
+    def _extract_python_docstring(self, node: 'tree_sitter.Node', source_code: str) -> Optional[str]:
+        """Extract Python docstring from function or class node."""
         def find_first_string_literal(n, depth=0):
             """Recursively find the first string literal in function/class body."""
             if depth > 3:  # Prevent infinite recursion
@@ -161,9 +172,10 @@ class ObservationExtractor:
                 return n.text.decode('utf-8')
             
             # For function/class definitions, look in the body
-            if n.type in ['function_definition', 'class_definition']:
+            if n.type in ['function_definition', 'class_definition', 'function_declaration', 'method_definition']:
                 for child in n.children:
-                    if child.type == 'block':
+                    # Python uses 'block', JavaScript uses 'statement_block'
+                    if child.type in ['block', 'statement_block']:
                         # Look for first statement that's a string
                         for stmt in child.children:
                             if stmt.type == 'expression_statement':
@@ -186,6 +198,7 @@ class ObservationExtractor:
             
             return None
         
+        # Actually call the helper function (this was missing!)
         try:
             raw_docstring = find_first_string_literal(node)
             if not raw_docstring:
@@ -210,6 +223,55 @@ class ObservationExtractor:
             
         except Exception as e:
             logger.debug(f"Error extracting docstring: {e}")
+            return None
+    
+    def _extract_jsdoc_comment(self, node: 'tree_sitter.Node', source_code: str) -> Optional[str]:
+        """Extract JSDoc comment from JavaScript function node."""
+        try:
+            # Get the source lines
+            lines = source_code.split('\n')
+            
+            # Look for comment before the function
+            func_start_line = node.start_point[0]
+            
+            # Search backwards for JSDoc comment (/** */)
+            jsdoc_lines = []
+            in_jsdoc = False
+            
+            for i in range(func_start_line - 1, max(0, func_start_line - 10), -1):
+                line = lines[i].strip()
+                
+                if line.endswith('*/'):
+                    in_jsdoc = True
+                    # Remove the */ and add the line
+                    clean_line = line[:-2].strip()
+                    if clean_line.startswith('*'):
+                        clean_line = clean_line[1:].strip()
+                    if clean_line:
+                        jsdoc_lines.insert(0, clean_line)
+                elif in_jsdoc and (line.startswith('*') or line.startswith('/**')):
+                    # Remove the * or /** and add the line
+                    clean_line = line.lstrip('/*').strip()
+                    if clean_line.startswith('*'):
+                        clean_line = clean_line[1:].strip()
+                    if clean_line:
+                        jsdoc_lines.insert(0, clean_line)
+                elif in_jsdoc and line.startswith('/**'):
+                    # Found the start of JSDoc
+                    break
+                elif in_jsdoc:
+                    # End of JSDoc block
+                    break
+                elif line and not line.startswith('//'):
+                    # Hit non-comment code, stop searching
+                    break
+            
+            if jsdoc_lines:
+                return ' '.join(jsdoc_lines)
+            
+            return None
+        except Exception as e:
+            logger.debug(f"Error extracting JSDoc comment: {e}")
             return None
     
     def _extract_docstring_patterns(self, docstring: str) -> List[str]:
@@ -391,14 +453,29 @@ class ObservationExtractor:
         return None
     
     def _extract_parameter_patterns(self, node: 'tree_sitter.Node', source_code: str) -> Optional[str]:
-        """Extract parameter patterns from function signature."""
+        """Extract parameter patterns from function signature with parameter names."""
         try:
             # Look for parameters node
             for child in node.children:
                 if child.type == 'parameters':
-                    param_count = len([c for c in child.children if c.type == 'identifier'])
-                    if param_count > 0:
-                        return f"{param_count} parameters"
+                    param_names = []
+                    for param_child in child.children:
+                        if param_child.type == 'identifier':
+                            param_name = param_child.text.decode('utf-8')
+                            param_names.append(param_name)
+                        elif param_child.type == 'formal_parameter':
+                            # For more complex parameter types
+                            for identifier in param_child.children:
+                                if identifier.type == 'identifier':
+                                    param_name = identifier.text.decode('utf-8')
+                                    param_names.append(param_name)
+                                    break
+                    
+                    if param_names:
+                        if len(param_names) <= 3:
+                            return f"({', '.join(param_names)})"
+                        else:
+                            return f"({', '.join(param_names[:3])}, ...{len(param_names) - 3} more)"
             return None
         except Exception:
             return None

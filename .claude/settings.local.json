@@ -4,7 +4,9 @@
       "mcp__zen__consensus",
       "WebFetch(domain:github.com)",
       "Bash(python:*)",
-      "Bash(source:*)"
+      "Bash(source:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

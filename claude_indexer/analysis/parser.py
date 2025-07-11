@@ -92,6 +92,16 @@ class CodeParser(ABC):
     def get_supported_extensions(self) -> List[str]:
         """Get list of supported file extensions."""
         pass
+    
+    def _create_chunk_id(self, file_path: Path, entity_name: str, chunk_type: str) -> str:
+        """Create deterministic chunk ID following existing pattern.
+        
+        This method is available to all parsers, fixing the architecture issue where
+        5 parsers (PythonParser, TextParser, CSVParser, INIParser, MarkdownParser)
+        were missing this method, causing 6000+ missing implementation chunks.
+        """
+        # Pattern: {file_path}::{entity_name}::{chunk_type}
+        return f"{str(file_path)}::{entity_name}::{chunk_type}"
 
 
 class PythonParser(CodeParser):

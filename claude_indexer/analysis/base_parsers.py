@@ -35,6 +35,13 @@ class TreeSitterParser(CodeParser):
             except Exception:
                 # If that fails, try using it directly
                 self.parser = Parser(language_module)
+        
+        # Initialize observation extractor for semantic analysis
+        try:
+            from .observation_extractor import ObservationExtractor
+            self._observation_extractor = ObservationExtractor(self.config.get('project_path', Path.cwd()))
+        except Exception:
+            self._observation_extractor = None
     
     def can_parse(self, file_path: Path) -> bool:
         """Check if this parser can handle the file."""
@@ -79,10 +86,6 @@ class TreeSitterParser(CodeParser):
         walk(root)
         return nodes
     
-    def _create_chunk_id(self, file_path: Path, entity_name: str, chunk_type: str) -> str:
-        """Create deterministic chunk ID following existing pattern."""
-        # Pattern: {file_path}::{entity_name}::{chunk_type}
-        return f"{str(file_path)}::{entity_name}::{chunk_type}"
     
     def _has_syntax_errors(self, tree) -> bool:
         """Check if the parse tree contains syntax errors."""
