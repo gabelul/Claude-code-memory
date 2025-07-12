@@ -12,8 +12,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-REPO_URL="https://github.com/gabelul/mcp-qdrant-memory.git"
-INSTALL_DIR="$HOME/mcp-qdrant-memory"
+REPO_URL="https://github.com/gabelul/Claude-code-memory.git"
+INSTALL_DIR="$HOME/Claude-code-memory"
 MCP_SERVER_DIR="$INSTALL_DIR/mcp-qdrant-memory"
 
 # Detect operating system
@@ -157,7 +157,7 @@ if [[ -d "$INSTALL_DIR" ]]; then
     echo -e "${YELLOW}Directory $INSTALL_DIR already exists${NC}"
     echo -e "${BLUE}Updating existing repository...${NC}"
     cd "$INSTALL_DIR"
-    git pull origin master
+    git pull origin main
 else
     echo -e "${BLUE}Cloning repository to $INSTALL_DIR...${NC}"
     git clone "$REPO_URL" "$INSTALL_DIR"

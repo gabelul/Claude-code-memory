@@ -42,22 +42,31 @@ Stop treating Claude like a goldfish. Give it the superpower of perfect memory a
 
 ## ⚡ Activate God Mode in 30 Seconds
 
-**Option 1: Let Claude Install Everything (Recommended)**
+**Option 1: One-Command Installation (Recommended)**
+```bash
+# Cross-Platform Installer (Linux, macOS, Windows Git Bash)
+curl -sSL https://raw.githubusercontent.com/gabelul/Claude-code-memory/main/install-cross-platform.sh | bash
+
+# Windows Native (Command Prompt/PowerShell)
+curl -o install-windows.bat https://raw.githubusercontent.com/gabelul/Claude-code-memory/main/install-windows.bat && install-windows.bat
 ```
-You: Install Claude Code Memory from https://github.com/Durafen/Claude-code-memory and help me understand how to use it
+
+**Option 2: Let Claude Install Everything**
+```
+You: Install Claude Code Memory from https://github.com/gabelul/Claude-code-memory and help me understand how to use it
 
 Claude: I'll help you install the complete Claude Code Memory system...
 [Claude handles everything: clones repos, installs dependencies, configures settings, indexes your project, and sets up MCP]
 ```
 
-**Option 2: Manual Setup**
+**Option 3: Manual Setup**
 ```bash
 # 1. Clone and setup
-git clone https://github.com/Durafen/Claude-code-memory.git
+git clone https://github.com/gabelul/Claude-code-memory.git
 cd Claude-code-memory
 
-# 2. Install dependencies
-python3.12 -m venv .venv
+# 2. Install dependencies (auto-detects Python 3.9+)
+python3 -m venv .venv  # or python, py, python3.12, etc.
 source .venv/bin/activate
 pip install -r requirements.txt
 
@@ -103,9 +112,9 @@ claude-indexer add-mcp -c my-project
 
 This project is actively being developed! We're building the most advanced Claude Code memory system ever created.
 
-**Found a bug?** 🐛 [Report it here](https://github.com/Durafen/Claude-code-memory/issues)  
-**Want a feature?** ✨ [Request it here](https://github.com/Durafen/Claude-code-memory/issues)  
-**Have feedback?** 💬 [Start a discussion](https://github.com/Durafen/Claude-code-memory/discussions)
+**Found a bug?** 🐛 [Report it here](https://github.com/gabelul/Claude-code-memory/issues)  
+**Want a feature?** ✨ [Request it here](https://github.com/gabelul/Claude-code-memory/issues)  
+**Have feedback?** 💬 [Start a discussion](https://github.com/gabelul/Claude-code-memory/discussions)
 
 We're moving fast and breaking things (in a good way). Your feedback helps us prioritize what to build next!
 
@@ -210,41 +219,59 @@ claude-indexer index -p /config-project -c config-app
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.12+
-- Node.js 18+  
-- Claude Code installed
-- Qdrant running (Docker recommended)
+- **Python 3.9+** (auto-detects: `python3.12`, `python3.11`, `python3.10`, `python3.9`, `python3`, `python`, `py`)
+- **Node.js 18+** (for MCP server)
+- **Git** (for repository cloning)
+- **Docker** (for Qdrant database)
+- **Claude Code** installed
+
+**Supported Platforms:** Windows, Linux, macOS
 
 ### Installation
 
+**🚀 Automated Installation (Recommended):**
+```bash
+# Cross-Platform (Linux, macOS, Windows Git Bash)
+curl -sSL https://raw.githubusercontent.com/gabelul/Claude-code-memory/main/install-cross-platform.sh | bash
+
+# Windows Native (Command Prompt/PowerShell)  
+curl -o install-windows.bat https://raw.githubusercontent.com/gabelul/Claude-code-memory/main/install-windows.bat
+install-windows.bat
+```
+
+**📋 Manual Installation:**
 ```bash
 # 1. Clone and setup
-git clone https://github.com/Durafen/Claude-code-memory.git
+git clone https://github.com/gabelul/Claude-code-memory.git
 cd Claude-code-memory
-python3.12 -m venv .venv
+python3 -m venv .venv  # Works with any Python 3.9+
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Configure settings (copy template and add your API keys)
+# 2. Install MCP server dependencies
+cd mcp-qdrant-memory && npm install && npm run build && cd ..
+
+# 3. Install global wrapper (creates claude-indexer command)
+./install.sh
+
+# 4. Configure settings (copy template and add your API keys)
 cp settings.template.txt settings.txt
 # Edit settings.txt with your API keys
 
-# 3. Install our enhanced MCP memory server
-git clone https://github.com/Durafen/mcp-qdrant-memory.git
-cd mcp-qdrant-memory && npm install && npm run build && cd ..
-
-# 4. Install global wrapper (creates claude-indexer command)
-./install.sh
-
 # 5. Start Qdrant
-docker run -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_storage:/qdrant/storage:z qdrant/qdrant
+docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
 
-# 6. Index your project (analyzes your code) - NEW: Deduplication enabled by default
+# 6. Index your project (NEW: 90% token reduction enabled by default)
 claude-indexer index -p /your/project -c my-project
 
 # 7. Configure MCP server (automatically creates CLAUDE.md!)
 claude-indexer add-mcp -c my-project -p .
 ```
+
+**🎯 Post-Installation:**
+- **Linux/macOS:** Commands installed to `/usr/local/bin/`
+- **Windows:** Commands installed to `%USERPROFILE%\bin\` (add to PATH)
+- **Installation Directory:** `~/Claude-code-memory/`
 
 
 ## ⚙️ Embedding Provider Configuration
@@ -530,7 +557,7 @@ Add these to your CLAUDE.md for enhanced memory usage:
 - "$dup" = Don't duplicate code, check twice if there's a function that already does something similar prior to implementing what you want (use memory to check relations and best practices).
 
 Note: This is my personal workflow that works well with Claude Code Memory.
-Have better shortcuts or workflows? Share them: https://github.com/Durafen/Claude-code-memory/issues
+Have better shortcuts or workflows? Share them: https://github.com/gabelul/Claude-code-memory/issues
 ```
 
 ## 💬 Real Claude Code Conversations (Before vs After)
@@ -1084,7 +1111,7 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive architecture, setup instructions, a
 
 ## 🏗️ Architecture
 
-**Note**: Our enhanced MCP server is based on [@delorenj/mcp-qdrant-memory](https://github.com/delorenj/mcp-qdrant-memory) with added features for entity-specific filtering, unified search, and direct Qdrant integration.
+**Note**: Contains enhanced MCP server based on [@delorenj/mcp-qdrant-memory](https://github.com/delorenj/mcp-qdrant-memory) with entity-specific filtering, unified search, and progressive disclosure features.
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐

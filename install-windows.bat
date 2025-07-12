@@ -5,8 +5,8 @@ REM Automatically clones from GitHub and sets up both Python indexer and Node.js
 setlocal enabledelayedexpansion
 
 REM Configuration
-set REPO_URL=https://github.com/gabelul/mcp-qdrant-memory.git
-set INSTALL_DIR=%USERPROFILE%\mcp-qdrant-memory
+set REPO_URL=https://github.com/gabelul/Claude-code-memory.git
+set INSTALL_DIR=%USERPROFILE%\Claude-code-memory
 set MCP_SERVER_DIR=%INSTALL_DIR%\mcp-qdrant-memory
 
 echo Claude Code Memory Solution - Windows Installer
@@ -78,7 +78,7 @@ if exist "%INSTALL_DIR%" (
     echo Directory %INSTALL_DIR% already exists
     echo Updating existing repository...
     cd /d "%INSTALL_DIR%"
-    git pull origin master
+    git pull origin main
 ) else (
     echo Cloning repository to %INSTALL_DIR%...
     git clone "%REPO_URL%" "%INSTALL_DIR%"
