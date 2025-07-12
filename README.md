@@ -664,13 +664,67 @@ mcp__my-project-memory__get_implementation("entityName", "logical")  # same-file
 mcp__my-project-memory__get_implementation("entityName", "dependencies")  # imports/calls
 ```
 
+## 🔄 Updating Existing Indexes (Re-scraping)
+
+### 🚀 **Automatic Incremental Updates (Recommended)**
+```bash
+# Simply run the same command again - automatically detects existing collection
+claude-indexer index -p /path/to/project -c collection-name
+
+# System automatically uses:
+# ✅ INCREMENTAL MODE: Only processes changed files (15x faster)
+# ✅ 90% TOKEN REDUCTION: Content deduplication enabled by default
+# ✅ SMART DETECTION: Compares file timestamps and hashes
+```
+
+### 🔄 **Force Full Re-index Options**
+```bash
+# Option 1: Clear auto-indexed content (preserves manual memories)
+claude-indexer index -p /path/to/project -c collection-name --clear
+
+# Option 2: Clear everything including manual memories  
+claude-indexer index -p /path/to/project -c collection-name --clear-all
+
+# Option 3: Re-index with verbose output to see what's being processed
+claude-indexer index -p /path/to/project -c collection-name --clear --verbose
+```
+
+### ⚡ **Real-time Updates**
+```bash
+# File watching - automatically re-indexes when files change
+claude-indexer watch start -p /path/to/project -c collection-name
+
+# Background service for multiple projects
+claude-indexer service add-project /path/to/project collection-name
+claude-indexer service start
+
+# Git hooks - automatic re-indexing on commits
+claude-indexer hooks install -p /path/to/project -c collection-name
+```
+
+### 📊 **When to Use Each Method**
+
+| Scenario | Command | Use Case |
+|----------|---------|-----------|
+| **Daily updates** | `claude-indexer index -p X -c Y` | Regular development, small changes |
+| **Major refactoring** | `...--clear` | Renamed files, moved directories |
+| **Architecture changes** | `...--clear-all` | Complete project restructure |
+| **Active development** | `claude-indexer watch start` | Real-time updates while coding |
+| **Team workflow** | `claude-indexer hooks install` | Automatic updates on git commits |
+
+### 🎯 **Performance Benefits**
+- **Incremental mode**: 15x faster than full re-indexing
+- **Content deduplication**: 90% token reduction through SHA256 hashing
+- **Smart detection**: Only processes files that actually changed
+- **State tracking**: Uses `.claude-indexer/{collection}.json` for change detection
+
 ## 🎯 Best Practices for God Mode
 
 ### 1. Keep Your Memory Fresh
 ```bash
-# Quick re-index after major changes (90% token reduction + incremental mode)
+# Quick re-index after changes (automatic incremental mode)
 claude-indexer index -p /project -c my-project
-# Runs in seconds with incremental mode + content deduplication
+# Runs in seconds with smart change detection
 ```
 
 ### 2. Use Descriptive Collection Names

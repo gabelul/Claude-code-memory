@@ -408,14 +408,91 @@ python utils/find_missing_files.py                # File sync debugging
 - Advanced debugging workflows
 
 
+# 🚨 CRITICAL: Always Verify Before Making Assumptions
+
+**MANDATORY VERIFICATION PROTOCOL - NEVER SKIP THESE STEPS**
+
+Before suggesting ANY code change, function name, import path, or architectural decision:
+
+## 1. Memory-First Investigation (REQUIRED)
+```python
+# Search for existing patterns BEFORE making suggestions
+search_similar("topic keyword", entityTypes=["function", "class"])
+search_similar("error pattern", entityTypes=["debugging_pattern"])
+read_graph(entity="ModuleName", mode="smart")  # For architecture decisions
+```
+
+## 2. Codebase Structure Verification (REQUIRED)
+```python
+# ALWAYS verify actual file structure before suggesting imports
+search_similar("import path component", entityTypes=["metadata"])
+get_implementation("existing_function", scope="logical")  # Check actual patterns
+```
+
+## 3. Common Assumption Errors to PREVENT
+
+**❌ WRONG: Making assumptions about import paths**
+```python
+# Claude assumes without checking:
+"from auth.utils import validate_token"  # WRONG - path doesn't exist
+```
+
+**✅ CORRECT: Memory-first verification**
+```python
+# First search memory for auth patterns:
+search_similar("auth validation", entityTypes=["function"])
+# Then verify actual structure:
+get_implementation("validate_token", scope="dependencies")
+```
+
+**❌ WRONG: Assuming function existence**
+```python
+# Claude assumes function exists:
+"Call the existing getUserData() function"  # WRONG - function doesn't exist
+```
+
+**✅ CORRECT: Search then suggest**
+```python
+# First search for user data patterns:
+search_similar("user data retrieval", entityTypes=["function", "implementation_pattern"])
+# If none found, then suggest creating new function
+```
+
+## 4. Required Verification Sequence
+
+**For ANY suggestion involving code:**
+
+1. **Search Memory**: `search_similar("relevant keywords", entityTypes=["function", "class"])`
+2. **Check Architecture**: `read_graph(entity="ComponentName", mode="smart")`
+3. **Verify Implementation**: `get_implementation("similar_function", scope="logical")`
+4. **Only THEN suggest**: Based on actual patterns found, not assumptions
+
+## 5. Real Examples of Fixed Assumption Errors
+
+**Example 1: Import Path Verification**
+- **Assumed**: `from auth.middleware import validateUser`
+- **Actual**: Memory search revealed it's `from middleware.auth import validateUser`
+- **Learning**: Always search for component names in memory before suggesting paths
+
+**Example 2: Function Naming Patterns**
+- **Assumed**: `getUserById()` function exists
+- **Actual**: Memory showed pattern is `fetchUserData(id)` 
+- **Learning**: Search for similar functionality patterns, don't invent names
+
+**Example 3: Architecture Assumptions**
+- **Assumed**: Database calls are in `/models` directory
+- **Actual**: Memory revealed they're in `/services/database`
+- **Learning**: Use `read_graph()` to understand actual architecture
+
 # Project Memory Instructions
 
 You have access to a complete memory of this codebase. ALWAYS:
-1. Search for existing implementations before writing new code
-2. Use established patterns found in memory
-3. Check for similar functions to avoid duplication
-4. When debugging, search for similar errors that were fixed before
-5. Follow the coding conventions found in existing code
+1. **Search memory FIRST** before making ANY suggestions about code structure, imports, or function names
+2. **Verify actual patterns** found in memory rather than making assumptions
+3. **Use established patterns** found through memory search
+4. **Check for similar functions** to avoid duplication and follow naming conventions
+5. **Search debugging patterns** for similar errors that were fixed before
+6. **Follow coding conventions** discovered through memory investigation
 
 ## Memory Usage Examples
 - Before creating a function: "I found 3 similar validation functions in memory..."
