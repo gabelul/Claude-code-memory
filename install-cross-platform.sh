@@ -2,7 +2,7 @@
 # Claude Code Memory Solution - Cross-Platform Installer
 # Works on Windows (Git Bash/WSL), Linux, and macOS
 
-set -e
+set -ex  # Exit on error, show commands for debugging
 
 # Colors for output
 RED='\033[0;31m'
@@ -158,11 +158,19 @@ if [[ -d "$INSTALL_DIR" ]]; then
     echo -e "${BLUE}Updating existing repository...${NC}"
     cd "$INSTALL_DIR"
     git pull origin main
+    # Ensure all submodules are updated
+    git submodule update --init --recursive
 else
     echo -e "${BLUE}Cloning repository to $INSTALL_DIR...${NC}"
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    git clone --recursive "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
+
+# Verify successful clone/update
+echo -e "${BLUE}=== REPOSITORY VERIFICATION ===${NC}"
+echo -e "${BLUE}Current directory: $(pwd)${NC}"
+echo -e "${BLUE}Repository contents:${NC}"
+ls -la
 
 # ============================================
 # PYTHON INDEXER SETUP
@@ -210,6 +218,36 @@ echo -e "${BLUE}Setting up Node.js MCP server...${NC}"
 
 # Install Node.js dependencies
 echo -e "${BLUE}Installing Node.js dependencies...${NC}"
+
+# Debug and validate paths
+echo -e "${BLUE}=== MCP SERVER SETUP DEBUGGING ===${NC}"
+echo -e "${BLUE}Current directory: $(pwd)${NC}"
+echo -e "${BLUE}HOME: $HOME${NC}"
+echo -e "${BLUE}INSTALL_DIR: $INSTALL_DIR${NC}"
+echo -e "${BLUE}MCP_SERVER_DIR: $MCP_SERVER_DIR${NC}"
+echo -e "${BLUE}Contents of INSTALL_DIR:${NC}"
+ls -la "$INSTALL_DIR/" 2>/dev/null || echo "INSTALL_DIR does not exist!"
+
+# Validate install directory exists
+if [[ ! -d "$INSTALL_DIR" ]]; then
+    echo -e "${RED}ERROR: Install directory $INSTALL_DIR not found${NC}"
+    echo -e "${YELLOW}This suggests the git clone failed earlier.${NC}"
+    exit 1
+fi
+
+# Validate MCP server directory exists
+if [[ ! -d "$MCP_SERVER_DIR" ]]; then
+    echo -e "${RED}ERROR: MCP server directory not found at $MCP_SERVER_DIR${NC}"
+    echo -e "${BLUE}Available directories in $INSTALL_DIR:${NC}"
+    ls -la "$INSTALL_DIR/"
+    echo -e "${YELLOW}The mcp-qdrant-memory directory may not have been cloned properly.${NC}"
+    echo -e "${YELLOW}Checking if it's a git submodule issue...${NC}"
+    cd "$INSTALL_DIR"
+    git submodule status
+    exit 1
+fi
+
+echo -e "${GREEN}✅ MCP server directory verified${NC}"
 cd "$MCP_SERVER_DIR"
 npm install
 
